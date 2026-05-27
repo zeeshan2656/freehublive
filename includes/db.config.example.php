@@ -1,3 +1,5 @@
+
+
 <?php
 /**
  * Copy this file to db.config.php and fill in your Hostinger MySQL details.
@@ -10,6 +12,7 @@
  */
 return [
     'host'    => 'localhost',
+    'port'    => 3306,
     'user'    => 'u123456789_freehub',
     'pass'    => 'YOUR_DATABASE_PASSWORD',
     'name'    => 'u123456789_freehub',
