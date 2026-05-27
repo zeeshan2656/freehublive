@@ -51,15 +51,7 @@ if (is_logged_in()) {
 
 $earningsMap = [];
 if ($is_owner && is_creator() && $videos) {
-    fh_sync_zero_durations($videos, 15);
-    foreach ($videos as $i => $v) {
-        if ((int)$v['duration'] === 0) {
-            $fresh = db_fetch('SELECT duration FROM videos WHERE id=?', [(int)$v['id']]);
-            if ($fresh) {
-                $videos[$i]['duration'] = $fresh['duration'];
-            }
-        }
-    }
+    // Duration sync removed for performance — synced via watch.php instead
     $earningsMap = fh_creator_video_earnings_map($channel_id, array_column($videos, 'id'));
 }
 

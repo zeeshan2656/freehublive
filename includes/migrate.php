@@ -35,6 +35,19 @@ function fh_run_migrations(): void {
     if ($done) return;
     $done = true;
 
+    // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
+    // Bump this version whenever you add new migrations to force re-check
+    $migration_version = '2026.05.28.1';
+    $cache_dir = __DIR__ . '/../cache/';
+    $flag_file = $cache_dir . '.migrations_done';
+    
+    if (is_file($flag_file)) {
+        $cached_ver = @file_get_contents($flag_file);
+        if (trim($cached_ver) === $migration_version) {
+            return; // All migrations already applied for this version
+        }
+    }
+
     // Schema not imported yet — skip (import install/schema.sql in phpMyAdmin)
     if (!fh_table_exists('users')) {
         return;
@@ -447,6 +460,10 @@ function fh_run_migrations(): void {
             db_query("INSERT INTO ad_placements (key_name, name, device_target, ad_display_duration, ad_trigger_count) VALUES ('video_player_overlay', 'Video Player Overlay Ad', 'all', 5, 3)");
         }
     }
+
+    // ── All migrations passed — write flag to skip on next request ──
+    if (!is_dir($cache_dir)) {
+        @mkdir($cache_dir, 0755, true);
+    }
+    @file_put_contents($flag_file, $migration_version);
 }
-
-

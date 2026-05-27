@@ -614,7 +614,7 @@ function render_video_card(array $v, array $opts = []): string {
     return <<<HTML
 <article class="video-card fade-in" onclick="location.href='{$url}'">
   <div class="video-thumb" style="position:relative">
-    <img src="{$thumb}" alt="{$title}" loading="lazy" width="320" height="180" class="thumb-main">
+    <img src="{$thumb}" alt="{$title}" loading="lazy" decoding="async" width="320" height="180" class="thumb-main">
     {$durBadge}
   </div>
   <div class="video-info">

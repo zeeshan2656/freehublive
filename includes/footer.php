@@ -70,7 +70,7 @@
 </div> <!-- /dashboard-layout -->
 
 <div id="dashboard-progress" style="position:fixed; top:0; left:0; height:3px; background:var(--accent); width:0%; opacity:0; transition:width 0.2s ease, opacity 0.2s ease; z-index:99999; pointer-events:none"></div>
-<script src="<?= BASE_URL ?>/assets/js/dashboard-router.js?v=<?= filemtime(__DIR__ . '/../assets/js/dashboard-router.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/dashboard-router.js?v=<?= filemtime(__DIR__ . '/../assets/js/dashboard-router.js') ?>" defer></script>
 <?php endif; ?>
 
 </body>

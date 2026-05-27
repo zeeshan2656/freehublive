@@ -28,16 +28,7 @@ if ($filter!=='all') $where .= " AND status='$filter'";
 $total  = db_count('videos', $where);
 $pg     = paginate($total, 20, $page);
 $videos = db_fetchAll("SELECT * FROM videos WHERE $where ORDER BY created_at DESC LIMIT 20 OFFSET {$pg['offset']}");
-fh_sync_zero_durations($videos, 20);
-// Refresh duration values after server-side probe
-foreach ($videos as $i => $v) {
-    if ((int)$v['duration'] === 0) {
-        $fresh = db_fetch('SELECT duration FROM videos WHERE id=?', [(int)$v['id']]);
-        if ($fresh) {
-            $videos[$i]['duration'] = $fresh['duration'];
-        }
-    }
-}
+// Duration sync removed for performance — synced via watch.php instead
 $meta_title = 'My Videos';
 require_once __DIR__ . '/../includes/header.php';
 ?>

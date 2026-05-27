@@ -64,30 +64,7 @@ if ($sel_cat) {
 }
 
 
-
-// Auto-detect missing durations for videos shown on this page
-$durationPool = array_merge($trending, $latest, $cat_videos, $hero ? [$hero] : []);
-fh_sync_zero_durations($durationPool, 30);
-$refreshDuration = static function (array $rows): array {
-    foreach ($rows as $i => $row) {
-        if ((int)($row['duration'] ?? 0) === 0) {
-            $fresh = db_fetch('SELECT duration FROM videos WHERE id=?', [(int)$row['id']]);
-            if ($fresh && (int)$fresh['duration'] > 0) {
-                $rows[$i]['duration'] = $fresh['duration'];
-            }
-        }
-    }
-    return $rows;
-};
-$trending   = $refreshDuration($trending);
-$latest     = $refreshDuration($latest);
-$cat_videos = $refreshDuration($cat_videos);
-if ($hero && (int)($hero['duration'] ?? 0) === 0) {
-    $fresh = db_fetch('SELECT duration FROM videos WHERE id=?', [(int)$hero['id']]);
-    if ($fresh && (int)$fresh['duration'] > 0) {
-        $hero['duration'] = $fresh['duration'];
-    }
-}
+// Duration sync removed for performance — durations are synced on watch.php instead
 
 $ref = auth_user()['ref_code'] ?? '';
 $creatorId    = (is_logged_in() && is_creator()) ? (int)auth_user()['id'] : 0;
@@ -119,7 +96,7 @@ if ($creatorId) {
     <?php if ($hero): ?>
     <section class="hero" aria-label="Featured video">
       <img src="<?= thumb_url($hero['thumbnail']) ?>" alt="<?= e($hero['title']) ?>"
-           class="hero-bg" loading="eager" width="1280" height="720">
+           class="hero-bg" loading="eager" fetchpriority="high" decoding="async" width="1280" height="720">
       <div class="hero-overlay"></div>
       <div class="hero-content">
         <span class="hero-badge">&#9733; Featured</span>
