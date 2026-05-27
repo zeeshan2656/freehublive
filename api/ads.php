@@ -24,6 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_ad') {
                 COALESCE(ap.ad_width, a.ad_width) AS ad_width,
                 COALESCE(ap.ad_height, a.ad_height) AS ad_height,
                 ap.reload_interval AS reload_interval,
+                ap.ad_display_duration AS ad_display_duration,
+                ap.ad_trigger_count AS ad_trigger_count,
                 a.device_target
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id
@@ -39,8 +41,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_ad') {
     );
 
     if ($ad) {
-        // Track ad impression and process payouts
-        fh_track_ad_event((int)$ad['id'], 'impression', $video_id);
         // Fix image URL
         $ad['image_url'] = $ad['image_url']
             ? (str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'])
@@ -64,6 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'fetch') {
                 COALESCE(ap.ad_width, a.ad_width) AS ad_width,
                 COALESCE(ap.ad_height, a.ad_height) AS ad_height,
                 ap.reload_interval AS reload_interval,
+                ap.ad_display_duration AS ad_display_duration,
+                ap.ad_trigger_count AS ad_trigger_count,
                 a.device_target
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id
@@ -79,8 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'fetch') {
     );
 
     foreach ($ads as &$ad) {
-        // Track ad impression and process payouts
-        fh_track_ad_event((int)$ad['id'], 'impression', $video_id);
         $ad['image_url'] = $ad['image_url']
             ? (str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'])
             : null;

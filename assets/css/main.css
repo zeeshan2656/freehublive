@@ -772,15 +772,25 @@ tbody tr:hover{background:var(--bg3)}
 
   .watch-page.main-content,
   .watch-page .container { padding-left: 0; padding-right: 0; }
+  .watch-page.main-content { padding-top: 0 !important; }
   .watch-page .container { max-width: none; }
   .watch-layout {
     grid-template-columns: 1fr !important;
     gap: 8px !important;
   }
+  .player-column {
+    display: contents;
+  }
   .player-wrapper {
+    position: sticky !important;
+    top: var(--nav-h) !important;
+    z-index: 90 !important;
     border-radius: 0 !important;
     margin: 0;
     width: 100%;
+  }
+  body.watch-page.has-header-ad .player-wrapper {
+    top: calc(var(--nav-h) + var(--ad-h)) !important;
   }
   .watch-page .watch-info,
   .watch-page .watch-channel-row,
@@ -1319,7 +1329,7 @@ tbody tr:hover{background:var(--bg3)}
     z-index: 99 !important;
     background: var(--bg) !important; /* solid page background to block scrolled content */
     margin: 0 0 12px 0 !important; /* edge-to-edge naturally outside main-content */
-    padding: 12px 0 !important;
+    padding: 0 !important;
     border-radius: 0 !important;
     border-left: none !important;
     border-right: none !important;
@@ -1327,9 +1337,29 @@ tbody tr:hover{background:var(--bg3)}
     border-bottom: 1px solid var(--border) !important;
     width: auto !important;
     max-width: none !important;
-    display: block !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     box-shadow: 0 4px 6px rgba(0,0,0,0.15) !important;
   }
+  
+  /* On watch page, the header ad remains sticky below the navbar, and we remove margins to avoid gaps. */
+  body.watch-page .ad-sponsored-container.ad-full-width-mobile {
+    position: sticky !important;
+    top: var(--nav-h) !important;
+    z-index: 99 !important;
+    margin: 0 !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+  }
+  /* Zero out margins inside full-width mobile header ad to prevent clipping/cutoff */
+  .ad-sponsored-container.ad-full-width-mobile .ad-creative-wrapper,
+  .ad-sponsored-container.ad-full-width-mobile .ad-html-content,
+  .ad-sponsored-container.ad-full-width-mobile iframe {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   .ad-sponsored-container.ad-full-width-mobile .ad-creative-wrapper {
     margin: 0 auto !important;
     display: flex !important;
@@ -1337,5 +1367,175 @@ tbody tr:hover{background:var(--bg3)}
     align-items: center !important;
   }
 }
+
+/* ── Video Player Overlay Ads ── */
+.ad-overlay-layer {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 400; /* Covers video controls and center play button */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+.ad-overlay-layer.show {
+  opacity: 1;
+}
+.ad-overlay-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.ad-overlay-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  box-sizing: border-box;
+}
+.ad-overlay-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ad-overlay-media iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.ad-overlay-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 410;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: not-allowed;
+  opacity: 0.85;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+.ad-overlay-close-btn:not(:disabled) {
+  cursor: pointer;
+  opacity: 1;
+  background: var(--accent);
+  border-color: #fff;
+}
+.ad-overlay-close-btn:not(:disabled):hover {
+  background: var(--accent2);
+  transform: scale(1.08);
+}
+.ad-overlay-close-btn:not(:disabled):active {
+  transform: scale(0.95);
+}
+.ad-overlay-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: var(--accent);
+  width: 100%;
+  z-index: 410;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+/* Spinner Loader */
+.ad-overlay-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--accent);
+  animation: ad-spin 0.8s linear infinite;
+}
+@keyframes ad-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Ensure all ads and dynamically injected network ad scripts stay responsive on mobile */
+@media (max-width: 900px) {
+  .ad-sponsored-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto;
+    padding: 12px 16px !important;
+    box-sizing: border-box !important;
+  }
+  .ad-sponsored-container * {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  /* Constrain images generated by network scripts to scale proportionally */
+  .ad-creative-wrapper img,
+  .ad-html-content img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  /* Constrain iframes and wrappers to match container height (respecting database configured sizes) */
+  .ad-creative-wrapper,
+  .ad-html-content,
+  .ad-html-content div,
+  .ad-html-content iframe {
+    max-width: 100% !important;
+    height: 100% !important;
+  }
+  .ad-sponsored-container.ad-watch-below-player {
+    background: var(--bg) !important;
+    border-bottom: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  .watch-below-player-wrapper {
+    margin-top: -8px !important;
+    margin-bottom: -8px !important;
+  }
+  body.watch-page .watch-info {
+    padding-top: 0 !important;
+  }
+}
+
+.watch-below-player-wrapper {
+  margin-top: 16px;
+}
+.ad-sponsored-container.ad-watch-below-player {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 16px auto;
+}
+
 
 

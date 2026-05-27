@@ -7,6 +7,36 @@
     || document.querySelector('meta[base-url]')?.content
     || '';
 
+  function renderHtmlAdInIframe(adDiv, htmlContent) {
+    adDiv.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;overflow:hidden;background:transparent;';
+    adDiv.appendChild(iframe);
+    
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+          </style>
+        </head>
+        <body>
+          ${htmlContent}
+        </body>
+        </html>
+      `);
+      doc.close();
+    } catch (e) {
+      console.error('Failed to write to iframe:', e);
+      adDiv.innerHTML = htmlContent;
+    }
+  }
+
   function detectDeviceType() {
     if (window.innerWidth <= 900) {
       return "mobile";
@@ -56,9 +86,8 @@
           container.dataset.reloadInterval = reloadSeconds;
         }
         
-        container.innerHTML = '';
         container.classList.add('loaded');
-        container.style.display = 'block';
+        container.style.display = '';
 
         // Update device targeting classes dynamically
         container.classList.remove('ad-mobile-only', 'ad-desktop-only');
@@ -98,9 +127,9 @@
         if (placement === 'home_mobile_top') {
           sizeStyle += 'width: 100% !important; ';
         } else if (ad.ad_width) {
-          sizeStyle += `width: ${ad.ad_width}px; `;
+          sizeStyle += `width: 100%; max-width: ${ad.ad_width}px; `;
         }
-        if (ad.ad_height) sizeStyle += `height: ${ad.ad_height}px; `;
+        if (ad.ad_height) sizeStyle += `height: 100%; max-height: ${ad.ad_height}px; `;
         
         const wrapper = document.createElement('div');
         wrapper.style.cssText = `margin: 0 auto; display: block; max-width: 100%; ${sizeStyle}`;
@@ -128,15 +157,6 @@
           adDiv.className = 'ad-html-content';
           adDiv.style.cssText = `width: 100%; ${ad.ad_height ? 'height: 100%;' : ''} display: block; margin: 0 auto; overflow: hidden;`;
           wrapper.appendChild(adDiv);
-          
-          try {
-            const range = document.createRange();
-            range.selectNode(adDiv);
-            const fragment = range.createContextualFragment(ad.content);
-            adDiv.appendChild(fragment);
-          } catch (e) {
-            adDiv.innerHTML = ad.content;
-          }
         } else {
           const txtLink = document.createElement('a');
           txtLink.href = ad.target_url || '#';
@@ -150,7 +170,22 @@
           wrapper.appendChild(txtLink);
         }
         
-        container.appendChild(wrapper);
+        const existingWrapper = container.querySelector('.ad-creative-wrapper');
+        if (existingWrapper) {
+          existingWrapper.replaceWith(wrapper);
+        } else {
+          container.innerHTML = '';
+          container.appendChild(wrapper);
+        }
+
+        if (ad.content_type === 'html') {
+          const adDiv = wrapper.querySelector('.ad-html-content');
+          if (adDiv) {
+            renderHtmlAdInIframe(adDiv, ad.content);
+          }
+        }
+        
+        trackImpression(ad.id, videoId);
         setupAdReload(container, reloadSeconds);
       } else {
         container.style.display = 'none';
@@ -162,6 +197,13 @@
       const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
       setupAdReload(container, reloadSeconds);
     }
+  }
+
+  async function trackImpression(adId, videoId) {
+    const vid = videoId || '';
+    try {
+      await fetch(`${BASE_URL}/api/ads.php?action=track_impression&id=${adId}&video_id=${vid}`, { method: 'POST' });
+    } catch(e) {}
   }
 
   async function trackClick(adId, videoId) {
@@ -184,7 +226,38 @@
   function initAds() {
     const containers = document.querySelectorAll('.ad-sponsored-container');
     containers.forEach(container => {
-      loadAd(container);
+      const template = container.querySelector('.ad-html-template');
+      const htmlContentEl = container.querySelector('.ad-html-content');
+      
+      if (template && htmlContentEl) {
+        // Render it inside safe iframe
+        const content = template.innerHTML;
+        renderHtmlAdInIframe(htmlContentEl, content);
+        
+        const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
+        if (reloadSeconds > 0) {
+          setupAdReload(container, reloadSeconds);
+        }
+        const adId = container.dataset.adId;
+        const videoId = container.dataset.videoId || window.FH_WATCH?.videoId || '';
+        if (adId) {
+          trackImpression(adId, videoId);
+        }
+      } else if (container.querySelector('.ad-click-link, .ad-html-content')) {
+        const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
+        if (reloadSeconds > 0) {
+          setupAdReload(container, reloadSeconds);
+        }
+        // Track ad impression asynchronously
+        const adId = container.dataset.adId;
+        const videoId = container.dataset.videoId || window.FH_WATCH?.videoId || '';
+        if (adId) {
+          trackImpression(adId, videoId);
+        }
+      } else {
+        // Empty placeholder, load it
+        loadAd(container);
+      }
     });
   }
 

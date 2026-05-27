@@ -454,10 +454,37 @@ if ($is_dashboard_page && is_logged_in() && !is_admin()) {
     }
 }
 
+$header_ad_html = '';
+$header_ad_height = 55; // Default fallback
+$script_name = $_SERVER['SCRIPT_NAME'] ?? '';
+$is_dashboard = str_contains($script_name, '/admin/') || 
+                str_contains($script_name, '/creator/') || 
+                str_contains($script_name, '/affiliate/');
+
+if (!$is_dashboard && function_exists('render_ad_placeholder')) {
+    $header_ad_html = render_ad_placeholder('home_mobile_top');
+    if (!empty($header_ad_html)) {
+        $now = date('Y-m-d');
+        $ad_placement = db_fetch(
+            "SELECT COALESCE(ap.ad_height, a.ad_height) AS height 
+             FROM ads a
+             JOIN ad_placements ap ON ap.assigned_ad_id = a.id
+             WHERE ap.key_name = 'home_mobile_top' AND a.is_active = 1
+               AND (a.start_date IS NULL OR a.start_date <= ?)
+               AND (a.end_date IS NULL OR a.end_date >= ?)
+             LIMIT 1",
+            [$now, $now]
+        );
+        if ($ad_placement && $ad_placement['height']) {
+            $header_ad_height = (int)$ad_placement['height'];
+        }
+    }
+}
+
 $sidebar_path = get_sidebar_path();
 ?>
 
-<body class="<?= $is_dashboard_page ? 'dashboard-page' : 'public-page' ?><?= $_fh_show_age_gate ? ' age-unverified' : '' ?>">
+<body class="<?= $is_dashboard_page ? 'dashboard-page' : 'public-page' ?><?= $_fh_show_age_gate ? ' age-unverified' : '' ?><?= isset($is_watch) && $is_watch ? ' watch-page' : '' ?><?= !empty($header_ad_html) ? ' has-header-ad' : '' ?>" style="--ad-h: <?= (int)$header_ad_height ?>px;">
 
 <?php if ($_fh_show_age_gate): ?>
 <!-- Age Verification Gate — renders BEFORE any site content -->
@@ -1118,12 +1145,7 @@ async function selectCategory(catId, catName) {
 }
 </script>
 <?php
-$script_name = $_SERVER['SCRIPT_NAME'] ?? '';
-$is_dashboard = str_contains($script_name, '/admin/') || 
-                str_contains($script_name, '/creator/') || 
-                str_contains($script_name, '/affiliate/');
-
-if (!$is_dashboard && function_exists('render_ad_placeholder')) {
-    echo render_ad_placeholder('home_mobile_top');
+if (!empty($header_ad_html)) {
+    echo $header_ad_html;
 }
 ?>

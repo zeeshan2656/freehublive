@@ -69,6 +69,7 @@ if (is_logged_in()) {
 $meta_title = $video['title'] . ' — ' . setting('site_name','FreeHub');
 $meta_desc  = truncate(strip_tags($video['description'] ?? ''), 160);
 $meta_image = thumb_url($video['thumbnail']);
+$is_watch = true;
 require_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -79,7 +80,7 @@ require_once __DIR__ . '/includes/header.php';
       <div class="watch-layout">
 
     <!-- ── Player Column ── -->
-    <div>
+    <div class="player-column">
       <!-- Player -->
       <div class="player-wrapper" id="player-wrapper">
         <?php
@@ -87,7 +88,7 @@ require_once __DIR__ . '/includes/header.php';
         if ($yt_id):
         ?>
           <iframe id="fh-youtube-player" width="100%" height="100%"
-                  src="https://www.youtube.com/embed/<?= e($yt_id) ?>?autoplay=1"
+                  src="https://www.youtube.com/embed/<?= e($yt_id) ?>?autoplay=1&enablejsapi=1"
                   frameborder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowfullscreen style="width:100%;height:100%;border:none;display:block"></iframe>
@@ -167,9 +168,14 @@ require_once __DIR__ . '/includes/header.php';
       </div>
 
       <!-- Ad Placeholder: Below Player -->
-      <div style="margin-top: 16px;">
-        <?= render_ad_placeholder('watch_below_player') ?>
+      <?php
+      $below_ad_html = render_ad_placeholder('watch_below_player');
+      if (!empty($below_ad_html)):
+      ?>
+      <div class="watch-below-player-wrapper">
+        <?= $below_ad_html ?>
       </div>
+      <?php endif; ?>
 
       <!-- Video Info -->
       <div class="watch-info">
@@ -685,6 +691,21 @@ window.FH_WATCH = {
   videoId: <?= (int)$vid ?>,
   endpoint: <?= json_encode(BASE_URL . '/api/watchtime.php') ?>
 };
+window.FH_VIDEO_DURATION = <?= (int)$video['duration'] ?>;
+</script>
+<script src="<?= BASE_URL ?>/assets/js/video-player-ads.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.getElementById('player-wrapper')) {
+    new FHVideoAdManager({
+      playerId: 'fh-player',
+      ytPlayerId: 'fh-youtube-player',
+      videoId: <?= (int)$vid ?>,
+      baseUrl: '<?= BASE_URL ?>',
+      device: '<?= detect_device() ?>'
+    });
+  }
+});
 </script>
 <script src="<?= BASE_URL ?>/assets/js/watchtime.js" defer></script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

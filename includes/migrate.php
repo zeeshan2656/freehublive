@@ -432,6 +432,21 @@ function fh_run_migrations(): void {
             }
         }
     }
+
+    // 7. Video Player Overlay Ad Placement System
+    if (fh_table_exists('ad_placements')) {
+        if (!fh_column_exists('ad_placements', 'ad_display_duration')) {
+            db_query("ALTER TABLE ad_placements ADD COLUMN ad_display_duration SMALLINT UNSIGNED DEFAULT NULL AFTER reload_interval");
+        }
+        if (!fh_column_exists('ad_placements', 'ad_trigger_count')) {
+            db_query("ALTER TABLE ad_placements ADD COLUMN ad_trigger_count TINYINT UNSIGNED DEFAULT NULL AFTER ad_display_duration");
+        }
+        
+        $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = 'video_player_overlay'");
+        if ((int)$check['c'] === 0) {
+            db_query("INSERT INTO ad_placements (key_name, name, device_target, ad_display_duration, ad_trigger_count) VALUES ('video_player_overlay', 'Video Player Overlay Ad', 'all', 5, 3)");
+        }
+    }
 }
 
 

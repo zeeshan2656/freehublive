@@ -15,6 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         $ad_width = $_POST['ad_width'] === '' ? null : (int)$_POST['ad_width'];
         $ad_height = $_POST['ad_height'] === '' ? null : (int)$_POST['ad_height'];
         $reload_interval = $_POST['reload_interval'] === '' ? null : (int)$_POST['reload_interval'];
+        $ad_display_duration = $_POST['ad_display_duration'] === '' ? null : (int)$_POST['ad_display_duration'];
+        $ad_trigger_count = $_POST['ad_trigger_count'] === '' ? null : (int)$_POST['ad_trigger_count'];
         $ad_id = $_POST['ad_id'] === '' ? null : (int)$_POST['ad_id'];
         
         if ($id && $name) {
@@ -24,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
                 'ad_width' => $ad_width,
                 'ad_height' => $ad_height,
                 'reload_interval' => $reload_interval,
+                'ad_display_duration' => $ad_display_duration,
+                'ad_trigger_count' => $ad_trigger_count,
                 'assigned_ad_id' => $ad_id
             ], 'id=?', [$id]);
             flash('success', 'Ad placement updated successfully.');
@@ -40,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
                 'ad_width'       => $orig['ad_width'] ?: null,
                 'ad_height'      => $orig['ad_height'] ?: null,
                 'reload_interval'=> $orig['reload_interval'] ?: null,
+                'ad_display_duration'=> $orig['ad_display_duration'] ?: null,
+                'ad_trigger_count'   => $orig['ad_trigger_count'] ?: null,
                 'name'           => 'Copy of ' . $orig['name'],
                 'assigned_ad_id' => $orig['assigned_ad_id'] ?: null
             ]);
@@ -49,12 +55,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
     
     if ($action === 'delete') {
         $id = (int)($_POST['placement_id'] ?? 0);
-        $protected_ids = [1, 2, 3, 4];
-        if (!in_array($id, $protected_ids)) {
+        $orig = db_fetch("SELECT key_name FROM ad_placements WHERE id = ?", [$id]);
+        $protected_keys = [
+            'landing_trending', 'landing_latest', 'search_grid', 'category_grid',
+            'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay'
+        ];
+        if ($orig && in_array($orig['key_name'], $protected_keys)) {
+            flash('error', 'Cannot delete system default placements.');
+        } else {
             db_query("DELETE FROM ad_placements WHERE id = ?", [$id]);
             flash('success', 'Placement deleted.');
-        } else {
-            flash('error', 'Cannot delete system default placements.');
         }
     }
     
@@ -65,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         $ad_width = ($_POST['ad_width'] ?? '') === '' ? null : (int)$_POST['ad_width'];
         $ad_height = ($_POST['ad_height'] ?? '') === '' ? null : (int)$_POST['ad_height'];
         $reload_interval = ($_POST['reload_interval'] ?? '') === '' ? null : (int)$_POST['reload_interval'];
+        $ad_display_duration = ($_POST['ad_display_duration'] ?? '') === '' ? null : (int)$_POST['ad_display_duration'];
+        $ad_trigger_count = ($_POST['ad_trigger_count'] ?? '') === '' ? null : (int)$_POST['ad_trigger_count'];
         $ad_id = ($_POST['ad_id'] ?? '') === '' ? null : (int)$_POST['ad_id'];
         
         // Sanitize key_name: lowercase, underscores only
@@ -83,6 +95,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
                     'ad_width'       => $ad_width,
                     'ad_height'      => $ad_height,
                     'reload_interval'=> $reload_interval,
+                    'ad_display_duration'=> $ad_display_duration,
+                    'ad_trigger_count'=> $ad_trigger_count,
                     'assigned_ad_id' => $ad_id
                 ]);
                 flash('success', 'New ad placement created successfully.');
@@ -355,6 +369,18 @@ require_once __DIR__ . '/partials/admin_head.php';
                   <?php else: ?>
                     <div style="font-size: 0.72rem; color: var(--text3); font-style: italic;">No reload</div>
                   <?php endif; ?>
+                  
+                  <?php if ($p['ad_display_duration']): ?>
+                    <div style="font-size: 0.72rem; color: var(--green); font-weight: bold; display: flex; align-items: center; gap: 3px; margin-top: 4px;">
+                      ⏱️ <?= (int)$p['ad_display_duration'] ?>s duration
+                    </div>
+                  <?php endif; ?>
+                  
+                  <?php if ($p['ad_trigger_count']): ?>
+                    <div style="font-size: 0.72rem; color: #3b82f6; font-weight: bold; display: flex; align-items: center; gap: 3px; margin-top: 4px;">
+                      🔄 <?= (int)$p['ad_trigger_count'] ?> triggers
+                    </div>
+                  <?php endif; ?>
                 </div>
               </td>
               <td>
@@ -371,7 +397,7 @@ require_once __DIR__ . '/partials/admin_head.php';
               <td style="text-align: right;">
                 <div style="display: inline-flex; gap: 6px; align-items: center;">
                   <!-- Edit/Assign Button -->
-                  <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>', '<?= $p['ad_width'] ?: '' ?>', '<?= $p['ad_height'] ?: '' ?>', '<?= $p['reload_interval'] ?: '' ?>')">
+                  <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>', '<?= $p['ad_width'] ?: '' ?>', '<?= $p['ad_height'] ?: '' ?>', '<?= $p['reload_interval'] ?: '' ?>', '<?= $p['ad_display_duration'] ?: '' ?>', '<?= $p['ad_trigger_count'] ?: '' ?>')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     Edit
                   </button>
@@ -387,7 +413,10 @@ require_once __DIR__ . '/partials/admin_head.php';
                   </form>
 
                   <!-- Delete Action Form (only for duplicated items) -->
-                  <?php if (!in_array((int)$p['id'], [1, 2, 3, 4])): ?>
+                  <?php 
+                  $protected_keys = ['landing_trending', 'landing_latest', 'search_grid', 'category_grid', 'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay'];
+                  if (!in_array($p['key_name'], $protected_keys)): 
+                  ?>
                     <form method="POST" style="display:inline-block; margin: 0;" onsubmit="return confirm('Are you sure you want to delete this duplicated placement?');">
                       <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
                       <input type="hidden" name="placement_id" value="<?= $p['id'] ?>">
@@ -461,6 +490,17 @@ require_once __DIR__ . '/partials/admin_head.php';
             <input class="form-input" type="number" name="reload_interval" id="modal_reload_interval" placeholder="e.g. 30 (Optional)" min="5" style="font-size: 0.9rem;">
             <div style="font-size: 0.72rem; color: var(--text3); margin-top: 4px; line-height: 1.3;">
               Auto-reloads the ad placement without refreshing the page. Enter seconds (e.g. 30, 45, 60). Leave empty to disable.
+            </div>
+          </div>
+          
+          <div class="form-row-grid" style="margin-bottom: 14px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Ad Display Duration (seconds)</label>
+              <input class="form-input" type="number" name="ad_display_duration" id="modal_ad_display_duration" placeholder="e.g. 5 (seconds)" min="1" style="font-size: 0.9rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Ad Trigger Count</label>
+              <input class="form-input" type="number" name="ad_trigger_count" id="modal_ad_trigger_count" placeholder="e.g. 3 (triggers)" min="1" style="font-size: 0.9rem;">
             </div>
           </div>
           
@@ -541,6 +581,17 @@ require_once __DIR__ . '/partials/admin_head.php';
             <input class="form-input" type="number" name="reload_interval" placeholder="e.g. 30 (Optional)" min="5" style="font-size: 0.9rem;">
           </div>
           
+          <div class="form-row-grid" style="margin-bottom: 14px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Ad Display Duration (seconds)</label>
+              <input class="form-input" type="number" name="ad_display_duration" placeholder="e.g. 5 (Optional)" min="1" style="font-size: 0.9rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Ad Trigger Count</label>
+              <input class="form-input" type="number" name="ad_trigger_count" placeholder="e.g. 3 (Optional)" min="1" style="font-size: 0.9rem;">
+            </div>
+          </div>
+          
           <div class="form-group" style="margin-bottom: 20px;">
             <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: var(--text2); margin-bottom: 6px;">Assign Ad (Optional)</label>
             <select class="form-input form-select" name="ad_id" style="width: 100%; height: 38px; border-radius: 6px; padding: 0 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border);">
@@ -566,7 +617,7 @@ require_once __DIR__ . '/partials/admin_head.php';
 </div>
 
 <script>
-function openPlacementModal(id, name, key, deviceTarget, assignedAdId, adWidth, adHeight, reloadInterval) {
+function openPlacementModal(id, name, key, deviceTarget, assignedAdId, adWidth, adHeight, reloadInterval, adDisplayDuration, adTriggerCount) {
   document.getElementById('modal_placement_id').value = id;
   document.getElementById('modal_placement_name').value = name;
   document.getElementById('modal_placement_key').value = key;
@@ -575,6 +626,8 @@ function openPlacementModal(id, name, key, deviceTarget, assignedAdId, adWidth, 
   document.getElementById('modal_ad_width').value = adWidth || '';
   document.getElementById('modal_ad_height').value = adHeight || '';
   document.getElementById('modal_reload_interval').value = reloadInterval || '';
+  document.getElementById('modal_ad_display_duration').value = adDisplayDuration || '';
+  document.getElementById('modal_ad_trigger_count').value = adTriggerCount || '';
   document.getElementById('placement-modal').classList.add('open');
 }
 
