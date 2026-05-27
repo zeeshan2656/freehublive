@@ -89,6 +89,125 @@ $active_ads = db_fetchAll("SELECT id, title, content_type FROM ads WHERE is_acti
 $meta_title = 'Ad Placements';
 require_once __DIR__ . '/partials/admin_head.php';
 ?>
+<style>
+/* Table Row Height & Vertical Centering */
+.admin-categories-table th,
+.admin-categories-table td {
+  vertical-align: middle !important;
+  padding: 6px 12px !important; /* Extremely neat and compact padding */
+}
+
+/* Row hover highlight */
+.admin-categories-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+.admin-categories-table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.015) !important;
+}
+
+/* Premium Action Buttons */
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.btn-action svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  fill: none;
+  flex-shrink: 0;
+}
+
+/* Edit button styles */
+.btn-edit {
+  border-color: rgba(99, 102, 241, 0.25);
+  color: var(--accent);
+}
+.btn-edit:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+/* Duplicate button styles */
+.btn-duplicate {
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #3b82f6; /* Modern Blue */
+}
+.btn-duplicate:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  color: #3b82f6;
+  transform: translateY(-1px);
+}
+
+/* Delete button styles */
+.btn-delete {
+  border-color: rgba(239, 68, 68, 0.25);
+  color: var(--red);
+}
+.btn-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--red);
+  color: var(--red);
+  transform: translateY(-1px);
+}
+
+/* Badge Tweaks for Premium Alignment */
+.admin-categories-table .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px !important;
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: 4px !important;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.badge-cyan {
+  background: rgba(6, 182, 212, 0.12) !important;
+  color: #06b6d4 !important;
+}
+.badge-purple {
+  background: rgba(168, 85, 247, 0.12) !important;
+  color: #a855f7 !important;
+}
+
+/* Code Tag styling for key_name */
+.admin-categories-table code {
+  background: rgba(99, 102, 241, 0.06) !important;
+  border: 1px solid rgba(99, 102, 241, 0.15) !important;
+  color: var(--accent) !important;
+  padding: 3px 6px !important;
+  border-radius: 4px;
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 0.75rem !important;
+  vertical-align: middle;
+  display: inline-block;
+  line-height: 1;
+}
+</style>
 <div class="admin-content">
   <div class="admin-page-header">
     <h1 style="display: flex; align-items: center; gap: 8px;">📺 Ad Placement Areas</h1>
@@ -144,63 +263,66 @@ require_once __DIR__ . '/partials/admin_head.php';
       <table class="admin-categories-table" style="width: 100%; border-collapse: collapse;">
         <thead>
           <tr style="border-bottom: 1px solid var(--border); text-align: left;">
-            <th style="padding: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text2);">ID</th>
-            <th style="padding: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text2);">Name</th>
-            <th style="padding: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text2);">Key Name</th>
-            <th style="padding: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text2);">Device Target</th>
-            <th style="padding: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text2);">Assigned Ad</th>
-            <th style="padding: 12px; font-weight: 700; font-size: 0.85rem; color: var(--text2); text-align: right;">Actions</th>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Key Name</th>
+            <th>Device Target</th>
+            <th>Assigned Ad</th>
+            <th style="text-align: right;">Actions</th>
           </tr>
         </thead>
         <tbody>
           <?php foreach ($placements as $p): ?>
-            <tr style="border-bottom: 1px solid var(--border); transition: background-color 0.2s;">
-              <td style="padding: 14px 12px; font-size: 0.85rem; font-weight: bold; color: var(--text2);"><?= (int)$p['id'] ?></td>
-              <td style="padding: 14px 12px;">
+            <tr style="border-bottom: 1px solid var(--border);">
+              <td style="font-size: 0.85rem; font-weight: bold; color: var(--text2);"><?= (int)$p['id'] ?></td>
+              <td>
                 <div style="font-weight: 700; font-size: 0.9rem; color: var(--text);"><?= e($p['name']) ?></div>
               </td>
-              <td style="padding: 14px 12px;">
-                <code style="background: var(--bg3); padding: 3px 6px; border-radius: 4px; font-family: monospace; color: var(--accent); font-weight: bold; font-size: 0.78rem;"><?= e($p['key_name']) ?></code>
+              <td>
+                <code><?= e($p['key_name']) ?></code>
               </td>
-              <td style="padding: 14px 12px;">
-                <span class="badge badge-<?= $p['device_target'] === 'all' ? 'blue' : ($p['device_target'] === 'desktop' ? 'cyan' : 'purple') ?>" style="font-size: 0.68rem; font-weight: 600; text-transform: uppercase;">
-                  <?= $p['device_target'] === 'all' ? 'All Devices' : e($p['device_target']) ?>
-                </span>
+              <td>
+                <span class="badge badge-<?= $p['device_target'] === 'all' ? 'blue' : ($p['device_target'] === 'desktop' ? 'cyan' : 'purple') ?>">
+                   <?= $p['device_target'] === 'all' ? 'All Devices' : e($p['device_target']) ?>
+                 </span>
               </td>
-              <td style="padding: 14px 12px;">
+              <td>
                 <?php if ($p['assigned_ad_id']): ?>
                   <div class="flex gap-2" style="align-items: center; flex-wrap: wrap;">
                     <span style="font-weight: 700; font-size: 0.88rem; color: var(--text);"><?= e($p['ad_title']) ?></span>
-                    <span class="badge badge-blue" style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase;"><?= e($p['ad_type']) ?></span>
-                    <span class="badge badge-<?= $p['ad_active'] ? 'green' : 'gray' ?>" style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase;"><?= $p['ad_active'] ? 'Active' : 'Inactive' ?></span>
+                    <span class="badge badge-blue"><?= e($p['ad_type']) ?></span>
+                    <span class="badge badge-<?= $p['ad_active'] ? 'green' : 'gray' ?>"><?= $p['ad_active'] ? 'Active' : 'Inactive' ?></span>
                   </div>
                 <?php else: ?>
                   <span class="text-muted text-xs" style="font-style: italic; color: var(--text3);">Unassigned</span>
                 <?php endif; ?>
               </td>
-              <td style="padding: 14px 12px; text-align: right;">
+              <td style="text-align: right;">
                 <div style="display: inline-flex; gap: 6px; align-items: center;">
                   <!-- Edit/Assign Button -->
-                  <button type="button" class="btn btn-sm btn-outline" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>')" style="font-weight: 600;">
-                    ✏️ Edit
+                  <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    Edit
                   </button>
 
                   <!-- Duplicate Action Form -->
-                  <form method="POST" style="display:inline;">
+                  <form method="POST" style="display:inline-block; margin: 0;">
                     <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
                     <input type="hidden" name="placement_id" value="<?= $p['id'] ?>">
-                    <button name="action" value="duplicate" class="btn btn-sm btn-outline" style="border-color: var(--blue); color: var(--blue);" title="Duplicate this placement">
-                      👯 Duplicate
+                    <button name="action" value="duplicate" class="btn-action btn-duplicate" title="Duplicate this placement">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      Duplicate
                     </button>
                   </form>
 
                   <!-- Delete Action Form (only for duplicated items) -->
                   <?php if ($p['id'] > 4): ?>
-                    <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this duplicated placement?');">
+                    <form method="POST" style="display:inline-block; margin: 0;" onsubmit="return confirm('Are you sure you want to delete this duplicated placement?');">
                       <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
                       <input type="hidden" name="placement_id" value="<?= $p['id'] ?>">
-                      <button name="action" value="delete" class="btn btn-sm btn-outline" style="border-color: var(--red); color: var(--red);" title="Delete duplicated placement">
-                        🗑️ Delete
+                      <button name="action" value="delete" class="btn-action btn-delete" title="Delete duplicated placement">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        Delete
                       </button>
                     </form>
                   <?php endif; ?>
