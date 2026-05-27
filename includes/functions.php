@@ -684,7 +684,7 @@ HTML;
         if ($ad['content_type'] === 'image' && $ad['image_url']) {
             $img_src = str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'];
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; min-height:auto;">
+<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}" onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; min-height:auto;">
   <div class="video-thumb" style="position:relative; aspect-ratio:{$aspect_ratio}; background:#0c0c0d; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
     <img src="{$img_src}" alt="{$title}" loading="lazy" class="thumb-main" style="width:100%; height:100%; object-fit:cover">
     {$sponsored_tag}
@@ -700,7 +700,7 @@ HTML;
             $inner_style = $ad['ad_height'] ? "height:" . (int)$ad['ad_height'] . "px;" : "min-height:160px;";
             
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in{$device_class}" style="{$card_style} display:flex; flex-direction:column; overflow:hidden; border-radius:12px; position:relative;">
+<article class="video-card ad-card fade-in{$device_class}" data-device-target="{$ad['placement_device']}" style="{$card_style} display:flex; flex-direction:column; overflow:hidden; border-radius:12px; position:relative;">
   {$sponsored_tag}
   <div class="ad-html-content" style="flex:1; position:relative; overflow:hidden; z-index:1; {$inner_style}">
     {$html_content}
@@ -710,7 +710,7 @@ HTML;
         } else {
             $content_text = e($ad['content']);
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; background:linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.03)); display:flex; flex-direction:column; justify-content:space-between; min-height:220px; border:1px solid rgba(99,102,241,0.15); border-radius:12px; transition:all 0.2s; position:relative;">
+<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}" onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; background:linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.03)); display:flex; flex-direction:column; justify-content:space-between; min-height:220px; border:1px solid rgba(99,102,241,0.15); border-radius:12px; transition:all 0.2s; position:relative;">
   {$sponsored_tag}
   <div style="padding:22px; flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center">
     <div style="font-size:2rem; margin-bottom:12px; filter: drop-shadow(0 2px 6px rgba(99,102,241,0.25));">🚀</div>

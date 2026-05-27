@@ -90,8 +90,12 @@ function render_ad_placeholder(string $placement_key): string {
         $h = $ad['placement_height'] ?: $ad['ad_height'];
 
         $size_style = '';
-        if ($w) $size_style .= 'max-width:' . (int)$w . 'px;';
-        if ($h) $size_style .= 'max-height:' . (int)$h . 'px;';
+        if ($placement_key === 'home_mobile_top') {
+            $size_style .= 'width:100% !important;';
+        } else {
+            if ($w) $size_style .= 'width:' . (int)$w . 'px;';
+        }
+        if ($h) $size_style .= 'height:' . (int)$h . 'px;';
 
         $device_class = '';
         if ($ad['placement_device'] === 'mobile' || $ad['device_target'] === 'mobile') {
@@ -101,10 +105,13 @@ function render_ad_placeholder(string $placement_key): string {
         }
 
         $container_style = 'margin:24px auto;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;';
-        if ($w) {
+        if ($placement_key === 'home_mobile_top') {
+            $container_style = 'margin:-16px -16px 4px -16px !important;padding:0 !important;background:none !important;border:none !important;border-radius:0 !important;text-align:center;box-sizing:border-box;width:100% !important;max-width:none !important;';
+        }
+        if ($w && $placement_key !== 'home_mobile_top') {
             $container_style .= 'width:100%;max-width:' . ((int)$w + 32) . 'px;';
         }
-        if ($h) {
+        if ($h && $placement_key !== 'home_mobile_top') {
             $container_style .= 'height:auto;max-height:' . ((int)$h + 32) . 'px;';
         }
 
@@ -112,20 +119,20 @@ function render_ad_placeholder(string $placement_key): string {
         if ($ad['content_type'] === 'image' && $ad['image_url']) {
             $img_src = str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'];
             $click_url = $ad['target_url'] ?: '#';
-            $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link">'
-                   . '<img src="' . e($img_src) . '" alt="' . e($ad['title']) . '" style="max-width:100%;height:auto;display:block;border-radius:4px;margin:0 auto">'
+            $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link" style="display:block;width:100%;height:100%;">'
+                   . '<img src="' . e($img_src) . '" alt="' . e($ad['title']) . '" style="width:100%;' . ($h ? 'height:100%;object-fit:contain;' : 'height:auto;') . 'display:block;border-radius:4px;margin:0 auto">'
                    . '</a>';
         } elseif ($ad['content_type'] === 'html') {
-            $inner = '<div class="ad-html-content" style="width:100%; display:block; margin:0 auto; overflow:hidden;">' . $ad['content'] . '</div>';
+            $inner = '<div class="ad-html-content" style="width:100%;' . ($h ? 'height:100%;' : '') . 'display:block;margin:0 auto;overflow:hidden;">' . $ad['content'] . '</div>';
         } else {
             $click_url = $ad['target_url'] ?: '#';
             $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link" style="font-weight:700;color:var(--accent);text-decoration:underline;font-size:.9rem">'
                    . e($ad['content'] ?: $ad['title']) . '</a>';
         }
 
-        $output .= '<div class="ad-sponsored-container' . $device_class . '" data-placement="' . e($placement_key) . '" style="' . $container_style . '">'
+        $output .= '<div class="ad-sponsored-container' . $device_class . '" data-placement="' . e($placement_key) . '" data-device-target="' . e($ad['placement_device']) . '" style="' . $container_style . '">'
              . $sponsored_label
-             . '<div style="margin:0 auto;display:block;width:100%;' . $size_style . '">' . $inner . '</div>'
+             . '<div style="margin:0 auto;display:block;width:100%;max-width:100%;' . $size_style . '">' . $inner . '</div>'
              . '</div>';
     }
 
@@ -242,7 +249,6 @@ if ($creatorId) {
         <h2 class="section-title">&#128293; Trending Now</h2>
         <a href="<?= BASE_URL ?>/search.php?sort=views" class="see-all">See all &rarr;</a>
       </div>
-      <?= render_ad_placeholder('landing_trending_header') ?>
       <div class="grid grid-6">
         <?php 
         $trending_subset = array_slice($trending, 0, 5);

@@ -20,7 +20,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_ad') {
     $now = date('Y-m-d');
     $ad = db_fetch(
         "SELECT a.id, a.title, a.content_type, a.content, a.target_url, a.image_url,
-                a.ad_width, a.ad_height, a.device_target
+                COALESCE(ap.ad_width, a.ad_width) AS ad_width,
+                COALESCE(ap.ad_height, a.ad_height) AS ad_height,
+                a.device_target
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id
          WHERE ap.key_name = ?
@@ -56,7 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'fetch') {
     $now = date('Y-m-d');
     $ads = db_fetchAll(
         "SELECT a.id, a.title, a.content_type, a.content, a.target_url, a.image_url,
-                a.ad_width, a.ad_height, a.device_target
+                COALESCE(ap.ad_width, a.ad_width) AS ad_width,
+                COALESCE(ap.ad_height, a.ad_height) AS ad_height,
+                a.device_target
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id
          WHERE ap.key_name = ?

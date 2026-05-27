@@ -30,8 +30,20 @@
         container.innerHTML = '';
         container.classList.add('loaded');
         container.style.display = 'block';
+
+        // Update device targeting classes dynamically
+        container.classList.remove('ad-mobile-only', 'ad-desktop-only');
+        const placementDevice = container.dataset.deviceTarget || 'all';
+        if (ad.device_target === 'mobile' || placementDevice === 'mobile') {
+          container.classList.add('ad-mobile-only');
+        } else if (ad.device_target === 'desktop' || placementDevice === 'desktop') {
+          container.classList.add('ad-desktop-only');
+        }
         
-        if (ad.ad_width) {
+        if (placement === 'home_mobile_top') {
+          container.style.width = '100%';
+          container.style.maxWidth = 'none';
+        } else if (ad.ad_width) {
           container.style.maxWidth = (parseInt(ad.ad_width) + 32) + 'px';
           container.style.width = '100%';
           container.style.marginLeft = 'auto';
@@ -39,7 +51,11 @@
         }
         
         let sizeStyle = '';
-        if (ad.ad_width) sizeStyle += `width: ${ad.ad_width}px; `;
+        if (placement === 'home_mobile_top') {
+          sizeStyle += 'width: 100% !important; ';
+        } else if (ad.ad_width) {
+          sizeStyle += `width: ${ad.ad_width}px; `;
+        }
         if (ad.ad_height) sizeStyle += `height: ${ad.ad_height}px; `;
         
         const wrapper = document.createElement('div');
@@ -51,19 +67,20 @@
           imgLink.href = ad.target_url || '#';
           imgLink.target = '_blank';
           imgLink.rel = 'noopener';
+          imgLink.style.cssText = 'display: block; width: 100%; height: 100%;';
           imgLink.addEventListener('click', () => trackClick(ad.id));
           
           const img = document.createElement('img');
           img.src = ad.image_url;
           img.alt = ad.title;
-          img.style.cssText = 'max-width: 100%; height: auto; display: block; border-radius: 4px;';
+          img.style.cssText = `width: 100%; ${ad.ad_height ? 'height: 100%; object-fit: contain;' : 'height: auto;'} display: block; border-radius: 4px;`;
           
           imgLink.appendChild(img);
           wrapper.appendChild(imgLink);
         } else if (ad.content_type === 'html') {
           const adDiv = document.createElement('div');
           adDiv.className = 'ad-html-content';
-          adDiv.style.cssText = 'width:100%; display:block; margin:0 auto; overflow:hidden;';
+          adDiv.style.cssText = `width: 100%; ${ad.ad_height ? 'height: 100%;' : ''} display: block; margin: 0 auto; overflow: hidden;`;
           wrapper.appendChild(adDiv);
           
           try {
