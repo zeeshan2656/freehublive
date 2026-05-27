@@ -909,7 +909,7 @@ tbody tr:hover{background:var(--bg3)}
 }
 @media(max-width:480px){
   .grid-3,.grid-4,.grid-5,.grid-6{grid-template-columns:1fr}
-  .site-footer .grid-4 { grid-template-columns: 1fr; }
+  .site-footer .grid-4 { grid-template-columns: 1fr 1fr; }
   .watch-page .related-thumb { width: 100px; }
   .channel-header .channel-avatar-lg { width: 64px; height: 64px; }
   .quick-actions { grid-template-columns: 1fr !important; }
