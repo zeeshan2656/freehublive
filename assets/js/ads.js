@@ -8,7 +8,7 @@
     || '';
 
   function detectDeviceType() {
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 900) {
       return "mobile";
     }
     return "desktop";

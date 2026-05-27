@@ -1300,7 +1300,7 @@ tbody tr:hover{background:var(--bg3)}
 .ad-mobile-only { display: none !important; }
 .ad-desktop-only { display: block !important; }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .ad-mobile-only { display: block !important; }
   .ad-desktop-only { display: none !important; }
 }
