@@ -228,4 +228,18 @@ function fh_run_migrations(): void {
         } catch (Throwable $e) {}
         db_query("ALTER TABLE ad_placements ADD COLUMN device_target ENUM('all', 'desktop', 'mobile') NOT NULL DEFAULT 'all' AFTER key_name");
     }
+
+    if (fh_table_exists('ad_placements') && !fh_column_exists('ad_placements', 'ad_width')) {
+        db_query("ALTER TABLE ad_placements ADD COLUMN ad_width SMALLINT UNSIGNED DEFAULT NULL AFTER device_target");
+    }
+    if (fh_table_exists('ad_placements') && !fh_column_exists('ad_placements', 'ad_height')) {
+        db_query("ALTER TABLE ad_placements ADD COLUMN ad_height SMALLINT UNSIGNED DEFAULT NULL AFTER ad_width");
+    }
+
+    if (fh_table_exists('ad_placements')) {
+        $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = 'home_mobile_top'");
+        if ((int)$check['c'] === 0) {
+            db_query("INSERT INTO ad_placements (key_name, name, device_target) VALUES ('home_mobile_top', 'Home Page Mobile Top Banner', 'mobile')");
+        }
+    }
 }

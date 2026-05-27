@@ -66,7 +66,7 @@ if ($sel_cat) {
 function render_ad_placeholder(string $placement_key): string {
     $now = date('Y-m-d');
     $placements = db_fetchAll(
-        "SELECT ap.device_target as placement_device, a.*
+        "SELECT ap.device_target as placement_device, ap.ad_width as placement_width, ap.ad_height as placement_height, a.*
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id
          WHERE ap.key_name = ?
@@ -85,9 +85,13 @@ function render_ad_placeholder(string $placement_key): string {
 
         $sponsored_label = '<div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>Sponsored</div>';
 
+        // Resolve width and height (placement values override ad values)
+        $w = $ad['placement_width'] ?: $ad['ad_width'];
+        $h = $ad['placement_height'] ?: $ad['ad_height'];
+
         $size_style = '';
-        if ($ad['ad_width']) $size_style .= 'max-width:' . (int)$ad['ad_width'] . 'px;';
-        if ($ad['ad_height']) $size_style .= 'max-height:' . (int)$ad['ad_height'] . 'px;';
+        if ($w) $size_style .= 'max-width:' . (int)$w . 'px;';
+        if ($h) $size_style .= 'max-height:' . (int)$h . 'px;';
 
         $device_class = '';
         if ($ad['placement_device'] === 'mobile' || $ad['device_target'] === 'mobile') {
@@ -97,8 +101,11 @@ function render_ad_placeholder(string $placement_key): string {
         }
 
         $container_style = 'margin:24px auto;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;';
-        if ($ad['ad_width']) {
-            $container_style .= 'width:100%;max-width:' . ((int)$ad['ad_width'] + 32) . 'px;';
+        if ($w) {
+            $container_style .= 'width:100%;max-width:' . ((int)$w + 32) . 'px;';
+        }
+        if ($h) {
+            $container_style .= 'height:auto;max-height:' . ((int)$h + 32) . 'px;';
         }
 
         $inner = '';
@@ -174,6 +181,8 @@ if ($creatorId) {
     <?php foreach (get_flash() as $f): ?>
       <div class="alert alert-<?= e($f['type']) ?>"><?= e($f['msg']) ?></div>
     <?php endforeach; ?>
+
+    <?= render_ad_placeholder('home_mobile_top') ?>
 
     <!-- Hero -->
     <?php if ($hero): ?>

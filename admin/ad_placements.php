@@ -12,12 +12,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         $id = (int)($_POST['placement_id'] ?? 0);
         $name = trim($_POST['name'] ?? '');
         $device_target = $_POST['device_target'] ?? 'all';
+        $ad_width = $_POST['ad_width'] === '' ? null : (int)$_POST['ad_width'];
+        $ad_height = $_POST['ad_height'] === '' ? null : (int)$_POST['ad_height'];
         $ad_id = $_POST['ad_id'] === '' ? null : (int)$_POST['ad_id'];
         
         if ($id && $name) {
             db_update('ad_placements', [
                 'name' => $name,
                 'device_target' => $device_target,
+                'ad_width' => $ad_width,
+                'ad_height' => $ad_height,
                 'assigned_ad_id' => $ad_id
             ], 'id=?', [$id]);
             flash('success', 'Ad placement updated successfully.');
@@ -31,6 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
             db_insert('ad_placements', [
                 'key_name'       => $orig['key_name'],
                 'device_target'  => $orig['device_target'],
+                'ad_width'       => $orig['ad_width'] ?: null,
+                'ad_height'      => $orig['ad_height'] ?: null,
                 'name'           => 'Copy of ' . $orig['name'],
                 'assigned_ad_id' => $orig['assigned_ad_id'] ?: null
             ]);
@@ -267,6 +273,7 @@ require_once __DIR__ . '/partials/admin_head.php';
             <th>Name</th>
             <th>Key Name</th>
             <th>Device Target</th>
+            <th>Placement Size</th>
             <th>Assigned Ad</th>
             <th style="text-align: right;">Actions</th>
           </tr>
@@ -287,6 +294,15 @@ require_once __DIR__ . '/partials/admin_head.php';
                  </span>
               </td>
               <td>
+                <?php if ($p['ad_width'] || $p['ad_height']): ?>
+                  <code style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-weight: bold; color: var(--text2);">
+                    <?= $p['ad_width'] ? (int)$p['ad_width'] . 'px' : 'Auto' ?> × <?= $p['ad_height'] ? (int)$p['ad_height'] . 'px' : 'Auto' ?>
+                  </code>
+                <?php else: ?>
+                  <span class="text-muted text-xs" style="font-style: italic; color: var(--text3);">Auto / Responsive</span>
+                <?php endif; ?>
+              </td>
+              <td>
                 <?php if ($p['assigned_ad_id']): ?>
                   <div class="flex gap-2" style="align-items: center; flex-wrap: wrap;">
                     <span style="font-weight: 700; font-size: 0.88rem; color: var(--text);"><?= e($p['ad_title']) ?></span>
@@ -300,7 +316,7 @@ require_once __DIR__ . '/partials/admin_head.php';
               <td style="text-align: right;">
                 <div style="display: inline-flex; gap: 6px; align-items: center;">
                   <!-- Edit/Assign Button -->
-                  <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>')">
+                  <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>', '<?= $p['ad_width'] ?: '' ?>', '<?= $p['ad_height'] ?: '' ?>')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     Edit
                   </button>
@@ -373,6 +389,17 @@ require_once __DIR__ . '/partials/admin_head.php';
               <option value="mobile">Mobile Only</option>
             </select>
           </div>
+
+          <div class="form-row-grid" style="margin-bottom: 14px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Max Width (px)</label>
+              <input class="form-input" type="number" name="ad_width" id="modal_ad_width" placeholder="e.g. 728 (Optional)" min="1" style="font-size: 0.9rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Max Height (px)</label>
+              <input class="form-input" type="number" name="ad_height" id="modal_ad_height" placeholder="e.g. 90 (Optional)" min="1" style="font-size: 0.9rem;">
+            </div>
+          </div>
           
           <div class="form-group" style="margin-bottom: 20px;">
             <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: var(--text2); margin-bottom: 6px;">Select Ad to Assign</label>
@@ -399,12 +426,14 @@ require_once __DIR__ . '/partials/admin_head.php';
 </div>
 
 <script>
-function openPlacementModal(id, name, key, deviceTarget, assignedAdId) {
+function openPlacementModal(id, name, key, deviceTarget, assignedAdId, adWidth, adHeight) {
   document.getElementById('modal_placement_id').value = id;
   document.getElementById('modal_placement_name').value = name;
   document.getElementById('modal_placement_key').value = key;
   document.getElementById('modal_device_target').value = deviceTarget;
   document.getElementById('modal_ad_id').value = assignedAdId || '';
+  document.getElementById('modal_ad_width').value = adWidth || '';
+  document.getElementById('modal_ad_height').value = adHeight || '';
   document.getElementById('placement-modal').classList.add('open');
 }
 
