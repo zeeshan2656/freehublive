@@ -61,11 +61,19 @@
           imgLink.appendChild(img);
           wrapper.appendChild(imgLink);
         } else if (ad.content_type === 'html') {
-          const iframe = document.createElement('iframe');
-          iframe.style.cssText = 'border:none; width:100%; height:100%; min-height:90px; background:transparent;';
-          iframe.scrolling = 'no';
-          iframe.srcdoc = `<!DOCTYPE html><html><head><style>body{margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100%;overflow:hidden;background:transparent;}</style></head><body>${ad.content}</body></html>`;
-          wrapper.appendChild(iframe);
+          const adDiv = document.createElement('div');
+          adDiv.className = 'ad-html-content';
+          adDiv.style.cssText = 'width:100%; display:block; margin:0 auto; overflow:hidden;';
+          wrapper.appendChild(adDiv);
+          
+          try {
+            const range = document.createRange();
+            range.selectNode(adDiv);
+            const fragment = range.createContextualFragment(ad.content);
+            adDiv.appendChild(fragment);
+          } catch (e) {
+            adDiv.innerHTML = ad.content;
+          }
         } else {
           const txtLink = document.createElement('a');
           txtLink.href = ad.target_url || '#';

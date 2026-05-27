@@ -694,7 +694,6 @@ HTML;
 HTML;
         } elseif ($ad['content_type'] === 'html') {
             $html_content = $ad['content'];
-            $srcdoc = htmlspecialchars('<!DOCTYPE html><html><head><style>body{margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100%;overflow:hidden;background:transparent;}</style></head><body>' . $html_content . '</body></html>', ENT_QUOTES, 'UTF-8');
             
             $aspect_ratio_val = ($ad['ad_width'] && $ad['ad_height']) ? ((int)$ad['ad_width'] . '/' . (int)$ad['ad_height']) : '';
             $card_style = $aspect_ratio_val ? "min-height:auto; aspect-ratio:{$aspect_ratio_val};" : "min-height:200px;";
@@ -703,8 +702,8 @@ HTML;
             $inner_html = <<<HTML
 <article class="video-card ad-card fade-in{$device_class}" style="{$card_style} display:flex; flex-direction:column; overflow:hidden; border-radius:12px; position:relative;">
   {$sponsored_tag}
-  <div style="flex:1; position:relative; overflow:hidden; z-index:1; {$inner_style}">
-    <iframe srcdoc="{$srcdoc}" style="border:none; width:100%; height:100%; background:transparent;" scrolling="no"></iframe>
+  <div class="ad-html-content" style="flex:1; position:relative; overflow:hidden; z-index:1; {$inner_style}">
+    {$html_content}
   </div>
 </article>
 HTML;

@@ -63,61 +63,66 @@ if ($sel_cat) {
     );
 }
 
-function render_ad_placeholder(string $placement): string {
-    $device = detect_device();
+function render_ad_placeholder(string $placement_key): string {
     $now = date('Y-m-d');
-    $ad = db_fetch(
-        "SELECT a.id, a.title, a.content_type, a.content, a.target_url, a.image_url,
-                a.ad_width, a.ad_height
+    $placements = db_fetchAll(
+        "SELECT ap.device_target as placement_device, a.*
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id
          WHERE ap.key_name = ?
-           AND (ap.device_target = ? OR ap.device_target = 'all')
            AND a.is_active = 1
-           AND (a.device_target = ? OR a.device_target = 'all')
            AND (a.start_date IS NULL OR a.start_date <= ?)
-           AND (a.end_date IS NULL OR a.end_date >= ?)
-         ORDER BY (ap.device_target = ?) DESC, RAND()
-         LIMIT 1",
-        [$placement, $device, $device, $now, $now, $device]
+           AND (a.end_date IS NULL OR a.end_date >= ?)",
+        [$placement_key, $now, $now]
     );
-    if (!$ad) return '';
 
-    // Track impression
-    db_query("UPDATE ads SET impressions=impressions+1 WHERE id=?", [$ad['id']]);
+    if (!$placements) return '';
 
-    $sponsored_label = '<div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>Sponsored</div>';
+    $output = '';
+    foreach ($placements as $ad) {
+        // Track impression
+        db_query("UPDATE ads SET impressions=impressions+1 WHERE id=?", [$ad['id']]);
 
-    $size_style = '';
-    if ($ad['ad_width']) $size_style .= 'max-width:' . (int)$ad['ad_width'] . 'px;';
-    if ($ad['ad_height']) $size_style .= 'max-height:' . (int)$ad['ad_height'] . 'px;';
+        $sponsored_label = '<div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>Sponsored</div>';
 
-    $container_style = 'margin:24px auto;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;';
-    if ($ad['ad_width']) {
-        $container_style .= 'width:100%;max-width:' . ((int)$ad['ad_width'] + 32) . 'px;';
+        $size_style = '';
+        if ($ad['ad_width']) $size_style .= 'max-width:' . (int)$ad['ad_width'] . 'px;';
+        if ($ad['ad_height']) $size_style .= 'max-height:' . (int)$ad['ad_height'] . 'px;';
+
+        $device_class = '';
+        if ($ad['placement_device'] === 'mobile' || $ad['device_target'] === 'mobile') {
+            $device_class = ' ad-mobile-only';
+        } elseif ($ad['placement_device'] === 'desktop' || $ad['device_target'] === 'desktop') {
+            $device_class = ' ad-desktop-only';
+        }
+
+        $container_style = 'margin:24px auto;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;';
+        if ($ad['ad_width']) {
+            $container_style .= 'width:100%;max-width:' . ((int)$ad['ad_width'] + 32) . 'px;';
+        }
+
+        $inner = '';
+        if ($ad['content_type'] === 'image' && $ad['image_url']) {
+            $img_src = str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'];
+            $click_url = $ad['target_url'] ?: '#';
+            $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link">'
+                   . '<img src="' . e($img_src) . '" alt="' . e($ad['title']) . '" style="max-width:100%;height:auto;display:block;border-radius:4px;margin:0 auto">'
+                   . '</a>';
+        } elseif ($ad['content_type'] === 'html') {
+            $inner = '<div class="ad-html-content" style="width:100%; display:block; margin:0 auto; overflow:hidden;">' . $ad['content'] . '</div>';
+        } else {
+            $click_url = $ad['target_url'] ?: '#';
+            $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link" style="font-weight:700;color:var(--accent);text-decoration:underline;font-size:.9rem">'
+                   . e($ad['content'] ?: $ad['title']) . '</a>';
+        }
+
+        $output .= '<div class="ad-sponsored-container' . $device_class . '" data-placement="' . e($placement_key) . '" style="' . $container_style . '">'
+             . $sponsored_label
+             . '<div style="margin:0 auto;display:block;width:100%;' . $size_style . '">' . $inner . '</div>'
+             . '</div>';
     }
 
-    $inner = '';
-    if ($ad['content_type'] === 'image' && $ad['image_url']) {
-        $img_src = str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'];
-        $click_url = $ad['target_url'] ?: '#';
-        $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link">'
-               . '<img src="' . e($img_src) . '" alt="' . e($ad['title']) . '" style="max-width:100%;height:auto;display:block;border-radius:4px;margin:0 auto">'
-               . '</a>';
-    } elseif ($ad['content_type'] === 'html') {
-        $srcdoc = htmlspecialchars('<!DOCTYPE html><html><head><style>body{margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100%;overflow:hidden;background:transparent;}</style></head><body>' . $ad['content'] . '</body></html>', ENT_QUOTES, 'UTF-8');
-        $iframe_height = $ad['ad_height'] ? (int)$ad['ad_height'] . 'px' : '90px';
-        $inner = '<iframe srcdoc="' . $srcdoc . '" style="border:none; width:100%; height:' . $iframe_height . '; background:transparent; display:block;" scrolling="no"></iframe>';
-    } else {
-        $click_url = $ad['target_url'] ?: '#';
-        $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link" style="font-weight:700;color:var(--accent);text-decoration:underline;font-size:.9rem">'
-               . e($ad['content'] ?: $ad['title']) . '</a>';
-    }
-
-    return '<div class="ad-sponsored-container" style="' . $container_style . '">'
-         . $sponsored_label
-         . '<div style="margin:0 auto;display:block;width:100%;' . $size_style . '">' . $inner . '</div>'
-         . '</div>';
+    return $output;
 }
 
 // Auto-detect missing durations for videos shown on this page
