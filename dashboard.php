@@ -55,9 +55,9 @@ if ($from && $to) {
 
 $qParams = array_merge([$uid], $dateParams);
 
-$total_videos_watched = db_count('video_views', "user_id=? AND $dateWhere", $qParams);
-$total_watch_time = db_fetch("SELECT SUM(watch_seconds) as t FROM video_views WHERE user_id=? AND $dateWhere", $qParams)['t'] ?? 0;
-$total_viewing_earnings = db_fetch("SELECT SUM(amount) as t FROM earnings WHERE user_id=? AND type='watch_time' AND $dateWhere", $qParams)['t'] ?? 0;
+$total_ad_impressions = db_count('ad_logs', "viewer_id=? AND type='impression' AND $dateWhere", $qParams);
+$total_ad_clicks = db_count('ad_logs', "viewer_id=? AND type='click' AND $dateWhere", $qParams);
+$total_viewing_earnings = db_fetch("SELECT SUM(amount) as t FROM earnings WHERE user_id=? AND type IN ('ad_impression', 'ad_click') AND $dateWhere", $qParams)['t'] ?? 0;
 
 $total_clicks = fh_table_exists('affiliate_clicks') ? db_count('affiliate_clicks', "affiliate_id=? AND $dateWhere", $qParams) : 0;
 $total_referrals = fh_table_exists('referral_conversions') ? db_count('referral_conversions', "referrer_id=? AND $dateWhere", $qParams) : 0;
@@ -71,10 +71,10 @@ $referral_earnings = db_fetch("SELECT SUM(amount) as t FROM earnings WHERE user_
 $chart = [];
 for ($i = min($days, 30) - 1; $i >= 0; $i--) {
     $d = date('Y-m-d', strtotime("-$i days"));
-    $vw = db_fetch("SELECT SUM(watch_seconds) as wt FROM video_views WHERE user_id=? AND DATE(created_at)=?", [$uid, $d])['wt'] ?? 0;
-    $chart[] = ['date' => date('M j', strtotime("-$i days")), 'wt' => $vw];
+    $vw = db_fetch("SELECT COUNT(id) as c FROM ad_logs WHERE viewer_id=? AND type='impression' AND DATE(created_at)=?", [$uid, $d])['c'] ?? 0;
+    $chart[] = ['date' => date('M j', strtotime("-$i days")), 'impressions' => (int)$vw];
 }
-$maxWt = max(1, max(array_column($chart, 'wt')));
+$maxImpressions = max(1, max(array_column($chart, 'impressions')));
 
 $meta_title = 'My Dashboard';
 require_once __DIR__ . '/includes/header.php';
@@ -118,12 +118,12 @@ require_once __DIR__ . '/includes/header.php';
       
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:32px">
         <div class="stat-card" style="padding:20px;display:flex;flex-direction:column;justify-content:center">
-          <div class="stat-label" style="font-size:.8rem;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Videos Watched</div>
-          <div class="stat-value" style="font-size:1.8rem;font-weight:800"><?= format_number($total_videos_watched) ?></div>
+          <div class="stat-label" style="font-size:.8rem;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Ad Impressions</div>
+          <div class="stat-value" style="font-size:1.8rem;font-weight:800"><?= format_number($total_ad_impressions) ?></div>
         </div>
         <div class="stat-card" style="padding:20px;display:flex;flex-direction:column;justify-content:center">
-          <div class="stat-label" style="font-size:.8rem;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Watch Time</div>
-          <div class="stat-value" style="font-size:1.8rem;font-weight:800"><?= format_duration((int)$total_watch_time) ?></div>
+          <div class="stat-label" style="font-size:.8rem;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Ad Clicks</div>
+          <div class="stat-value" style="font-size:1.8rem;font-weight:800"><?= format_number($total_ad_clicks) ?></div>
         </div>
         <div class="stat-card" style="padding:20px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,rgba(99,102,241,.05),transparent);border-color:rgba(99,102,241,.2)">
           <div class="stat-label" style="font-size:.8rem;color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Viewing Earnings</div>
@@ -161,34 +161,34 @@ require_once __DIR__ . '/includes/header.php';
         </div>
       </div>
 
-      <!-- Watch Time Chart -->
+      <!-- Ad Impressions Chart -->
       <div class="card" style="margin-bottom:28px;padding:24px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
           <h3 style="font-weight:800;font-size:1.15rem;display:flex;align-items:center;gap:8px">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            Daily Watch Time Trend
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+            Daily Ad Impressions Trend
             <span style="font-size:.8rem;font-weight:600;color:var(--text2);background:var(--bg3);padding:2px 8px;border-radius:12px"><?= e($label) ?></span>
           </h3>
         </div>
         <?php
-          $hasData = max(array_column($chart, 'wt')) > 0;
+          $hasData = max(array_column($chart, 'impressions')) > 0;
         ?>
         <?php if (!$hasData): ?>
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:140px;color:var(--text2);gap:8px">
-          <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.4"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          <span style="font-size:.9rem">No watch time data for this period</span>
+          <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.4"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M12 18V6M6 12h12"/></svg>
+          <span style="font-size:.9rem">No ad impressions for this period</span>
         </div>
         <?php else: ?>
         <div style="display:flex;align-items:flex-end;gap:4px;height:160px;overflow-x:auto;padding-bottom:4px">
           <?php foreach ($chart as $d):
-            $h = max(4, round(($d['wt']/$maxWt)*130));
-            $opacity = $d['wt'] > 0 ? '1' : '0.2';
+            $h = max(4, round(($d['impressions']/$maxImpressions)*130));
+            $opacity = $d['impressions'] > 0 ? '1' : '0.2';
           ?>
           <div style="flex:1;min-width:28px;max-width:44px;display:flex;flex-direction:column;align-items:center;gap:4px;height:160px;justify-content:flex-end">
-            <?php if($d['wt'] > 0): ?>
-            <span style="font-size:.6rem;color:var(--text2);white-space:nowrap;writing-mode:horizontal-tb"><?= format_duration((int)$d['wt']) ?></span>
+            <?php if($d['impressions'] > 0): ?>
+            <span style="font-size:.6rem;color:var(--text2);white-space:nowrap;writing-mode:horizontal-tb"><?= format_number($d['impressions']) ?></span>
             <?php endif; ?>
-            <div style="width:100%;max-width:32px;height:<?= $h ?>px;background:linear-gradient(to top,var(--accent),rgba(139,92,246,.5));border-radius:5px 5px 0 0;opacity:<?= $opacity ?>;transition:opacity .2s;cursor:default" title="<?= $d['date'] ?>: <?= format_duration((int)$d['wt']) ?> watch time"></div>
+            <div style="width:100%;max-width:32px;height:<?= $h ?>px;background:linear-gradient(to top,var(--accent),rgba(139,92,246,.5));border-radius:5px 5px 0 0;opacity:<?= $opacity ?>;transition:opacity .2s;cursor:default" title="<?= $d['date'] ?>: <?= format_number($d['impressions']) ?> impressions"></div>
             <span style="font-size:.6rem;color:var(--text2);white-space:nowrap"><?= $d['date'] ?></span>
           </div>
           <?php endforeach; ?>
@@ -272,7 +272,7 @@ require_once __DIR__ . '/includes/header.php';
           </table>
         </div>
         <?php else: ?>
-        <p class="text-muted text-sm">No earnings yet. Watch videos to start earning based on your watch time.</p>
+        <p class="text-muted text-sm">No earnings yet. Interact with ads on video watch pages to start earning.</p>
         <?php endif; ?>
       </div>
       <?php endif; ?>

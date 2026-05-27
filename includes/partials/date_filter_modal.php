@@ -128,7 +128,9 @@ function applyCustomSmartDate() {
     alert('Please select both start and end dates.');
     return;
   }
-  saveSmartDateRange(startVal, endVal, 'custom');
+  const activeBtn = document.querySelector('.date-preset-btn.active');
+  const presetLabel = activeBtn ? activeBtn.dataset.preset : 'custom';
+  saveSmartDateRange(startVal, endVal, presetLabel);
 }
 
 function saveSmartDateRange(start, end, presetLabel) {
@@ -151,6 +153,10 @@ function saveSmartDateRange(start, end, presetLabel) {
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.date-preset-btn').forEach(btn => {
     btn.addEventListener('click', function() {
+      // Highlight clicked preset
+      document.querySelectorAll('.date-preset-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+
       const preset = this.dataset.preset;
       if (preset === 'custom') {
         // Just focus custom fields
@@ -210,8 +216,23 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       if (start && end) {
-        saveSmartDateRange(formatDate(start), formatDate(end), preset);
+        // Set dates automatically in the date boxes on the right
+        document.getElementById('date-start-input').value = formatDate(start);
+        document.getElementById('date-end-input').value = formatDate(end);
       }
+    });
+  });
+
+  // If user modifies inputs manually, clear other preset active highlights and mark custom as active
+  ['date-start-input', 'date-end-input'].forEach(id => {
+    document.getElementById(id).addEventListener('input', function() {
+      document.querySelectorAll('.date-preset-btn').forEach(b => {
+        if (b.dataset.preset === 'custom') {
+          b.classList.add('active');
+        } else {
+          b.classList.remove('active');
+        }
+      });
     });
   });
 

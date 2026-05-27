@@ -166,6 +166,11 @@ require_once __DIR__ . '/includes/header.php';
         <?php endif; ?>
       </div>
 
+      <!-- Ad Placeholder: Below Player -->
+      <div style="margin-top: 16px;">
+        <?= render_ad_placeholder('watch_below_player') ?>
+      </div>
+
       <!-- Video Info -->
       <div class="watch-info">
         <h1 style="font-size:1.25rem;font-weight:700;margin-bottom:8px;line-height:1.3"><?= e($video['title']) ?></h1>
@@ -254,6 +259,10 @@ require_once __DIR__ . '/includes/header.php';
 
     <!-- ── Related Column ── -->
     <aside class="player-sidebar" aria-label="Related videos">
+      <!-- Ad Placeholder: Watch Page Sidebar -->
+      <div style="margin-bottom: 20px; padding: 0 16px;">
+        <?= render_ad_placeholder('watch_sidebar') ?>
+      </div>
       <h2 style="font-size:.95rem;font-weight:700;margin-bottom:12px;padding:0 16px">Up Next</h2>
       <?php foreach ($related as $r): ?>
       <a href="<?= BASE_URL ?>/watch.php?v=<?= $r['id'] ?>" class="related-video-item">

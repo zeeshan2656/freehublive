@@ -222,14 +222,7 @@ if ($creatorId) {
 
 <script>
 const FH_CREATOR_ID = <?= (int)$creatorId ?>;
-// ── Ad click tracking (server-side rendered ads) ────────────
-document.addEventListener('click', function(ev) {
-  const link = ev.target.closest('.ad-click-link');
-  if (link && link.dataset.adId) {
-    const fd = new FormData();
-    navigator.sendBeacon?.('<?= BASE_URL ?>/api/ads.php?action=track_click&id=' + link.dataset.adId, fd);
-  }
-});
+
 
 // ── Infinite scroll / Load More ───────────────────────────────
 function bindLoadMore() {

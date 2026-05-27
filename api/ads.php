@@ -16,6 +16,7 @@ $action = $_GET['action'] ?? '';
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_ad') {
     $placement = $_GET['placement'] ?? 'between_sections';
     $device    = $_GET['device'] ?? 'desktop';
+    $video_id  = (int)($_GET['video_id'] ?? $_GET['v'] ?? 0);
 
     $now = date('Y-m-d');
     $ad = db_fetch(
@@ -38,8 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_ad') {
     );
 
     if ($ad) {
-        // Track impression
-        db_query("UPDATE ads SET impressions=impressions+1 WHERE id=?", [$ad['id']]);
+        // Track ad impression and process payouts
+        fh_track_ad_event((int)$ad['id'], 'impression', $video_id);
         // Fix image URL
         $ad['image_url'] = $ad['image_url']
             ? (str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'])
@@ -55,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'fetch') {
     $placement = $_GET['placement'] ?? 'between_sections';
     $device    = $_GET['device'] ?? 'desktop';
     $limit     = min(10, max(1, (int)($_GET['limit'] ?? 3)));
+    $video_id  = (int)($_GET['video_id'] ?? $_GET['v'] ?? 0);
 
     $now = date('Y-m-d');
     $ads = db_fetchAll(
@@ -77,7 +79,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'fetch') {
     );
 
     foreach ($ads as &$ad) {
-        db_query("UPDATE ads SET impressions=impressions+1 WHERE id=?", [$ad['id']]);
+        // Track ad impression and process payouts
+        fh_track_ad_event((int)$ad['id'], 'impression', $video_id);
         $ad['image_url'] = $ad['image_url']
             ? (str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'])
             : null;
@@ -89,9 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'fetch') {
 
 // ── POST: Track ad impression ────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'track_impression') {
-    $ad_id = (int)($_GET['id'] ?? 0);
+    $ad_id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+    $video_id = (int)($_GET['video_id'] ?? $_POST['video_id'] ?? $_GET['v'] ?? $_POST['v'] ?? 0);
     if ($ad_id) {
-        db_query("UPDATE ads SET impressions=impressions+1 WHERE id=?", [$ad_id]);
+        fh_track_ad_event($ad_id, 'impression', $video_id);
         json_success(['tracked' => true]);
     }
     json_error('Invalid ad');
@@ -99,9 +103,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'track_impression') {
 
 // ── POST: Track ad click ─────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'track_click') {
-    $ad_id = (int)($_GET['id'] ?? 0);
+    $ad_id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+    $video_id = (int)($_GET['video_id'] ?? $_POST['video_id'] ?? $_GET['v'] ?? $_POST['v'] ?? 0);
     if ($ad_id) {
-        db_query("UPDATE ads SET clicks=clicks+1 WHERE id=?", [$ad_id]);
+        fh_track_ad_event($ad_id, 'click', $video_id);
         fh_credit_admin_ad_revenue($ad_id);
         json_success(['tracked' => true]);
     }

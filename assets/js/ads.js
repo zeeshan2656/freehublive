@@ -40,9 +40,10 @@
   async function loadAd(container) {
     const placement = container.dataset.placement;
     const position = container.dataset.position || 1;
+    const videoId = container.dataset.videoId || window.FH_WATCH?.videoId || '';
     
     try {
-      const url = `${BASE_URL}/api/ads.php?action=get_ad&placement=${placement}&position=${position}&device=${device}`;
+      const url = `${BASE_URL}/api/ads.php?action=get_ad&placement=${placement}&position=${position}&device=${device}&video_id=${videoId}`;
       const response = await fetch(url);
       const data = await response.json();
       
@@ -111,7 +112,9 @@
           imgLink.target = '_blank';
           imgLink.rel = 'noopener';
           imgLink.style.cssText = 'display: block; width: 100%; height: 100%;';
-          imgLink.addEventListener('click', () => trackClick(ad.id));
+          imgLink.className = 'ad-click-link';
+          imgLink.dataset.adId = ad.id;
+          imgLink.dataset.videoId = videoId;
           
           const img = document.createElement('img');
           img.src = ad.image_url;
@@ -139,9 +142,11 @@
           txtLink.href = ad.target_url || '#';
           txtLink.target = '_blank';
           txtLink.rel = 'noopener';
+          txtLink.className = 'ad-click-link';
+          txtLink.dataset.adId = ad.id;
+          txtLink.dataset.videoId = videoId;
           txtLink.style.cssText = 'font-weight: bold; color: var(--accent); text-decoration: underline;';
           txtLink.textContent = ad.content || ad.title;
-          txtLink.addEventListener('click', () => trackClick(ad.id));
           wrapper.appendChild(txtLink);
         }
         
@@ -159,11 +164,22 @@
     }
   }
 
-  async function trackClick(adId) {
+  async function trackClick(adId, videoId) {
+    const vid = videoId || '';
     try {
-      await fetch(`${BASE_URL}/api/ads.php?action=track_click&id=${adId}`, { method: 'POST' });
+      await fetch(`${BASE_URL}/api/ads.php?action=track_click&id=${adId}&video_id=${vid}`, { method: 'POST' });
     } catch(e) {}
   }
+
+  // Global ad click tracking listener
+  document.addEventListener('click', function(ev) {
+    const link = ev.target.closest('.ad-click-link');
+    if (link && link.dataset.adId) {
+      const adId = link.dataset.adId;
+      const videoId = link.dataset.videoId || window.FH_WATCH?.videoId || '';
+      trackClick(adId, videoId);
+    }
+  });
 
   function initAds() {
     const containers = document.querySelectorAll('.ad-sponsored-container');

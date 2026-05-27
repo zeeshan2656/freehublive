@@ -349,5 +349,89 @@ function fh_run_migrations(): void {
             // Ignore if already run
         }
     }
+
+    // ── Ad Impressions & Clicks Earnings Migration ──────────────────
+    // 1. Extend earnings.type enum
+    try {
+        db_query("ALTER TABLE earnings MODIFY COLUMN type ENUM(
+            'video_view','affiliate_click','affiliate_view','payout','bonus','watch_time','ad_revenue','referral','ad_impression','ad_click'
+        ) NOT NULL");
+    } catch (Throwable $e) {}
+
+    // 2. Create ad_logs table
+    if (!fh_table_exists('ad_logs')) {
+        db_query("CREATE TABLE ad_logs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            ad_id INT UNSIGNED NOT NULL,
+            video_id INT UNSIGNED DEFAULT NULL,
+            viewer_id INT UNSIGNED DEFAULT NULL,
+            creator_id INT UNSIGNED DEFAULT NULL,
+            type ENUM('impression', 'click') NOT NULL,
+            ip_hash VARCHAR(64) NOT NULL,
+            user_agent VARCHAR(255) DEFAULT NULL,
+            earnings_viewer DECIMAL(12, 6) DEFAULT 0.000000,
+            earnings_creator DECIMAL(12, 6) DEFAULT 0.000000,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ad (ad_id),
+            INDEX idx_video (video_id),
+            INDEX idx_viewer (viewer_id),
+            INDEX idx_creator (creator_id),
+            INDEX idx_type (type),
+            INDEX idx_ip_date (ip_hash, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    // 3. Add default settings for CPM / CPC
+    $ad_defaults = [
+        'creator_cpm' => '1.00',
+        'creator_cpc' => '50.00',
+        'viewer_cpm' => '0.50',
+        'viewer_cpc' => '20.00',
+    ];
+    foreach ($ad_defaults as $key => $val) {
+        db_query(
+            "INSERT INTO settings (`key`,`value`,`group`) VALUES (?,?,'earnings')
+             ON DUPLICATE KEY UPDATE `key`=`key`",
+            [$key, $val]
+        );
+    }
+
+    // 4. Add columns to videos
+    if (fh_table_exists('videos')) {
+        if (!fh_column_exists('videos', 'ad_impressions')) {
+            db_query("ALTER TABLE videos ADD COLUMN ad_impressions INT UNSIGNED NOT NULL DEFAULT 0 AFTER watch_time");
+        }
+        if (!fh_column_exists('videos', 'ad_clicks')) {
+            db_query("ALTER TABLE videos ADD COLUMN ad_clicks INT UNSIGNED NOT NULL DEFAULT 0 AFTER ad_impressions");
+        }
+    }
+
+    // 5. Add columns to users
+    if (fh_table_exists('users')) {
+        if (!fh_column_exists('users', 'total_ad_impressions')) {
+            db_query("ALTER TABLE users ADD COLUMN total_ad_impressions BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER total_watch_seconds");
+        }
+        if (!fh_column_exists('users', 'total_ad_clicks')) {
+            db_query("ALTER TABLE users ADD COLUMN total_ad_clicks BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER total_ad_impressions");
+        }
+        if (!fh_column_exists('users', 'lifetime_ad_earnings')) {
+            db_query("ALTER TABLE users ADD COLUMN lifetime_ad_earnings DECIMAL(12,4) NOT NULL DEFAULT 0.0000 AFTER lifetime_watch_earnings");
+        }
+    }
+
+    // 6. Add default placements for watch page
+    if (fh_table_exists('ad_placements')) {
+        $watch_placements = [
+            ['watch_sidebar', 'Watch Page Sidebar Banner', 'all'],
+            ['watch_below_player', 'Watch Page Below Player Banner', 'all']
+        ];
+        foreach ($watch_placements as $wp) {
+            $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = ?", [$wp[0]]);
+            if ((int)$check['c'] === 0) {
+                db_query("INSERT INTO ad_placements (key_name, name, device_target) VALUES (?, ?, ?)", [$wp[0], $wp[1], $wp[2]]);
+            }
+        }
+    }
 }
+
 

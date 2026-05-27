@@ -278,19 +278,26 @@ function fh_process_watch_time(int $viewId, int $videoId, int $seconds, bool $is
     $credited = 0;
 
     if ($viewerId && $viewerRate > 0 && $viewerStatus === 'active') {
+        // Disabled watch-time payouts: Viewer
+        /*
         $viewerUsd = ($seconds / 3600) * $viewerRate;
         fh_credit_user($viewerUsd, $viewerId, "Watch time: {$seconds}s on video #{$videoId}", $viewId);
         $credited += $viewerUsd;
+        */
     }
     if ($creatorId > 0 && $creatorRate > 0 && $creatorId !== $viewerId && $creatorStatus === 'active' && ($viewerId === null || $viewerStatus === 'active')) {
+        // Disabled watch-time payouts: Creator
+        /*
         $creatorUsd = ($seconds / 3600) * $creatorRate;
         fh_credit_user($creatorUsd, $creatorId, "Creator watch time: {$seconds}s on video #{$videoId}", $viewId);
         db_query('UPDATE videos SET revenue = revenue + ? WHERE id = ?', [$creatorUsd, $videoId]);
         $credited += $creatorUsd;
+        */
     }
     if ($affiliateId > 0 && $refWatchRate > 0 && $affiliateId !== $viewerId && $affiliateId !== $creatorId && $affiliateStatus === 'active' && ($viewerId === null || $viewerStatus === 'active')) {
+        // Disabled watch-time payouts: Affiliate
+        /*
         $affUsd = ($seconds / 3600) * $refWatchRate;
-        // Credit the affiliate (referral type)
         $amount = round($affUsd, 6);
         if ($amount > 0) {
             db_insert('earnings', [
@@ -307,14 +314,168 @@ function fh_process_watch_time(int $viewId, int $videoId, int $seconds, bool $is
             );
             $credited += $affUsd;
         }
+        */
     }
 
     return [
-        'credited'     => round($credited, 6),
+        'credited'     => 0.0,
         'seconds'      => $seconds,
         'viewer_rate'  => $viewerRate,
         'creator_rate' => $creatorRate,
     ];
+}
+
+/** Credit USD balance and log approved ad earning (impression or click). */
+function fh_credit_ad_earnings(int $userId, float $amount, string $userRole, string $eventType, int $adId, ?int $videoId = null): void {
+    if ($amount <= 0 || $userId < 1) return;
+    $userRow = db_fetch("SELECT role, status FROM users WHERE id=?", [$userId]);
+    if (!$userRow) return;
+    if (($userRow['role'] ?? '') === 'admin') return;
+    if (($userRow['status'] ?? 'pending') !== 'active') return;
+    
+    $amount = round($amount, 6);
+    $type = $eventType === 'impression' ? 'ad_impression' : 'ad_click';
+    $desc = ucfirst($userRole) . " ad " . $eventType . " on " . ($videoId ? "video #{$videoId}" : "page") . " (Ad #{$adId})";
+    
+    db_insert('earnings', [
+        'user_id'      => $userId,
+        'type'         => $type,
+        'amount'       => $amount,
+        'reference_id' => $adId,
+        'description'  => $desc,
+        'status'       => 'approved',
+    ]);
+    
+    db_query(
+        "UPDATE users SET balance = balance + ?, lifetime_ad_earnings = lifetime_ad_earnings + ? WHERE id = ?",
+        [$amount, $amount, $userId]
+    );
+    
+    if (is_logged_in() && (int)auth_user()['id'] === $userId) {
+        $_SESSION['user']['balance'] = (float)(db_fetch("SELECT balance FROM users WHERE id=?", [$userId])['balance'] ?? 0);
+    }
+}
+
+/**
+ * Track an ad impression or click with duplicate/fake protection and award payouts.
+ */
+function fh_track_ad_event(int $adId, string $eventType, ?int $videoId = null): bool {
+    $adId = (int)$adId;
+    if (!$adId) return false;
+    $eventType = ($eventType === 'click') ? 'click' : 'impression';
+    
+    $ad = db_fetch("SELECT id FROM ads WHERE id=?", [$adId]);
+    if (!$ad) return false;
+    
+    $ipHash = hash_ip(get_ip());
+    $viewerId = is_logged_in() ? (int)auth_user()['id'] : null;
+    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+    
+    // Fraud/Spam Protection: 10-minute duplicate check per IP/user, per ad, per event type
+    if ($viewerId) {
+        $recent = db_fetch(
+            "SELECT id FROM ad_logs 
+             WHERE (viewer_id = ? OR ip_hash = ?) AND ad_id = ? AND type = ? AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)",
+            [$viewerId, $ipHash, $adId, $eventType]
+        );
+    } else {
+        $recent = db_fetch(
+            "SELECT id FROM ad_logs 
+             WHERE ip_hash = ? AND ad_id = ? AND type = ? AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)",
+            [$ipHash, $adId, $eventType]
+        );
+    }
+    
+    if ($recent) {
+        // Prevent duplicate earning/payouts and fake counts
+        return false;
+    }
+    
+    // 1. Get Earning Rates from Settings
+    $cpmCreator = max(0.0, (float)setting('creator_cpm', '1.00'));
+    $cpcCreator = max(0.0, (float)setting('creator_cpc', '50.00'));
+    $cpmViewer  = max(0.0, (float)setting('viewer_cpm', '0.50'));
+    $cpcViewer  = max(0.0, (float)setting('viewer_cpc', '20.00'));
+    
+    // Calculate Payouts per single event
+    $creatorEarning = 0.0;
+    $viewerEarning  = 0.0;
+    
+    // Find creator of the video
+    $creatorId = null;
+    if ($videoId > 0) {
+        $video = db_fetch("SELECT user_id FROM videos WHERE id=?", [$videoId]);
+        if ($video) {
+            $creatorId = (int)$video['user_id'];
+        }
+    }
+    
+    // Only pay if event is on a single video page ($videoId exists)
+    if ($videoId > 0) {
+        if ($eventType === 'impression') {
+            $creatorEarning = $cpmCreator / 1000.0;
+            $viewerEarning  = $cpmViewer / 1000.0;
+        } else {
+            $creatorEarning = $cpcCreator / 1000.0;
+            $viewerEarning  = $cpcViewer / 1000.0;
+        }
+    }
+    
+    // Perform updates
+    // Increment global ad stats
+    if ($eventType === 'impression') {
+        db_query("UPDATE ads SET impressions = impressions + 1 WHERE id = ?", [$adId]);
+    } else {
+        db_query("UPDATE ads SET clicks = clicks + 1 WHERE id = ?", [$adId]);
+    }
+    
+    // Increment video-level ad stats
+    if ($videoId > 0) {
+        if ($eventType === 'impression') {
+            db_query("UPDATE videos SET ad_impressions = ad_impressions + 1 WHERE id = ?", [$videoId]);
+        } else {
+            db_query("UPDATE videos SET ad_clicks = ad_clicks + 1 WHERE id = ?", [$videoId]);
+        }
+    }
+    
+    // Increment user-level stats (impressions/clicks count)
+    if ($viewerId) {
+        if ($eventType === 'impression') {
+            db_query("UPDATE users SET total_ad_impressions = total_ad_impressions + 1 WHERE id = ?", [$viewerId]);
+        } else {
+            db_query("UPDATE users SET total_ad_clicks = total_ad_clicks + 1 WHERE id = ?", [$viewerId]);
+        }
+    }
+    if ($creatorId && $creatorId !== $viewerId) {
+        if ($eventType === 'impression') {
+            db_query("UPDATE users SET total_ad_impressions = total_ad_impressions + 1 WHERE id = ?", [$creatorId]);
+        } else {
+            db_query("UPDATE users SET total_ad_clicks = total_ad_clicks + 1 WHERE id = ?", [$creatorId]);
+        }
+    }
+    
+    // Distribute payouts (only if active & not admin)
+    if ($creatorId > 0 && $creatorEarning > 0) {
+        fh_credit_ad_earnings($creatorId, $creatorEarning, 'creator', $eventType, $adId, $videoId);
+    }
+    if ($viewerId > 0 && $viewerEarning > 0) {
+        fh_credit_ad_earnings($viewerId, $viewerEarning, 'viewer', $eventType, $adId, $videoId);
+    }
+    
+    // Write to ad_logs
+    db_insert('ad_logs', [
+        'ad_id'            => $adId,
+        'video_id'         => $videoId ?: null,
+        'viewer_id'        => $viewerId ?: null,
+        'creator_id'       => $creatorId ?: null,
+        'type'             => $eventType,
+        'ip_hash'          => $ipHash,
+        'user_agent'       => $userAgent,
+        'earnings_viewer'  => $viewerEarning,
+        'earnings_creator' => $creatorEarning,
+    ]);
+    
+    return true;
 }
 
 /**
@@ -337,18 +498,12 @@ function fh_creator_video_earnings_map(int $creatorId, array $videoIds): array {
 
     $rows = db_fetchAll(
         "SELECT v.id AS video_id,
-                GREATEST(
-                    COALESCE(v.revenue, 0),
-                    COALESCE((
-                        SELECT SUM(e.amount)
-                        FROM earnings e
-                        INNER JOIN video_views vv ON vv.id = e.reference_id
-                        WHERE e.user_id = ?
-                          AND e.type = 'watch_time'
-                          AND e.description LIKE 'Creator watch time%'
-                          AND vv.video_id = v.id
-                    ), 0)
-                ) AS earned
+                COALESCE((
+                    SELECT SUM(al.earnings_creator)
+                    FROM ad_logs al
+                    WHERE al.video_id = v.id
+                      AND al.creator_id = ?
+                ), 0) AS earned
          FROM videos v
          WHERE v.user_id = ? AND v.id IN ($placeholders)",
         array_merge([$creatorId, $creatorId], $videoIds)

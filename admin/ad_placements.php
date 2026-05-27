@@ -49,12 +49,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
     
     if ($action === 'delete') {
         $id = (int)($_POST['placement_id'] ?? 0);
-        $protected_ids = [1, 2, 3, 4, 6, 7, 8, 9];
+        $protected_ids = [1, 2, 3, 4];
         if (!in_array($id, $protected_ids)) {
             db_query("DELETE FROM ad_placements WHERE id = ?", [$id]);
             flash('success', 'Placement deleted.');
         } else {
             flash('error', 'Cannot delete system default placements.');
+        }
+    }
+    
+    if ($action === 'create') {
+        $name = trim($_POST['name'] ?? '');
+        $key_name = trim($_POST['key_name'] ?? '');
+        $device_target = $_POST['device_target'] ?? 'all';
+        $ad_width = ($_POST['ad_width'] ?? '') === '' ? null : (int)$_POST['ad_width'];
+        $ad_height = ($_POST['ad_height'] ?? '') === '' ? null : (int)$_POST['ad_height'];
+        $reload_interval = ($_POST['reload_interval'] ?? '') === '' ? null : (int)$_POST['reload_interval'];
+        $ad_id = ($_POST['ad_id'] ?? '') === '' ? null : (int)$_POST['ad_id'];
+        
+        // Sanitize key_name: lowercase, underscores only
+        $key_name = preg_replace('/[^a-z0-9_]/', '_', strtolower($key_name));
+        
+        if ($name && $key_name) {
+            // Check for duplicate key_name
+            $existing = db_fetch("SELECT id FROM ad_placements WHERE key_name = ?", [$key_name]);
+            if ($existing) {
+                flash('error', 'A placement with key name "' . $key_name . '" already exists.');
+            } else {
+                db_insert('ad_placements', [
+                    'name'           => $name,
+                    'key_name'       => $key_name,
+                    'device_target'  => $device_target,
+                    'ad_width'       => $ad_width,
+                    'ad_height'      => $ad_height,
+                    'reload_interval'=> $reload_interval,
+                    'assigned_ad_id' => $ad_id
+                ]);
+                flash('success', 'New ad placement created successfully.');
+            }
+        } else {
+            flash('error', 'Name and Key Name are required.');
         }
     }
     
@@ -95,7 +129,16 @@ $placements = db_fetchAll("
 // Fetch active ads for assignment dropdown
 $active_ads = db_fetchAll("SELECT id, title, content_type FROM ads WHERE is_active = 1 ORDER BY title ASC");
 
+// Fetch all distinct key_names used across the project for the dropdown
+$all_key_names = db_fetchAll("SELECT DISTINCT key_name FROM ad_placements ORDER BY key_name ASC");
+
 $meta_title = 'Ad Placements';
+$header_actions = '
+<button type="button" class="btn btn-primary" onclick="openAddModal()" style="display: inline-flex; align-items: center; gap: 6px; height: 34px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; padding: 0 16px;">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+  Add Placement
+</button>
+';
 require_once __DIR__ . '/partials/admin_head.php';
 ?>
 <style>
@@ -218,9 +261,7 @@ require_once __DIR__ . '/partials/admin_head.php';
 }
 </style>
 <div class="admin-content">
-  <div class="admin-page-header">
-    <h1 style="display: flex; align-items: center; gap: 8px;">📺 Ad Placement Areas</h1>
-  </div>
+
   
   <?php foreach(get_flash() as $f): ?>
     <div class="alert alert-<?= $f['type'] === 'error' ? 'danger' : $f['type'] ?>"><?= e($f['msg']) ?></div>
@@ -346,7 +387,7 @@ require_once __DIR__ . '/partials/admin_head.php';
                   </form>
 
                   <!-- Delete Action Form (only for duplicated items) -->
-                  <?php if ($p['id'] > 4): ?>
+                  <?php if (!in_array((int)$p['id'], [1, 2, 3, 4])): ?>
                     <form method="POST" style="display:inline-block; margin: 0;" onsubmit="return confirm('Are you sure you want to delete this duplicated placement?');">
                       <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
                       <input type="hidden" name="placement_id" value="<?= $p['id'] ?>">
@@ -445,6 +486,83 @@ require_once __DIR__ . '/partials/admin_head.php';
       </div>
     </div>
   </div>
+  <!-- Add New Placement Modal -->
+  <div class="modal-backdrop" id="add-modal">
+    <div class="modal" style="max-width: 500px; width: 95%;">
+      <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border);">
+        <span class="modal-title" style="font-weight:700; font-size:1.05rem;">➕ Add New Placement</span>
+        <button type="button" class="btn-icon" onclick="closeAddModal()" style="background:none; border:none; color:var(--text2); cursor:pointer; font-size:1.25rem;">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 20px;">
+        <form method="POST">
+          <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+          <input type="hidden" name="action" value="create">
+          
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Placement Name *</label>
+            <input class="form-input" type="text" name="name" id="add_name" required placeholder="e.g. Sidebar Banner Ad" style="font-size: 0.9rem;">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Key Name *</label>
+            <select class="form-input form-select" name="key_name" id="add_key_name" required style="width: 100%; height: 38px; border-radius: 6px; padding: 0 10px; background: var(--bg); color: var(--accent); border: 1px solid var(--border); font-family: monospace; font-size: 0.85rem; font-weight: 700;">
+              <option value="">-- Select Key Name --</option>
+              <?php foreach ($all_key_names as $kn): ?>
+                <option value="<?= e($kn['key_name']) ?>"><?= e($kn['key_name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <div style="font-size: 0.72rem; color: var(--text3); margin-top: 4px; line-height: 1.3;">
+              Select an existing placement key used in the project.
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Target Device</label>
+            <select class="form-input form-select" name="device_target" id="add_device_target" style="width: 100%; height: 38px; border-radius: 6px; padding: 0 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border);">
+              <option value="all">All Devices</option>
+              <option value="desktop">Desktop Only</option>
+              <option value="mobile">Mobile Only</option>
+            </select>
+          </div>
+
+          <div class="form-row-grid" style="margin-bottom: 14px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Max Width (px)</label>
+              <input class="form-input" type="number" name="ad_width" placeholder="e.g. 728 (Optional)" min="1" style="font-size: 0.9rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Max Height (px)</label>
+              <input class="form-input" type="number" name="ad_height" placeholder="e.g. 90 (Optional)" min="1" style="font-size: 0.9rem;">
+            </div>
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Reload Ad (seconds)</label>
+            <input class="form-input" type="number" name="reload_interval" placeholder="e.g. 30 (Optional)" min="5" style="font-size: 0.9rem;">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 20px;">
+            <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: var(--text2); margin-bottom: 6px;">Assign Ad (Optional)</label>
+            <select class="form-input form-select" name="ad_id" style="width: 100%; height: 38px; border-radius: 6px; padding: 0 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border);">
+              <option value="">-- None / Unassigned --</option>
+              <?php foreach ($active_ads as $ad): ?>
+                <option value="<?= $ad['id'] ?>">
+                  <?= e($ad['title']) ?> (<?= e($ad['content_type']) ?>)
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          
+          <div class="flex gap-2" style="justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 15px; margin-top: 10px;">
+            <button type="button" class="btn btn-outline" onclick="closeAddModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 4px;">
+              ➕ Create Placement
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -464,10 +582,23 @@ function closePlacementModal() {
   document.getElementById('placement-modal').classList.remove('open');
 }
 
+function openAddModal() {
+  document.getElementById('add_name').value = '';
+  document.getElementById('add_key_name').value = '';
+  document.getElementById('add_device_target').value = 'all';
+  document.getElementById('add-modal').classList.add('open');
+}
+
+function closeAddModal() {
+  document.getElementById('add-modal').classList.remove('open');
+}
+
 document.getElementById('placement-modal').addEventListener('click', function(e) {
-  if (e.target === this) {
-    closePlacementModal();
-  }
+  if (e.target === this) closePlacementModal();
+});
+
+document.getElementById('add-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddModal();
 });
 </script>
 <?php require_once __DIR__ . '/partials/admin_foot.php'; ?>

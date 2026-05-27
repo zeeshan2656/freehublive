@@ -8,7 +8,7 @@ require_role('admin');
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) {
     $fields = [
         'site_name','site_tagline','active_theme','primary_color',
-        'viewer_rate_usd','creator_rate_usd','watch_time_rate_usd',
+        'creator_cpm','creator_cpc','viewer_cpm','viewer_cpc',
         'min_withdrawal','min_payout',
         'ad_revenue_per_click','currency_rates_json',
         'allow_register','maintenance',
@@ -20,8 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         'site_logo',
         'adult_mode',
     ];
-    // Sync rates so old code still works
-    $_POST['watch_time_rate_usd'] = $_POST['viewer_rate_usd'] ?? $_POST['watch_time_rate_usd'] ?? '0.50';
     $_POST['min_payout'] = $_POST['min_withdrawal'] ?? $_POST['min_payout'] ?? '25.00';
 
     // Handle SMTP password separately (only update if not blank)
@@ -130,23 +128,35 @@ $themes = [
       <!-- Monetization Slice -->
       <div id="slice-monetization" class="slice-section" style="display:none">
       <div class="card">
-        <h3 style="font-weight:700;margin-bottom:6px">Earnings & Payouts</h3>
+        <h3 style="font-weight:700;margin-bottom:6px">Ad Earnings & Payouts</h3>
         <p class="text-sm text-muted" style="margin-bottom:16px">
-          Configure separate earning rates for viewers (Watch &amp; Earn users) and creators.
+          Configure CPM (earnings per 1,000 ad impressions) and CPC (earnings per 1,000 ad clicks) for viewers and creators.
           <strong>Admin cannot earn</strong> — earnings are only for viewers and creators.
         </p>
         <div class="stat-grid-2">
           <div class="form-group">
-            <label class="form-label">👁️ Viewer Rate (USD/hour watched)</label>
-            <input class="form-input" type="number" name="viewer_rate_usd" step="0.001" min="0"
-                   value="<?= e(setting('viewer_rate_usd', setting('watch_time_rate_usd','0.50'))) ?>">
-            <small class="text-muted text-xs">Amount Watch &amp; Earn users earn per hour of watch time</small>
+            <label class="form-label">👁️ Viewer CPM Rate (USD per 1,000 impressions)</label>
+            <input class="form-input" type="number" name="viewer_cpm" step="0.001" min="0"
+                   value="<?= e(setting('viewer_cpm', '0.50')) ?>">
+            <small class="text-muted text-xs">Viewer earnings per 1,000 impressions on video page ads</small>
           </div>
           <div class="form-group">
-            <label class="form-label">🎬 Creator Rate (USD/hour of their videos watched)</label>
-            <input class="form-input" type="number" name="creator_rate_usd" step="0.001" min="0"
-                   value="<?= e(setting('creator_rate_usd', setting('watch_time_rate_usd','0.50'))) ?>">
-            <small class="text-muted text-xs">Amount creators earn per hour their videos are watched</small>
+            <label class="form-label">👁️ Viewer CPC Rate (USD per 1,000 clicks)</label>
+            <input class="form-input" type="number" name="viewer_cpc" step="0.001" min="0"
+                   value="<?= e(setting('viewer_cpc', '20.00')) ?>">
+            <small class="text-muted text-xs">Viewer earnings per 1,000 clicks on video page ads</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label">🎬 Creator CPM Rate (USD per 1,000 impressions)</label>
+            <input class="form-input" type="number" name="creator_cpm" step="0.001" min="0"
+                   value="<?= e(setting('creator_cpm', '1.00')) ?>">
+            <small class="text-muted text-xs">Creator earnings per 1,000 impressions on their video page ads</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label">🎬 Creator CPC Rate (USD per 1,000 clicks)</label>
+            <input class="form-input" type="number" name="creator_cpc" step="0.001" min="0"
+                   value="<?= e(setting('creator_cpc', '50.00')) ?>">
+            <small class="text-muted text-xs">Creator earnings per 1,000 clicks on their video page ads</small>
           </div>
           <div class="form-group">
             <label class="form-label">Minimum Withdrawal for Creators (USD)</label>
@@ -178,12 +188,6 @@ $themes = [
             <input class="form-input" type="number" name="referral_bonus_usd" step="0.01" min="0"
                    value="<?= e(setting('referral_bonus_usd','0.00')) ?>">
             <small class="text-muted text-xs">Bonus paid to referrer when a new user signs up via their link</small>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Referral Video Watch Rate (USD/hour)</label>
-            <input class="form-input" type="number" name="referral_watch_rate_usd" step="0.001" min="0"
-                   value="<?= e(setting('referral_watch_rate_usd','0.10')) ?>">
-            <small class="text-muted text-xs">Bonus paid to referrer when their referred users watch videos</small>
           </div>
           <div class="form-group">
             <label class="form-label">Admin Ad Revenue per Click (USD)</label>

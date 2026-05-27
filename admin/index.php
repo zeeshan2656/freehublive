@@ -16,7 +16,7 @@ $stats = [
     'views'       => db_fetch("SELECT SUM(views) as t FROM videos")['t'] ?? 0,
     'pending_vid' => db_count('videos', "status='pending'"),
     'pending_wd'  => fh_table_exists('withdrawal_requests') ? db_count('withdrawal_requests', "status='pending'") : 0,
-    'earnings_distributed' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type='watch_time' AND status='approved'")['t'] ?? 0),
+    'earnings_distributed' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND status='approved'")['t'] ?? 0),
     'earnings_paid'        => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM withdrawal_requests WHERE status='paid'")['t'] ?? 0),
 ];
 

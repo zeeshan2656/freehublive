@@ -636,6 +636,7 @@ HTML;
 }
 
 function render_ad_card(string $placement_key): string {
+    global $vid;
     $now = date('Y-m-d');
     $placements = db_fetchAll(
         "SELECT ap.device_target as placement_device, a.*
@@ -662,9 +663,11 @@ HTML;
     }
 
     $output = '';
+    $vid_attr = $vid ? ' data-video-id="' . (int)$vid . '"' : '';
+
     foreach ($placements as $ad) {
-        // Track impression
-        db_query("UPDATE ads SET impressions=impressions+1 WHERE id=?", [$ad['id']]);
+        // Track impression and payouts
+        fh_track_ad_event((int)$ad['id'], 'impression', $vid);
 
         $click_url = $ad['target_url'] ?: '#';
         $ad_id = $ad['id'];
@@ -684,7 +687,7 @@ HTML;
         if ($ad['content_type'] === 'image' && $ad['image_url']) {
             $img_src = str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'];
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}" onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; min-height:auto;">
+<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}"{$vid_attr} onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; min-height:auto;">
   <div class="video-thumb" style="position:relative; aspect-ratio:{$aspect_ratio}; background:#0c0c0d; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
     <img src="{$img_src}" alt="{$title}" loading="lazy" class="thumb-main" style="width:100%; height:100%; object-fit:cover">
     {$sponsored_tag}
@@ -700,7 +703,7 @@ HTML;
             $inner_style = $ad['ad_height'] ? "height:" . (int)$ad['ad_height'] . "px;" : "min-height:160px;";
             
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in{$device_class}" data-device-target="{$ad['placement_device']}" style="{$card_style} display:flex; flex-direction:column; overflow:hidden; border-radius:12px; position:relative;">
+<article class="video-card ad-card fade-in{$device_class}" data-device-target="{$ad['placement_device']}"{$vid_attr} style="{$card_style} display:flex; flex-direction:column; overflow:hidden; border-radius:12px; position:relative;">
   {$sponsored_tag}
   <div class="ad-html-content" style="flex:1; position:relative; overflow:hidden; z-index:1; {$inner_style}">
     {$html_content}
@@ -710,7 +713,7 @@ HTML;
         } else {
             $content_text = e($ad['content']);
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}" onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; background:linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.03)); display:flex; flex-direction:column; justify-content:space-between; min-height:220px; border:1px solid rgba(99,102,241,0.15); border-radius:12px; transition:all 0.2s; position:relative;">
+<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}"{$vid_attr} onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; background:linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.03)); display:flex; flex-direction:column; justify-content:space-between; min-height:220px; border:1px solid rgba(99,102,241,0.15); border-radius:12px; transition:all 0.2s; position:relative;">
   {$sponsored_tag}
   <div style="padding:22px; flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center">
     <div style="font-size:2rem; margin-bottom:12px; filter: drop-shadow(0 2px 6px rgba(99,102,241,0.25));">🚀</div>
@@ -730,6 +733,7 @@ HTML;
 }
 
 function render_ad_placeholder(string $placement_key): string {
+    global $vid;
     $now = date('Y-m-d');
     $placements = db_fetchAll(
         "SELECT ap.device_target as placement_device, ap.ad_width as placement_width, ap.ad_height as placement_height, ap.reload_interval as reload_interval, a.*
@@ -745,9 +749,11 @@ function render_ad_placeholder(string $placement_key): string {
     if (!$placements) return '';
 
     $output = '';
+    $vid_attr = $vid ? ' data-video-id="' . (int)$vid . '"' : '';
+
     foreach ($placements as $ad) {
-        // Track impression
-        db_query("UPDATE ads SET impressions=impressions+1 WHERE id=?", [$ad['id']]);
+        // Track ad impression and process payouts
+        fh_track_ad_event((int)$ad['id'], 'impression', $vid);
 
         $sponsored_label = '<div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>Sponsored</div>';
 
@@ -801,7 +807,7 @@ function render_ad_placeholder(string $placement_key): string {
                    . e($ad['content'] ?: $ad['title']) . '</a>';
         }
 
-        $output .= '<div class="ad-sponsored-container' . $device_class . $extra_class . '" data-placement="' . e($placement_key) . '" data-device-target="' . e($ad['placement_device']) . '" data-reload-interval="' . (int)$ad['reload_interval'] . '" style="' . $container_style . '">'
+        $output .= '<div class="ad-sponsored-container' . $device_class . $extra_class . '" data-placement="' . e($placement_key) . '" data-device-target="' . e($ad['placement_device']) . '" data-reload-interval="' . (int)$ad['reload_interval'] . '" data-ad-id="' . (int)$ad['id'] . '"' . $vid_attr . ' style="' . $container_style . '">'
              . $sponsored_label
              . '<div style="margin:0 auto;display:block;width:100%;max-width:100%;' . $size_style . '">' . $inner . '</div>'
              . '</div>';

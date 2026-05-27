@@ -12,10 +12,10 @@ $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
 
 $watch_stats = fh_user_watch_stats((int)$uid);
 $stats = [
-    'videos'     => db_count('videos', "user_id=?", [$uid]),
-    'views'      => db_fetch("SELECT SUM(views) as t FROM videos WHERE user_id=?", [$uid])['t'] ?? 0,
-    'watch_time' => db_fetch("SELECT SUM(watch_time) as t FROM videos WHERE user_id=?", [$uid])['t'] ?? 0,
-    'subscribers'=> $user['subscribers'],
+    'videos'         => db_count('videos', "user_id=?", [$uid]),
+    'ad_impressions' => db_fetch("SELECT SUM(ad_impressions) as t FROM videos WHERE user_id=?", [$uid])['t'] ?? 0,
+    'ad_clicks'      => db_fetch("SELECT SUM(ad_clicks) as t FROM videos WHERE user_id=?", [$uid])['t'] ?? 0,
+    'subscribers'    => $user['subscribers'],
 ];
 
 $my_videos = db_fetchAll(
@@ -28,7 +28,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 <div class="container">
 
-    <?php $watch_stats_user_id = (int)$uid; require __DIR__ . '/../includes/partials/watch_earnings_stats.php'; ?>
+    <?php $watch_stats_user_id = (int)$uid; $creator_context = true; require __DIR__ . '/../includes/partials/watch_earnings_stats.php'; ?>
 
     <!-- Channel stats -->
     <div class="stat-grid-4" style="margin-bottom:28px">
@@ -37,12 +37,12 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="stat-label">Videos</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value"><?= format_number($stats['views']) ?></div>
-        <div class="stat-label">Total Views</div>
+        <div class="stat-value"><?= format_number($stats['ad_impressions']) ?></div>
+        <div class="stat-label">Ad Impressions</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value"><?= format_duration($stats['watch_time']) ?></div>
-        <div class="stat-label">Watch Time</div>
+        <div class="stat-value"><?= format_number($stats['ad_clicks']) ?></div>
+        <div class="stat-label">Ad Clicks</div>
       </div>
       <div class="stat-card">
         <div class="stat-value"><?= format_number($stats['subscribers']) ?></div>

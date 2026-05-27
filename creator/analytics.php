@@ -8,7 +8,11 @@ $site_theme = setting('active_theme', 'dark-minimal');
 $primary    = setting('primary_color', '#6366f1');
 $uid = auth_user()['id'];
 
-$videos = db_fetchAll("SELECT id,title,views,likes,comments_count,watch_time,created_at FROM videos WHERE user_id=? AND status='published' ORDER BY views DESC", [$uid]);
+$videos = db_fetchAll("SELECT id,title,views,likes,comments_count,watch_time,ad_impressions,ad_clicks,created_at FROM videos WHERE user_id=? AND status='published' ORDER BY views DESC", [$uid]);
+$video_ids = array_column($videos, 'id');
+$earnings_map = fh_creator_video_earnings_map((int)$uid, $video_ids);
+$creator_cpm = (float)setting('creator_cpm', '1.00');
+$creator_cpc = (float)setting('creator_cpc', '50.00');
 
 // Chart data
 $chart = [];
@@ -58,21 +62,33 @@ require_once __DIR__ . '/../includes/header.php';
     <!-- Video Performance -->
     <?php if ($videos): ?>
     <div class="card">
-      <h3 style="font-weight:700;margin-bottom:16px">Video Performance</h3>
+      <h3 style="font-weight:700;margin-bottom:16px">Video Ad Performance</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Video</th><th>Views</th><th>Likes</th><th>Comments</th><th>Watch Time</th><th>Engagement</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Video</th>
+              <th style="text-align:right">Ad Impressions</th>
+              <th style="text-align:right">Ad Clicks</th>
+              <th style="text-align:right">CPM Rate</th>
+              <th style="text-align:right">CPC Rate</th>
+              <th style="text-align:right">Estimated Revenue</th>
+            </tr>
+          </thead>
           <tbody>
           <?php foreach ($videos as $v):
-            $engagement = $v['views'] > 0 ? round(($v['likes']/$v['views'])*100,1) : 0;
+            $vid = (int)$v['id'];
+            $earned = $earnings_map[$vid] ?? 0.0;
           ?>
           <tr>
-            <td style="font-size:.83rem;font-weight:500;max-width:200px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"><?= e($v['title']) ?></td>
-            <td class="text-sm"><?= format_number((int)$v['views']) ?></td>
-            <td class="text-sm"><?= format_number((int)$v['likes']) ?></td>
-            <td class="text-sm"><?= format_number((int)$v['comments_count']) ?></td>
-            <td class="text-sm"><?= format_duration((int)$v['watch_time']) ?></td>
-            <td><span class="badge badge-<?= $engagement>5?'green':($engagement>2?'yellow':'gray') ?>"><?= $engagement ?>%</span></td>
+            <td style="font-size:.83rem;font-weight:500;max-width:200px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis" title="<?= e($v['title']) ?>">
+              <?= e($v['title']) ?>
+            </td>
+            <td class="text-sm" style="text-align:right"><?= format_number((int)$v['ad_impressions']) ?></td>
+            <td class="text-sm" style="text-align:right"><?= format_number((int)$v['ad_clicks']) ?></td>
+            <td class="text-xs text-muted" style="text-align:right">$<?= number_format($creator_cpm, 2) ?></td>
+            <td class="text-xs text-muted" style="text-align:right">$<?= number_format($creator_cpc, 2) ?></td>
+            <td class="text-sm font-semibold" style="text-align:right;color:var(--green)">$<?= number_format($earned, 4) ?></td>
           </tr>
           <?php endforeach; ?>
           </tbody>

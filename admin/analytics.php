@@ -31,8 +31,9 @@ $totals = [
     'videos_published'   => db_count('videos', "status='published'"),
     'videos_pending'     => db_count('videos', "status='pending'"),
     'total_views'        => (int)(db_fetch("SELECT COALESCE(SUM(views),0) AS t FROM videos")['t'] ?? 0),
-    'total_watch_hours'  => round((float)(db_fetch("SELECT COALESCE(SUM(total_watch_seconds),0) AS t FROM users")['t'] ?? 0) / 3600, 1),
-    'earnings_total'     => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type='watch_time' AND status='approved'")['t'] ?? 0),
+    'total_ad_impressions' => (int)(db_fetch("SELECT COALESCE(SUM(total_ad_impressions),0) AS t FROM users")['t'] ?? 0),
+    'total_ad_clicks'      => (int)(db_fetch("SELECT COALESCE(SUM(total_ad_clicks),0) AS t FROM users")['t'] ?? 0),
+    'earnings_total'     => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND status='approved'")['t'] ?? 0),
     'earnings_paid'      => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM withdrawal_requests WHERE status='paid'")['t'] ?? 0),
     'withdrawals_pending'=> (int)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM withdrawal_requests WHERE status='pending'")['t'] ?? 0),
     'withdrawals_count'  => db_count('withdrawal_requests', "status='pending'"),
@@ -50,7 +51,7 @@ if ($from && $to) {
             'date'     => date('M j', $ts),
             'views'    => db_count('video_views', "DATE(created_at)=?", [$d]),
             'users'    => db_count('users', "DATE(created_at)=?", [$d]),
-            'earnings' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type='watch_time' AND DATE(created_at)=?", [$d])['t'] ?? 0),
+            'earnings' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND DATE(created_at)=?", [$d])['t'] ?? 0),
         ];
     }
 } else {
@@ -60,7 +61,7 @@ if ($from && $to) {
             'date'     => date('M j', strtotime("-$i days")),
             'views'    => db_count('video_views', "DATE(created_at)=?", [$d]),
             'users'    => db_count('users', "DATE(created_at)=?", [$d]),
-            'earnings' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type='watch_time' AND DATE(created_at)=?", [$d])['t'] ?? 0),
+            'earnings' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND DATE(created_at)=?", [$d])['t'] ?? 0),
         ];
     }
 }
@@ -71,7 +72,9 @@ $maxEarnings = max(0.001, max(array_column($daily, 'earnings')));
 
 // ── Top Content ───────────────────────────────────────────────
 $top_videos = db_fetchAll(
-    "SELECT v.title, v.views, v.watch_time, v.revenue, u.channel_name
+    "SELECT v.title, v.views, v.watch_time,
+            COALESCE((SELECT SUM(earnings_creator) FROM ad_logs WHERE video_id=v.id), 0) AS revenue,
+            u.channel_name
      FROM videos v JOIN users u ON u.id=v.user_id WHERE v.status='published'
      ORDER BY v.views DESC LIMIT 10"
 );
@@ -87,7 +90,7 @@ $top_creators = db_fetchAll(
 $period_new_users    = db_count('users', $dateWhere, $dateParams);
 $period_new_videos   = db_count('videos', $dateWhere, $dateParams);
 $period_new_earnings = (float)(db_fetch(
-    "SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type='watch_time' AND $dateWhere",
+    "SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND $dateWhere",
     $dateParams
 )['t'] ?? 0);
 
@@ -133,7 +136,7 @@ require_once __DIR__ . '/partials/admin_head.php';
     <div class="stat-card">
       <div class="stat-value"><?= format_number($totals['total_views']) ?></div>
       <div class="stat-label">Total Views</div>
-      <div class="text-xs text-muted" style="margin-top:4px">⏱️ <?= $totals['total_watch_hours'] ?>h total watch time</div>
+      <div class="text-xs text-muted" style="margin-top:4px">📺 Imps: <?= format_number($totals['total_ad_impressions']) ?> · 🖱️ Clicks: <?= format_number($totals['total_ad_clicks']) ?></div>
     </div>
     <div class="stat-card">
       <div class="stat-value" style="color:var(--green)">$<?= number_format($totals['earnings_total'],2) ?></div>
