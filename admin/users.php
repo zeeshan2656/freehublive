@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
 
     if ($action === 'suspend')   db_update('users', ['status' => 'suspended'], 'id=?', [$uid]);
     if ($action === 'activate')  db_update('users', ['status' => 'active'],    'id=?', [$uid]);
+    if ($action === 'reject')    db_update('users', ['status' => 'rejected'],  'id=?', [$uid]);
     if ($action === 'approve_creator') {
         db_update('users', ['status' => 'active', 'role' => 'creator'], 'id=?', [$uid]);
         $pu = db_fetch("SELECT username FROM users WHERE id=?", [$uid]);
@@ -241,10 +242,16 @@ if ($view_uid) {
               <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
               <input type="hidden" name="user_id" value="<?= $view_uid ?>">
               <?php if ($view_user['role'] !== 'admin'): ?>
+                <?php if ($view_user['status'] === 'pending' && $view_user['role'] !== 'creator'): ?>
+                <button name="action" value="activate" class="btn btn-sm" style="background:var(--green);color:#fff">✅ Approve Application</button>
+                <?php endif; ?>
                 <?php if ($view_user['status'] === 'active' || $view_user['status'] === 'pending'): ?>
                 <button name="action" value="suspend" class="btn btn-outline btn-sm" style="color:var(--red)" onclick="return confirm('Suspend this user?')">🚫 Suspend Account</button>
                 <?php endif; ?>
-                <?php if ($view_user['status'] === 'suspended'): ?>
+                <?php if ($view_user['status'] === 'pending'): ?>
+                <button name="action" value="reject" class="btn btn-outline btn-sm" style="color:var(--red)" onclick="return confirm('Reject this application?')">❌ Reject Application</button>
+                <?php endif; ?>
+                <?php if ($view_user['status'] === 'suspended' || $view_user['status'] === 'rejected'): ?>
                 <button name="action" value="activate" class="btn btn-sm" style="background:var(--green);color:#fff">✅ Activate Account</button>
                 <?php endif; ?>
                 <?php if ($view_user['status'] === 'pending' && $view_user['role'] === 'creator'): ?>
@@ -343,7 +350,7 @@ require_once __DIR__ . '/partials/admin_head.php';
     </select>
     <select name="status" class="form-input form-select" style="width:auto" onchange="this.form.submit()">
       <option value="all">All Status</option>
-      <?php foreach (['active','suspended','pending'] as $s): ?>
+      <?php foreach (['active','suspended','pending','rejected'] as $s): ?>
       <option value="<?= $s ?>" <?= $status===$s?'selected':'' ?>><?= ucfirst($s) ?></option>
       <?php endforeach; ?>
     </select>
@@ -390,18 +397,31 @@ require_once __DIR__ . '/partials/admin_head.php';
             <form method="POST" style="display:inline">
               <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
               <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
-              <button name="action" value="approve_creator" class="btn btn-sm" style="background:var(--green);color:#fff">✅</button>
+              <button name="action" value="approve_creator" class="btn btn-sm" style="background:var(--green);color:#fff" title="Approve Creator">✅</button>
+            </form>
+            <?php elseif ($u['status'] === 'pending' && $u['role'] !== 'creator'): ?>
+            <form method="POST" style="display:inline">
+              <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+              <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
+              <button name="action" value="activate" class="btn btn-sm" style="background:var(--green);color:#fff" title="Approve Viewer">✅</button>
             </form>
             <?php endif; ?>
             <form method="POST" style="display:inline">
               <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
               <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
               <?php if ($u['status'] === 'active' && $u['role'] !== 'admin'): ?>
-              <button name="action" value="suspend" class="btn btn-sm btn-outline" style="color:var(--red)" onclick="return confirm('Suspend?')">🚫</button>
-              <?php elseif ($u['status'] === 'suspended'): ?>
-              <button name="action" value="activate" class="btn btn-sm" style="background:var(--green);color:#fff">✅</button>
+              <button name="action" value="suspend" class="btn btn-sm btn-outline" style="color:var(--red)" onclick="return confirm('Suspend?')" title="Suspend">🚫</button>
+              <?php elseif ($u['status'] === 'suspended' || $u['status'] === 'rejected'): ?>
+              <button name="action" value="activate" class="btn btn-sm" style="background:var(--green);color:#fff" title="Activate/Unblock">✅</button>
               <?php endif; ?>
             </form>
+            <?php if ($u['status'] === 'pending'): ?>
+            <form method="POST" style="display:inline">
+              <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+              <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
+              <button name="action" value="reject" class="btn btn-sm btn-outline" style="color:var(--red)" onclick="return confirm('Reject application?')" title="Reject">❌</button>
+            </form>
+            <?php endif; ?>
           </div>
         </td>
       </tr>

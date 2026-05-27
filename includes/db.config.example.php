@@ -13,8 +13,9 @@
 return [
     'host'    => 'localhost',
     'port'    => 3306,
-    'user'    => 'u123456789_freehub',
-    'pass'    => 'YOUR_DATABASE_PASSWORD',
-    'name'    => 'u123456789_freehub',
+    'user'    => 'root',
+    'pass'    => '',
+    'name'    => 'freehub',
     'charset' => 'utf8mb4',
 ];
+

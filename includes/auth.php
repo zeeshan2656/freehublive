@@ -14,7 +14,32 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 function auth_user(): ?array {
-    return $_SESSION['user'] ?? null;
+    if (!isset($_SESSION['user']['id'])) {
+        return null;
+    }
+    
+    static $fresh_user = null;
+    if ($fresh_user === null) {
+        $fresh_user = db_fetch("SELECT * FROM users WHERE id = ?", [$_SESSION['user']['id']]);
+        if ($fresh_user) {
+            // Update session cache with latest database values
+            $_SESSION['user']['username']           = $fresh_user['username'];
+            $_SESSION['user']['email']              = $fresh_user['email'];
+            $_SESSION['user']['role']               = $fresh_user['role'];
+            $_SESSION['user']['status']             = $fresh_user['status'];
+            $_SESSION['user']['avatar']             = $fresh_user['avatar'];
+            $_SESSION['user']['cover_image']        = $fresh_user['cover_image'] ?? null;
+            $_SESSION['user']['channel_name']       = $fresh_user['channel_name'] ?? $fresh_user['username'];
+            $_SESSION['user']['balance']            = $fresh_user['balance'];
+            $_SESSION['user']['preferred_currency'] = $fresh_user['preferred_currency'];
+            $_SESSION['user']['ref_code']           = $fresh_user['ref_code'];
+        } else {
+            // User deleted from DB, clear session
+            $_SESSION = [];
+            return null;
+        }
+    }
+    return $_SESSION['user'];
 }
 
 function is_logged_in(): bool {
@@ -41,8 +66,11 @@ function is_creator(): bool  { return has_role(['creator', 'admin']); }
 function is_affiliate(): bool{ return has_role(['viewer', 'creator', 'affiliate', 'admin']); }
 // Strict viewer-only check
 function is_viewer(): bool   { return has_role(['viewer', 'affiliate']); }
-// Check if user can earn (non-admin)
-function can_earn(): bool    { return is_logged_in() && !is_admin(); }
+// Check if user can earn (non-admin and active)
+function can_earn(): bool    { 
+    $user = auth_user();
+    return $user && !is_admin() && ($user['status'] ?? 'pending') === 'active'; 
+}
 
 function require_login(string $redirect = '/auth/login.php'): void {
     if (!is_logged_in()) {

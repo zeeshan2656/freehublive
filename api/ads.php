@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_ad') {
         "SELECT a.id, a.title, a.content_type, a.content, a.target_url, a.image_url,
                 COALESCE(ap.ad_width, a.ad_width) AS ad_width,
                 COALESCE(ap.ad_height, a.ad_height) AS ad_height,
+                ap.reload_interval AS reload_interval,
                 a.device_target
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id
@@ -60,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'fetch') {
         "SELECT a.id, a.title, a.content_type, a.content, a.target_url, a.image_url,
                 COALESCE(ap.ad_width, a.ad_width) AS ad_width,
                 COALESCE(ap.ad_height, a.ad_height) AS ad_height,
+                ap.reload_interval AS reload_interval,
                 a.device_target
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id

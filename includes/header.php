@@ -70,6 +70,9 @@ $currency_symbol  = $currencies_list[$active_currency]['symbol'] ?? $active_curr
 <meta name="theme-color" content="<?= e($primary) ?>">
 <title><?= e($meta_title) ?></title>
 <meta name="description" content="<?= e($meta_desc) ?>">
+<?php if (!empty($meta_keywords)): ?>
+<meta name="keywords" content="<?= e($meta_keywords) ?>">
+<?php endif; ?>
 <meta property="og:title"       content="<?= e($meta_title) ?>">
 <meta property="og:description" content="<?= e($meta_desc) ?>">
 <meta property="og:image"       content="<?= e($meta_image) ?>">
@@ -309,6 +312,124 @@ $currency_symbol  = $currencies_list[$active_currency]['symbol'] ?? $active_curr
   }
 }
 </style>
+<?php
+// ── Age Verification Gate ──────────────────────────────────────
+$_fh_adult_mode = setting('adult_mode', '0') === '1';
+$_fh_adult_exempt = is_logged_in() && is_admin();
+$_fh_show_age_gate = $_fh_adult_mode && !$_fh_adult_exempt;
+?>
+<?php if ($_fh_show_age_gate): ?>
+<style>
+/* Hide ALL body content until verified — prevents content flash */
+body.age-unverified > *:not(#fh-age-gate) { display: none !important; }
+body.age-unverified { overflow: hidden; }
+
+#fh-age-gate {
+  position: fixed; inset: 0; z-index: 999999;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg1, #0a0a0f);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+#fh-age-gate .age-gate-backdrop {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(99,102,241,.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+#fh-age-gate .age-gate-card {
+  position: relative; z-index: 1;
+  max-width: 440px; width: 92%; padding: 44px 36px;
+  border-radius: 16px;
+  background: var(--bg2, #16161d);
+  border: 1px solid var(--border, rgba(255,255,255,.08));
+  box-shadow: 0 24px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
+  text-align: center;
+  animation: ageGateFadeIn .4s ease-out;
+}
+@keyframes ageGateFadeIn {
+  from { opacity: 0; transform: translateY(20px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+#fh-age-gate .age-gate-icon {
+  font-size: 3.2rem; margin-bottom: 16px;
+  filter: drop-shadow(0 0 16px rgba(239,68,68,.3));
+}
+#fh-age-gate h2 {
+  font-family: var(--font2, 'Inter', sans-serif);
+  font-size: 1.6rem; font-weight: 800;
+  color: var(--text, #e8e8f0);
+  margin: 0 0 8px;
+}
+#fh-age-gate .age-gate-subtitle {
+  color: var(--text2, #8b8b9e);
+  font-size: .92rem; line-height: 1.55;
+  margin-bottom: 28px;
+}
+#fh-age-gate .age-gate-sitename {
+  color: var(--accent, #6366f1);
+  font-weight: 700;
+}
+#fh-age-gate .age-gate-actions {
+  display: flex; gap: 12px;
+}
+#fh-age-gate .age-gate-btn {
+  flex: 1; height: 48px; border-radius: 24px;
+  font-size: .95rem; font-weight: 700;
+  border: none; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all .2s ease;
+  letter-spacing: .02em;
+}
+#fh-age-gate .age-gate-btn-yes {
+  background: linear-gradient(135deg, var(--accent, #6366f1), #8b5cf6);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(99,102,241,.35);
+}
+#fh-age-gate .age-gate-btn-yes:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(99,102,241,.45);
+}
+#fh-age-gate .age-gate-btn-no {
+  background: transparent;
+  color: var(--text2, #8b8b9e);
+  border: 1px solid var(--border, rgba(255,255,255,.1));
+}
+#fh-age-gate .age-gate-btn-no:hover {
+  border-color: rgba(239,68,68,.5);
+  color: var(--red, #ef4444);
+  background: rgba(239,68,68,.06);
+}
+#fh-age-gate .age-gate-legal {
+  margin-top: 20px;
+  font-size: .72rem; color: var(--text2, #8b8b9e);
+  opacity: .6; line-height: 1.5;
+}
+/* Blocked state */
+#fh-age-gate .age-gate-blocked { display: none; }
+#fh-age-gate.blocked .age-gate-main { display: none; }
+#fh-age-gate.blocked .age-gate-blocked { display: block; }
+#fh-age-gate .age-gate-blocked h2 { color: var(--red, #ef4444); }
+#fh-age-gate .age-gate-blocked-msg {
+  color: var(--text2, #8b8b9e);
+  font-size: .9rem; line-height: 1.6;
+  margin-bottom: 24px;
+}
+#fh-age-gate .age-gate-btn-leave {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 44px; padding: 0 28px; border-radius: 22px;
+  background: rgba(239,68,68,.1);
+  color: var(--red, #ef4444); border: 1px solid rgba(239,68,68,.25);
+  font-weight: 600; font-size: .88rem;
+  text-decoration: none; transition: all .2s ease;
+}
+#fh-age-gate .age-gate-btn-leave:hover { background: rgba(239,68,68,.18); }
+@media (max-width: 480px) {
+  #fh-age-gate .age-gate-card { padding: 32px 24px; }
+  #fh-age-gate h2 { font-size: 1.35rem; }
+  #fh-age-gate .age-gate-actions { flex-direction: column; }
+  #fh-age-gate .age-gate-btn { height: 44px; }
+}
+</style>
+<?php endif; ?>
 </head>
 
 <?php
@@ -320,10 +441,89 @@ $is_dashboard_page = (
     basename($_SERVER['PHP_SELF']) === 'settings.php' ||
     basename($_SERVER['PHP_SELF']) === 'profile.php'
 );
+
+// Global Access Guard for Dashboard Pages
+if ($is_dashboard_page && is_logged_in() && !is_admin()) {
+    $status = auth_user()['status'] ?? 'pending';
+    if ($status !== 'active') {
+        $currPage = basename($_SERVER['PHP_SELF']);
+        if ($currPage !== 'status.php' && $currPage !== 'logout.php') {
+            header('Location: ' . BASE_URL . '/auth/status.php');
+            exit;
+        }
+    }
+}
+
 $sidebar_path = get_sidebar_path();
 ?>
 
-<body class="<?= $is_dashboard_page ? 'dashboard-page' : 'public-page' ?>">
+<body class="<?= $is_dashboard_page ? 'dashboard-page' : 'public-page' ?><?= $_fh_show_age_gate ? ' age-unverified' : '' ?>">
+
+<?php if ($_fh_show_age_gate): ?>
+<!-- Age Verification Gate — renders BEFORE any site content -->
+<div id="fh-age-gate">
+  <div class="age-gate-backdrop"></div>
+  <div class="age-gate-card">
+    <!-- Main verification view -->
+    <div class="age-gate-main">
+      <div class="age-gate-icon">🔞</div>
+      <h2>Age Verification Required</h2>
+      <p class="age-gate-subtitle">
+        <span class="age-gate-sitename"><?= e($site_name) ?></span> contains age-restricted content.<br>
+        You must be <strong>18 years or older</strong> to access this website.
+      </p>
+      <div class="age-gate-actions">
+        <button class="age-gate-btn age-gate-btn-yes" id="age-gate-yes" type="button">
+          ✓ Yes, I'm 18+
+        </button>
+        <button class="age-gate-btn age-gate-btn-no" id="age-gate-no" type="button">
+          ✕ No, I'm Not
+        </button>
+      </div>
+      <p class="age-gate-legal">
+        By entering, you confirm you are of legal age in your jurisdiction
+        and agree to our Terms of Service.
+      </p>
+    </div>
+    <!-- Blocked / Denied view -->
+    <div class="age-gate-blocked">
+      <div class="age-gate-icon">🚫</div>
+      <h2>Access Denied</h2>
+      <p class="age-gate-blocked-msg">
+        You must be 18 years or older to access <strong><?= e($site_name) ?></strong>.<br>
+        This site contains age-restricted content that is not suitable for minors.
+      </p>
+      <a href="https://www.google.com" class="age-gate-btn-leave" id="age-gate-leave">Leave This Site</a>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var gate = document.getElementById('fh-age-gate');
+  var KEY = 'fh_age_verified';
+  // Check sessionStorage for existing verification
+  if (sessionStorage.getItem(KEY) === '1') {
+    gate.remove();
+    document.body.classList.remove('age-unverified');
+    return;
+  }
+  // Yes button — grant access
+  document.getElementById('age-gate-yes').addEventListener('click', function(){
+    sessionStorage.setItem(KEY, '1');
+    gate.style.transition = 'opacity .3s ease';
+    gate.style.opacity = '0';
+    setTimeout(function(){
+      gate.remove();
+      document.body.classList.remove('age-unverified');
+    }, 300);
+  });
+  // No button — block access
+  document.getElementById('age-gate-no').addEventListener('click', function(){
+    gate.classList.add('blocked');
+  });
+})();
+</script>
+<?php endif; ?>
 
 <?php if ($is_dashboard_page): ?>
 <div class="dashboard-layout">
@@ -417,6 +617,20 @@ $sidebar_path = get_sidebar_path();
           }
         });
         </script>
+        <a href="<?= BASE_URL ?>/admin/pages.php" class="studio-nav-item <?= $current_page === 'pages.php' || $current_page === 'page_edit.php' ? 'active' : '' ?>">
+          <span>📄 Pages</span>
+        </a>
+        <a href="<?= BASE_URL ?>/admin/approvals.php" class="studio-nav-item <?= $current_page === 'approvals.php' ? 'active' : '' ?>">
+          <span>🛡️ Approvals</span>
+          <?php
+          $pending_users = db_count('users', "status='pending' AND role!='creator'");
+          $pending_creators = db_count('users', "status='pending' AND role='creator'");
+          $pending_vids = db_count('videos', "status='pending'");
+          $total_pending = $pending_users + $pending_creators + $pending_vids;
+          if ($total_pending > 0): ?>
+            <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.65rem; padding:2px 6px; border-radius:10px; margin-left:auto"><?= $total_pending ?></span>
+          <?php endif; ?>
+        </a>
         <a href="<?= BASE_URL ?>/admin/seo.php" class="studio-nav-item <?= $current_page === 'seo.php' ? 'active' : '' ?>">
           <span>🔍 SEO</span>
         </a>
@@ -499,6 +713,7 @@ $sidebar_path = get_sidebar_path();
       <div style="display:flex; align-items:center; gap:12px">
         <div id="page-actions-container" class="flex gap-2">
           <!-- Action buttons will be loaded dynamically or initially -->
+          <?php if (isset($header_actions)) echo $header_actions; ?>
         </div>
 
         <!-- Right controls (Theme + User Dropdown) -->
@@ -902,3 +1117,13 @@ async function selectCategory(catId, catName) {
   }
 }
 </script>
+<?php
+$script_name = $_SERVER['SCRIPT_NAME'] ?? '';
+$is_dashboard = str_contains($script_name, '/admin/') || 
+                str_contains($script_name, '/creator/') || 
+                str_contains($script_name, '/affiliate/');
+
+if (!$is_dashboard && function_exists('render_ad_placeholder')) {
+    echo render_ad_placeholder('home_mobile_top');
+}
+?>

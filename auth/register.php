@@ -33,6 +33,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $refUser = db_fetch("SELECT id FROM users WHERE ref_code=?", [$_COOKIE['fh_ref']]);
                     $ref_by = $refUser['id'] ?? null;
                 }
+                $user_approval = setting('user_approval_mode', 'auto');
+                $creator_approval = setting('creator_approval_mode', 'manual');
+                $status = 'active';
+                if ($role === 'creator') {
+                    $status = ($creator_approval === 'auto') ? 'active' : 'pending';
+                } else {
+                    $status = ($user_approval === 'auto') ? 'active' : 'pending';
+                }
+
                 $id = db_insert('users', [
                     'username'           => $username,
                     'email'              => $email,
@@ -41,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'phone'              => $phone,
                     'password'           => hash_password($pass),
                     'role'               => $role,
-                    'status'             => $role === 'creator' ? 'pending' : 'active',
+                    'status'             => $status,
                     'ref_code'           => $ref_code,
                     'referred_by'        => $ref_by,
                     'channel_name'       => $username,
@@ -67,7 +76,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     } catch (Throwable $e) { /* ignore duplicate */ }
                 }
-                flash('success', $role === 'creator' ? 'Account created! Admin will review your creator application. Please sign in.' : 'Account created successfully! Please sign in.');
+                
+                $msg = 'Account created successfully! Please sign in.';
+                if ($status === 'pending') {
+                    $msg = 'Account created! Admin will review your application before full access is enabled. Please sign in.';
+                }
+                flash('success', $msg);
                 redirect(BASE_URL . '/auth/login.php');
         }
     }

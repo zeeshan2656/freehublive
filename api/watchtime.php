@@ -13,6 +13,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'stats')
     if (!is_logged_in()) {
         json_error('Login required', 401);
     }
+    if ((auth_user()['status'] ?? 'pending') !== 'active') {
+        json_error('Account not active', 403);
+    }
     $stats = fh_user_watch_stats((int)auth_user()['id']);
     json_response([
         'success' => true,

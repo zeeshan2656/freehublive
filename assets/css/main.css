@@ -970,18 +970,17 @@ tbody tr:hover{background:var(--bg3)}
   box-shadow: var(--shadow-sm);
 }
 .ad-sponsored-container iframe {
-  width: 100% !important;
-  height: 100% !important;
   max-width: 100% !important;
   max-height: 100% !important;
-  display: block;
+  display: block !important;
+  margin: 0 auto !important;
   border: none;
 }
 .ad-sponsored-container img {
-  max-width: 100%;
-  height: auto;
-  display: inline-block;
-  vertical-align: middle;
+  max-width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  margin: 0 auto !important;
   border: none;
 }
 
@@ -1310,6 +1309,33 @@ tbody tr:hover{background:var(--bg3)}
 @media (max-width: 900px) {
   .ad-mobile-only { display: block !important; }
   .ad-desktop-only { display: none !important; }
+}
+
+/* Mobile-specific edge-to-edge ad placement */
+@media(max-width: 900px) {
+  .ad-sponsored-container.ad-full-width-mobile {
+    position: sticky !important;
+    top: var(--nav-h) !important;
+    z-index: 99 !important;
+    background: var(--bg) !important; /* solid page background to block scrolled content */
+    margin: 0 0 12px 0 !important; /* edge-to-edge naturally outside main-content */
+    padding: 12px 0 !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-top: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    width: auto !important;
+    max-width: none !important;
+    display: block !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.15) !important;
+  }
+  .ad-sponsored-container.ad-full-width-mobile .ad-creative-wrapper {
+    margin: 0 auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
 }
 
 

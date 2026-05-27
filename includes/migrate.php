@@ -147,6 +147,8 @@ function fh_run_migrations(): void {
         'currency_rates_json'    => '{"USD":1,"INR":83.5,"PKR":278,"EUR":0.92,"GBP":0.79,"CAD":1.36,"AUD":1.52,"BDT":110,"AED":3.67,"SAR":3.75}',
         'schema_version'         => '3',
         'video_approval_mode'    => 'manual',  // 'auto' or 'manual'
+        'user_approval_mode'     => 'auto',    // 'auto' or 'manual'
+        'creator_approval_mode'  => 'manual',  // 'auto' or 'manual'
         'smtp_host'              => '',
         'smtp_port'              => '587',
         'smtp_user'              => '',
@@ -160,7 +162,7 @@ function fh_run_migrations(): void {
         $group = 'general';
         if (str_contains($key, 'rate') || str_contains($key, 'withdrawal') || str_contains($key, 'payout') || str_contains($key, 'revenue') || str_contains($key, 'bonus')) $group = 'earnings';
         if (str_contains($key, 'smtp')) $group = 'email';
-        if ($key === 'video_approval_mode') $group = 'content';
+        if ($key === 'video_approval_mode' || $key === 'user_approval_mode' || $key === 'creator_approval_mode') $group = 'content';
         db_query(
             "INSERT INTO settings (`key`,`value`,`group`) VALUES (?,?,?)
              ON DUPLICATE KEY UPDATE `key`=`key`",
@@ -235,6 +237,9 @@ function fh_run_migrations(): void {
     if (fh_table_exists('ad_placements') && !fh_column_exists('ad_placements', 'ad_height')) {
         db_query("ALTER TABLE ad_placements ADD COLUMN ad_height SMALLINT UNSIGNED DEFAULT NULL AFTER ad_width");
     }
+    if (fh_table_exists('ad_placements') && !fh_column_exists('ad_placements', 'reload_interval')) {
+        db_query("ALTER TABLE ad_placements ADD COLUMN reload_interval INT UNSIGNED DEFAULT NULL AFTER ad_height");
+    }
 
     if (fh_table_exists('ad_placements')) {
         $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = 'home_mobile_top'");
@@ -242,4 +247,107 @@ function fh_run_migrations(): void {
             db_query("INSERT INTO ad_placements (key_name, name, device_target) VALUES ('home_mobile_top', 'Home Page Mobile Top Banner', 'mobile')");
         }
     }
+
+    // ── Pages CMS Table ─────────────────────────────────────
+    if (!fh_table_exists('pages')) {
+        db_query("CREATE TABLE pages (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(150) NOT NULL,
+            slug VARCHAR(150) NOT NULL UNIQUE,
+            content MEDIUMTEXT,
+            is_published TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+        $initial_pages = [
+            [
+                'title' => 'Home',
+                'slug' => 'home',
+                'content' => '<h1>Welcome to FreeHub</h1><p>Watch. Share. Earn.</p><p>FreeHub is the premier next-generation video sharing platform where creators and viewers connect, collaborate, and share rewards. Explore trending topics, support your favorite video creators, or broadcast your own channel to start building your audience today.</p>'
+            ],
+            [
+                'title' => 'About Us',
+                'slug' => 'about-us',
+                'content' => '<h1>About Us</h1><p>Welcome to FreeHub! We are a dynamic, community-driven video sharing platform designed to empower content creators and engage audiences around the globe.</p><h2>Our Mission</h2><p>Our mission is simple: to democratize online entertainment and monetization. We believe that everyone who contributes to the platform—whether by creating compelling content or actively viewing videos—deserves to share in its success.</p><h2>How It Works</h2><ul><li><strong>Creators:</strong> Upload high-definition videos, engage with subscribers, and monetize content directly based on watch duration and advertising engagement.</li><li><strong>Viewers:</strong> Watch interesting videos, discover new channels, and earn active viewing rewards.</li></ul>'
+            ],
+            [
+                'title' => 'Privacy Policy',
+                'slug' => 'privacy-policy',
+                'content' => '<h1>Privacy Policy</h1><p>Last updated: May 2026</p><p>Your privacy is of paramount importance to us. This Privacy Policy details the types of personal data we collect, how we use it, and the strict security measures we implement to protect your information.</p><h2>1. Information We Collect</h2><p>We collect information to provide better services to all our users, including account details, viewing histories, interaction records, and preferred payment preferences.</p><h2>2. How We Use Information</h2><p>We use the collected information to manage user authentication, accurately calculate viewer rewards and creator earnings, process secure withdrawals, and prevent fraudulent activity on the platform.</p>'
+            ],
+            [
+                'title' => 'Disclaimer',
+                'slug' => 'disclaimer',
+                'content' => '<h1>Disclaimer</h1><p>Please read this disclaimer carefully before using the platform.</p><h2>No Earnings Guarantees</h2><p>Any earning statistics, rate tables, or success stories displayed on the platform are illustrative examples of potential outcomes. Actual creator and viewer earnings are not guaranteed and will vary based on user engagement, geographic location, adherence to community rules, and overall platform ad revenue.</p><h2>Third-Party Ads</h2><p>We display third-party advertisements. We are not responsible for the contents, products, or claims made in these external advertisements.</p>'
+            ],
+            [
+                'title' => 'Contact Us',
+                'slug' => 'contact-us',
+                'content' => '<h1>Contact Us</h1><p>Have questions, technical issues, or partnership proposals? The FreeHub support team is here to assist you.</p><h2>Get in Touch</h2><p>You can contact our support department directly by sending an email to:</p><p><strong>Email:</strong> support@freehub.live</p><p>Our business hours are Monday through Friday, 9:00 AM to 6:00 PM (EST). We aim to respond to all inquiries within 24 to 48 hours.</p>'
+            ],
+            [
+                'title' => 'Creator Page',
+                'slug' => 'creator-page',
+                'content' => '<h1>Creator Program</h1><p>Welcome to the FreeHub Creator Program. Broadcast your passion, build a loyal fanbase, and generate competitive revenue from your content.</p><h2>How to Get Started</h2><ol><li><strong>Setup Channel:</strong> Register or update your account role to Creator and define your unique channel name.</li><li><strong>Upload Original Content:</strong> Upload videos in standard high-definition formats. Keep titles descriptive and thumbnails engaging.</li><li><strong>Promote:</strong> Share your videos across social channels using your custom referral link to drive initial traction.</li></ol><h2>Rules & Policies</h2><ul><li><strong>Originality:</strong> Only upload videos that you own or have full authorization to distribute. Plagiarism will lead to channel termination.</li><li><strong>Quality:</strong> Maintain clear audio and visual standards. Poor quality videos may be unlisted.</li><li><strong>Prohibited Content:</strong> Content displaying violence, harassment, hate speech, or explicit material is strictly forbidden.</li></ul>'
+            ],
+            [
+                'title' => 'Viewer Page',
+                'slug' => 'viewer-page',
+                'content' => '<h1>Viewer Rewards</h1><p>FreeHub values your time and attention. That is why we pay you to watch videos!</p><h2>How to Watch & Earn</h2><ul><li><strong>Stay Active:</strong> Earn rewards for every minute you spend watching authorized videos on our platform.</li><li><strong>Refer Friends:</strong> Share your referral code. For every creator or viewer you introduce to FreeHub, you earn a percentage of their earnings for life!</li></ul><h2>Viewer Rules & Fair Play</h2><p>To keep the ecosystem fair for creators and advertisers, we enforce the following rules:</p><ul><li>No botting, scripting, automatic page reloads, or background playing tools.</li><li>Only watch one video at a time. Multi-tabbing to inflate watch time is disallowed.</li><li>Use a single account. Creating duplicate accounts to claim rewards will result in an immediate and permanent ban.</li></ul>'
+            ],
+            [
+                'title' => 'Payment & Payout Policy',
+                'slug' => 'payment-policy',
+                'content' => '<h1>Payment & Payout Policy</h1><p>At FreeHub, we ensure secure, transparent, and timely payouts for all eligible creators and viewers.</p><h2>Withdrawal Guidelines</h2><table border=\"1\" style=\"border-collapse: collapse; width: 100%; border-color: var(--border);\"><thead><tr><th style=\"padding: 8px; text-align: left;\">Payment Parameter</th><th style=\"padding: 8px; text-align: left;\">Detail / Limit</th></tr></thead><tbody><tr><td style=\"padding: 8px;\">Minimum Threshold</td><td style=\"padding: 8px;\">$25.00 USD (or local currency equivalent)</td></tr><tr><td style=\"padding: 8px;\">Processing Time</td><td style=\"padding: 8px;\">Paid within 7 business days from approval date</td></tr><tr><td style=\"padding: 8px;\">Supported Channels</td><td style=\"padding: 8px;\">PayPal, Direct Bank Transfer, Cryptocurrency (USDT)</td></tr></tbody></table><p style=\"margin-top: 12px;\">All withdrawal requests undergo manual audit by the administration team to verify traffic authenticity and rule compliance.</p>'
+            ],
+            [
+                'title' => 'Terms & Conditions',
+                'slug' => 'terms-conditions',
+                'content' => '<h1>Terms & Conditions</h1><p>These Terms and Conditions govern your access to and use of FreeHub. By creating an account or browsing the platform, you fully accept these terms.</p><h2>1. Account Registration</h2><p>You must provide accurate, complete, and up-to-date information during signup. You are solely responsible for maintaining account confidentiality.</p><h2>2. Intellectual Property</h2><p>All trademarks, logos, and system layouts remain the exclusive property of FreeHub. Uploaded content remains the property of the creator, who grants FreeHub a worldwide license to host and stream it.</p>'
+            ],
+            [
+                'title' => 'Community Guidelines',
+                'slug' => 'community-guidelines',
+                'content' => '<h1>Community Guidelines</h1><p>Our guidelines are designed to foster a safe, positive, and constructive environment for all users on FreeHub.</p><h2>Be Respectful</h2><p>We do not tolerate harassment, bullying, hate speech, or discriminatory language based on race, gender, religion, or orientation.</p><h2>Content Safety</h2><p>Keep content safe for our diverse audience. Avoid posting graphic violence, self-harm material, or illegal activities.</p>'
+            ]
+        ];
+
+        foreach ($initial_pages as $p) {
+            db_insert('pages', $p);
+        }
+    }
+
+    if (fh_table_exists('pages')) {
+        if (!fh_column_exists('pages', 'meta_title')) {
+            db_query("ALTER TABLE pages ADD COLUMN meta_title VARCHAR(255) DEFAULT NULL AFTER content");
+        }
+        if (!fh_column_exists('pages', 'meta_desc')) {
+            db_query("ALTER TABLE pages ADD COLUMN meta_desc TEXT DEFAULT NULL AFTER meta_title");
+        }
+        if (!fh_column_exists('pages::temp', 'meta_keywords')) { // Just checking column name uniqueness
+            if (!fh_column_exists('pages', 'meta_keywords')) {
+                db_query("ALTER TABLE pages ADD COLUMN meta_keywords VARCHAR(255) DEFAULT NULL AFTER meta_desc");
+            }
+        }
+        if (!fh_column_exists('pages', 'status')) {
+            db_query("ALTER TABLE pages ADD COLUMN status ENUM('published', 'draft', 'private', 'scheduled') NOT NULL DEFAULT 'published' AFTER meta_keywords");
+            if (fh_column_exists('pages', 'is_published')) {
+                db_query("UPDATE pages SET status = 'draft' WHERE is_published = 0");
+            }
+        }
+        if (!fh_column_exists('pages', 'publish_at')) {
+            db_query("ALTER TABLE pages ADD COLUMN publish_at DATETIME DEFAULT NULL AFTER status");
+        }
+    }
+
+    // ── Update users status ENUM to include 'rejected' ─────────
+    if (fh_table_exists('users')) {
+        try {
+            db_query("ALTER TABLE users MODIFY COLUMN status ENUM('active', 'suspended', 'pending', 'rejected') NOT NULL DEFAULT 'pending'");
+        } catch (Throwable $e) {
+            // Ignore if already run
+        }
+    }
 }
+

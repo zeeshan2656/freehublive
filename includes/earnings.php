@@ -164,8 +164,10 @@ function fh_lifetime_watch_earnings_usd(int $userId): float {
 function fh_credit_user(float $usd, int $userId, string $description, ?int $referenceId = null): void {
     if ($usd <= 0 || $userId < 1) return;
     // Admin cannot earn from the platform
-    $userRow = db_fetch("SELECT role FROM users WHERE id=?", [$userId]);
+    $userRow = db_fetch("SELECT role, status FROM users WHERE id=?", [$userId]);
+    if (!$userRow) return;
     if (($userRow['role'] ?? '') === 'admin') return;
+    if (($userRow['status'] ?? 'pending') !== 'active') return;
     $amount = round($usd, 6);
     db_insert('earnings', [
         'user_id'      => $userId,
@@ -211,8 +213,8 @@ function fh_process_watch_time(int $viewId, int $videoId, int $seconds, bool $is
 
     $view = db_fetch(
         "SELECT vv.*, v.user_id AS creator_id, v.title
-         FROM video_views vv JOIN videos v ON v.id = vv.video_id
-         WHERE vv.id = ? AND vv.video_id = ?",
+     FROM video_views vv JOIN videos v ON v.id = vv.video_id
+     WHERE vv.id = ? AND vv.video_id = ?",
         [$viewId, $videoId]
     );
     if (!$view) {
@@ -236,16 +238,22 @@ function fh_process_watch_time(int $viewId, int $videoId, int $seconds, bool $is
     );
 
     $viewerId = $view['user_id'] ? (int)$view['user_id'] : null;
+    $viewerStatus = 'pending';
     if ($viewerId) {
+        $viewerRow = db_fetch("SELECT status FROM users WHERE id=?", [$viewerId]);
+        $viewerStatus = $viewerRow['status'] ?? 'pending';
+    }
+
+    if ($viewerId && $viewerStatus === 'active') {
         db_query(
             "UPDATE users SET total_watch_seconds = total_watch_seconds + ? WHERE id = ?",
             [$seconds, $viewerId]
         );
         db_query(
             "INSERT INTO watch_history (user_id, video_id, watch_position, last_watched)
-             VALUES (?,?,?,NOW())
-             ON DUPLICATE KEY UPDATE watch_position = watch_position + VALUES(watch_position),
-             last_watched = NOW()",
+         VALUES (?,?,?,NOW())
+         ON DUPLICATE KEY UPDATE watch_position = watch_position + VALUES(watch_position),
+         last_watched = NOW()",
             [$viewerId, $videoId, $seconds]
         );
     }
@@ -253,22 +261,34 @@ function fh_process_watch_time(int $viewId, int $videoId, int $seconds, bool $is
     $viewerRate  = fh_watch_rate_usd();
     $creatorRate = fh_creator_watch_rate_usd();
     $creatorId = (int)$view['creator_id'];
+    $creatorStatus = 'pending';
+    if ($creatorId > 0) {
+        $creatorRow = db_fetch("SELECT status FROM users WHERE id=?", [$creatorId]);
+        $creatorStatus = $creatorRow['status'] ?? 'pending';
+    }
+
     $affiliateId = $view['affiliate_id'] ? (int)$view['affiliate_id'] : null;
+    $affiliateStatus = 'pending';
+    if ($affiliateId > 0) {
+        $affiliateRow = db_fetch("SELECT status FROM users WHERE id=?", [$affiliateId]);
+        $affiliateStatus = $affiliateRow['status'] ?? 'pending';
+    }
+
     $refWatchRate = max(0, (float)setting('referral_watch_rate_usd', '0.10'));
     $credited = 0;
 
-    if ($viewerId && $viewerRate > 0) {
+    if ($viewerId && $viewerRate > 0 && $viewerStatus === 'active') {
         $viewerUsd = ($seconds / 3600) * $viewerRate;
         fh_credit_user($viewerUsd, $viewerId, "Watch time: {$seconds}s on video #{$videoId}", $viewId);
         $credited += $viewerUsd;
     }
-    if ($creatorId > 0 && $creatorRate > 0 && $creatorId !== $viewerId) {
+    if ($creatorId > 0 && $creatorRate > 0 && $creatorId !== $viewerId && $creatorStatus === 'active' && ($viewerId === null || $viewerStatus === 'active')) {
         $creatorUsd = ($seconds / 3600) * $creatorRate;
         fh_credit_user($creatorUsd, $creatorId, "Creator watch time: {$seconds}s on video #{$videoId}", $viewId);
         db_query('UPDATE videos SET revenue = revenue + ? WHERE id = ?', [$creatorUsd, $videoId]);
         $credited += $creatorUsd;
     }
-    if ($affiliateId > 0 && $refWatchRate > 0 && $affiliateId !== $viewerId && $affiliateId !== $creatorId) {
+    if ($affiliateId > 0 && $refWatchRate > 0 && $affiliateId !== $viewerId && $affiliateId !== $creatorId && $affiliateStatus === 'active' && ($viewerId === null || $viewerStatus === 'active')) {
         $affUsd = ($seconds / 3600) * $refWatchRate;
         // Credit the affiliate (referral type)
         $amount = round($affUsd, 6);

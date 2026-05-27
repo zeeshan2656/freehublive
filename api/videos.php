@@ -83,6 +83,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
 // ── POST actions ─────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_logged_in()) json_error('Login required', 401);
+    if ((auth_user()['status'] ?? 'pending') !== 'active') {
+        json_error('Account not active', 403);
+    }
     $body = json_decode(file_get_contents('php://input'), true) ?? [];
     $uid  = auth_user()['id'];
 

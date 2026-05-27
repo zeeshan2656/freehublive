@@ -13,9 +13,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         'ad_revenue_per_click','currency_rates_json',
         'allow_register','maintenance',
         'video_approval_mode',
+        'user_approval_mode',
+        'creator_approval_mode',
         'referral_bonus_usd',
         'smtp_host','smtp_port','smtp_user','smtp_from_email','smtp_from_name','smtp_encryption',
         'site_logo',
+        'adult_mode',
     ];
     // Sync rates so old code still works
     $_POST['watch_time_rate_usd'] = $_POST['viewer_rate_usd'] ?? $_POST['watch_time_rate_usd'] ?? '0.50';
@@ -27,7 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         $group = 'general';
         if (str_contains($key, 'rate') || str_contains($key, 'withdrawal') || str_contains($key, 'payout') || str_contains($key, 'revenue') || str_contains($key, 'bonus')) $group = 'earnings';
         if (str_contains($key, 'smtp')) $group = 'email';
-        if ($key === 'video_approval_mode') $group = 'content';
+        if ($key === 'video_approval_mode' || $key === 'user_approval_mode' || $key === 'creator_approval_mode') $group = 'content';
+        if ($key === 'adult_mode') $group = 'popup';
         db_query("INSERT INTO settings (`key`,`value`,`group`) VALUES (?,?,?) ON DUPLICATE KEY UPDATE `value`=?", [$key, $val, $group, $val]);
     }
     // SMTP password — only update if provided
@@ -64,7 +68,8 @@ $themes = [
       <button class="btn btn-outline" style="justify-content:flex-start;border:none;background:rgba(99,102,241,.1);color:var(--accent)" onclick="showSlice('slice-general', this)">⚙️ General</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-appearance', this)">🎨 Appearance</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-monetization', this)">💰 Monetization</button>
-      <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-approval', this)">🛡️ Video Approval</button>
+      <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-approval', this)">🛡️ Approval Settings</button>
+      <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-popup', this)">🔞 First Popup</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-email', this)">✉️ Email / SMTP</button>
     </div>
 
@@ -193,17 +198,73 @@ $themes = [
       </div>
       </div>
 
-      <!-- Video Approval Slice -->
+      <!-- Approval Settings Slice -->
       <div id="slice-approval" class="slice-section" style="display:none">
       <div class="card">
-        <h3 style="font-weight:700;margin-bottom:16px">Video Approval</h3>
+        <h3 style="font-weight:700;margin-bottom:20px">Approval Settings</h3>
+        
+        <!-- User Approval Mode -->
         <div class="form-group">
-          <label class="form-label">Approval Mode</label>
-          <select class="form-input form-select" name="video_approval_mode">
-            <option value="manual" <?= setting('video_approval_mode','manual')==='manual'?'selected':'' ?>>🔍 Manual — Admin reviews each video</option>
-            <option value="auto"   <?= setting('video_approval_mode','manual')==='auto'?'selected':'' ?>>⚡ Auto — Videos publish immediately</option>
+          <label class="form-label">User / Viewer Approval Mode</label>
+          <select class="form-input form-select" name="user_approval_mode">
+            <option value="auto"   <?= setting('user_approval_mode','auto')==='auto'?'selected':'' ?>>⚡ Auto Approval — New viewers gain access instantly</option>
+            <option value="manual" <?= setting('user_approval_mode','auto')==='manual'?'selected':'' ?>>🔍 Manual Approval — Admin must approve new viewers</option>
           </select>
-          <small class="text-muted text-xs">In manual mode, uploaded videos are queued for admin approval before going live.</small>
+          <small class="text-muted text-xs" style="display:block;margin-top:4px">In manual mode, viewers remain pending and cannot access dashboard pages or earn rewards until approved.</small>
+        </div>
+        
+        <!-- Creator Approval Mode -->
+        <div class="form-group" style="margin-top:20px">
+          <label class="form-label">Creator Approval Mode</label>
+          <select class="form-input form-select" name="creator_approval_mode">
+            <option value="manual" <?= setting('creator_approval_mode','manual')==='manual'?'selected':'' ?>>🔍 Manual Approval — Admin must approve new creators</option>
+            <option value="auto"   <?= setting('creator_approval_mode','manual')==='auto'?'selected':'' ?>>⚡ Auto Approval — New creators gain access instantly</option>
+          </select>
+          <small class="text-muted text-xs" style="display:block;margin-top:4px">In manual mode, creators remain pending and cannot access creator tools or upload videos until approved.</small>
+        </div>
+        
+        <!-- Video Approval Mode -->
+        <div class="form-group" style="margin-top:20px">
+          <label class="form-label">Video Approval Mode</label>
+          <select class="form-input form-select" name="video_approval_mode">
+            <option value="manual" <?= setting('video_approval_mode','manual')==='manual'?'selected':'' ?>>🔍 Manual Approval — Admin reviews each video</option>
+            <option value="auto"   <?= setting('video_approval_mode','manual')==='auto'?'selected':'' ?>>⚡ Auto Approval — Videos publish immediately</option>
+          </select>
+          <small class="text-muted text-xs" style="display:block;margin-top:4px">In manual mode, uploaded videos are queued for admin approval before going live.</small>
+        </div>
+      </div>
+      </div>
+
+      <!-- First Popup Slice -->
+      <div id="slice-popup" class="slice-section" style="display:none">
+      <div class="card">
+        <h3 style="font-weight:700;margin-bottom:20px">First Popup Settings</h3>
+        <p class="text-sm text-muted" style="margin-bottom:20px;line-height:1.6">
+          Configure popups that appear before visitors can access the website.
+          When enabled, the selected popup will block all site content until the user interacts with it.
+        </p>
+
+        <!-- Adult Mode Toggle -->
+        <div class="form-group">
+          <label class="form-label">🔞 Adult Site Mode (18+ Age Verification)</label>
+          <select class="form-input form-select" name="adult_mode">
+            <option value="0" <?= setting('adult_mode','0')==='0'?'selected':'' ?>>🚫 Disabled — No age verification popup</option>
+            <option value="1" <?= setting('adult_mode','0')==='1'?'selected':'' ?>>✅ Enabled — Age verification popup is mandatory</option>
+          </select>
+          <small class="text-muted text-xs" style="display:block;margin-top:6px;line-height:1.5">
+            When enabled, all visitors must confirm they are 18+ before accessing any page on the website.
+            The verification is stored in the browser session and does not reappear until the session expires.
+            Admin users are exempt from the popup.
+          </small>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;border-radius:8px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15)">
+          <div style="font-weight:700;font-size:.88rem;margin-bottom:6px;color:var(--red)">⚠️ Important</div>
+          <p class="text-sm text-muted" style="line-height:1.6">
+            Enabling this mode confirms your platform hosts age-restricted content.
+            The popup blocks ALL site content (including public pages) until the visitor verifies their age.
+            Users who decline are shown a blocked-access screen and cannot browse the site.
+          </p>
         </div>
       </div>
       </div>

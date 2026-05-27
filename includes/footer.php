@@ -1,35 +1,52 @@
 <?php // FreeHub.Live — Shared Footer ?>
+<style>
+.footer-link {
+  transition: all 0.15s ease;
+  display: inline-block;
+  text-decoration: none;
+}
+.footer-link:hover {
+  color: var(--accent) !important;
+  transform: translateX(4px);
+}
+</style>
 <footer class="site-footer">
   <div class="container">
     <div class="grid grid-4" style="margin-bottom:32px">
+      <!-- Column 1: Brand Info -->
       <div>
         <div style="margin-bottom:10px"><?= render_site_logo('footer', false) ?></div>
         <p style="font-size:.83rem;color:var(--text2);line-height:1.7"><?= e(setting('site_tagline','Watch. Share. Earn.')) ?></p>
       </div>
+      
+      <!-- Column 2: Platform -->
       <div>
-        <div style="font-weight:600;margin-bottom:10px;font-size:.9rem">Platform</div>
+        <div style="font-weight:600;margin-bottom:12px;font-size:.9rem;color:var(--text)">Platform</div>
         <div class="flex-col gap-2">
-          <a href="<?= BASE_URL ?>/" class="text-muted text-sm" style="transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color=''">Home</a>
-          <a href="<?= BASE_URL ?>/search.php" class="text-muted text-sm">Trending</a>
-          <a href="<?= BASE_URL ?>/categories.php" class="text-muted text-sm">Categories</a>
-          <a href="<?= BASE_URL ?>/live.php" class="text-muted text-sm">Live</a>
+          <a href="<?= BASE_URL ?>/" class="text-muted text-sm footer-link">Home</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=about-us" class="text-muted text-sm footer-link">About Us</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=contact-us" class="text-muted text-sm footer-link">Contact Us</a>
         </div>
       </div>
+      
+      <!-- Column 3: Guidelines -->
       <div>
-        <div style="font-weight:600;margin-bottom:10px;font-size:.9rem">Programs</div>
+        <div style="font-weight:600;margin-bottom:12px;font-size:.9rem;color:var(--text)">Programs & Guidelines</div>
         <div class="flex-col gap-2">
-          <a href="<?= BASE_URL ?>/affiliate/register.php" class="text-muted text-sm">Affiliate Program</a>
-          <a href="<?= BASE_URL ?>/auth/register.php?role=creator" class="text-muted text-sm">Creator Program</a>
-          <a href="<?= BASE_URL ?>/advertise.php" class="text-muted text-sm">Advertise</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=creator-page" class="text-muted text-sm footer-link">Creator Page</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=viewer-page" class="text-muted text-sm footer-link">Viewer Page</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=community-guidelines" class="text-muted text-sm footer-link">Community Guidelines</a>
         </div>
       </div>
+      
+      <!-- Column 4: Legal -->
       <div>
-        <div style="font-weight:600;margin-bottom:10px;font-size:.9rem">Legal</div>
+        <div style="font-weight:600;margin-bottom:12px;font-size:.9rem;color:var(--text)">Legal & Policies</div>
         <div class="flex-col gap-2">
-          <a href="<?= BASE_URL ?>/terms.php" class="text-muted text-sm">Terms of Service</a>
-          <a href="<?= BASE_URL ?>/privacy.php" class="text-muted text-sm">Privacy Policy</a>
-          <a href="<?= BASE_URL ?>/dmca.php" class="text-muted text-sm">DMCA</a>
-          <a href="<?= BASE_URL ?>/contact.php" class="text-muted text-sm">Contact</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=privacy-policy" class="text-muted text-sm footer-link">Privacy Policy</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=disclaimer" class="text-muted text-sm footer-link">Disclaimer</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=payment-policy" class="text-muted text-sm footer-link">Payment & Payout Policy</a>
+          <a href="<?= BASE_URL ?>/page.php?slug=terms-conditions" class="text-muted text-sm footer-link">Terms & Conditions</a>
         </div>
       </div>
     </div>

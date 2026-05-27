@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         $device_target = $_POST['device_target'] ?? 'all';
         $ad_width = $_POST['ad_width'] === '' ? null : (int)$_POST['ad_width'];
         $ad_height = $_POST['ad_height'] === '' ? null : (int)$_POST['ad_height'];
+        $reload_interval = $_POST['reload_interval'] === '' ? null : (int)$_POST['reload_interval'];
         $ad_id = $_POST['ad_id'] === '' ? null : (int)$_POST['ad_id'];
         
         if ($id && $name) {
@@ -22,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
                 'device_target' => $device_target,
                 'ad_width' => $ad_width,
                 'ad_height' => $ad_height,
+                'reload_interval' => $reload_interval,
                 'assigned_ad_id' => $ad_id
             ], 'id=?', [$id]);
             flash('success', 'Ad placement updated successfully.');
@@ -37,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
                 'device_target'  => $orig['device_target'],
                 'ad_width'       => $orig['ad_width'] ?: null,
                 'ad_height'      => $orig['ad_height'] ?: null,
+                'reload_interval'=> $orig['reload_interval'] ?: null,
                 'name'           => 'Copy of ' . $orig['name'],
                 'assigned_ad_id' => $orig['assigned_ad_id'] ?: null
             ]);
@@ -294,13 +297,24 @@ require_once __DIR__ . '/partials/admin_head.php';
                  </span>
               </td>
               <td>
-                <?php if ($p['ad_width'] || $p['ad_height']): ?>
-                  <code style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-weight: bold; color: var(--text2);">
-                    <?= $p['ad_width'] ? (int)$p['ad_width'] . 'px' : 'Auto' ?> × <?= $p['ad_height'] ? (int)$p['ad_height'] . 'px' : 'Auto' ?>
-                  </code>
-                <?php else: ?>
-                  <span class="text-muted text-xs" style="font-style: italic; color: var(--text3);">Auto / Responsive</span>
-                <?php endif; ?>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <?php if ($p['ad_width'] || $p['ad_height']): ?>
+                    <code style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-weight: bold; color: var(--text2); display: inline-block;">
+                      <?= $p['ad_width'] ? (int)$p['ad_width'] . 'px' : 'Auto' ?> × <?= $p['ad_height'] ? (int)$p['ad_height'] . 'px' : 'Auto' ?>
+                    </code>
+                  <?php else: ?>
+                    <span class="text-muted text-xs" style="font-style: italic; color: var(--text3);">Auto / Responsive</span>
+                  <?php endif; ?>
+                  
+                  <?php if ($p['reload_interval']): ?>
+                    <div style="font-size: 0.72rem; color: var(--accent); font-weight: bold; display: flex; align-items: center; gap: 3px;">
+                      <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="stroke: var(--accent);"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l.73-.73"/></svg>
+                      <?= (int)$p['reload_interval'] ?>s reload
+                    </div>
+                  <?php else: ?>
+                    <div style="font-size: 0.72rem; color: var(--text3); font-style: italic;">No reload</div>
+                  <?php endif; ?>
+                </div>
               </td>
               <td>
                 <?php if ($p['assigned_ad_id']): ?>
@@ -316,7 +330,7 @@ require_once __DIR__ . '/partials/admin_head.php';
               <td style="text-align: right;">
                 <div style="display: inline-flex; gap: 6px; align-items: center;">
                   <!-- Edit/Assign Button -->
-                  <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>', '<?= $p['ad_width'] ?: '' ?>', '<?= $p['ad_height'] ?: '' ?>')">
+                  <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>', '<?= $p['ad_width'] ?: '' ?>', '<?= $p['ad_height'] ?: '' ?>', '<?= $p['reload_interval'] ?: '' ?>')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     Edit
                   </button>
@@ -401,6 +415,14 @@ require_once __DIR__ . '/partials/admin_head.php';
             </div>
           </div>
           
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Reload Ad (seconds)</label>
+            <input class="form-input" type="number" name="reload_interval" id="modal_reload_interval" placeholder="e.g. 30 (Optional)" min="5" style="font-size: 0.9rem;">
+            <div style="font-size: 0.72rem; color: var(--text3); margin-top: 4px; line-height: 1.3;">
+              Auto-reloads the ad placement without refreshing the page. Enter seconds (e.g. 30, 45, 60). Leave empty to disable.
+            </div>
+          </div>
+          
           <div class="form-group" style="margin-bottom: 20px;">
             <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: var(--text2); margin-bottom: 6px;">Select Ad to Assign</label>
             <select class="form-input form-select" name="ad_id" id="modal_ad_id" style="width: 100%; height: 38px; border-radius: 6px; padding: 0 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border);">
@@ -426,7 +448,7 @@ require_once __DIR__ . '/partials/admin_head.php';
 </div>
 
 <script>
-function openPlacementModal(id, name, key, deviceTarget, assignedAdId, adWidth, adHeight) {
+function openPlacementModal(id, name, key, deviceTarget, assignedAdId, adWidth, adHeight, reloadInterval) {
   document.getElementById('modal_placement_id').value = id;
   document.getElementById('modal_placement_name').value = name;
   document.getElementById('modal_placement_key').value = key;
@@ -434,6 +456,7 @@ function openPlacementModal(id, name, key, deviceTarget, assignedAdId, adWidth, 
   document.getElementById('modal_ad_id').value = assignedAdId || '';
   document.getElementById('modal_ad_width').value = adWidth || '';
   document.getElementById('modal_ad_height').value = adHeight || '';
+  document.getElementById('modal_reload_interval').value = reloadInterval || '';
   document.getElementById('placement-modal').classList.add('open');
 }
 

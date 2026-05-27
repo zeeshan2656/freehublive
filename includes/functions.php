@@ -728,3 +728,84 @@ HTML;
     }
     return $output;
 }
+
+function render_ad_placeholder(string $placement_key): string {
+    $now = date('Y-m-d');
+    $placements = db_fetchAll(
+        "SELECT ap.device_target as placement_device, ap.ad_width as placement_width, ap.ad_height as placement_height, ap.reload_interval as reload_interval, a.*
+         FROM ads a
+         JOIN ad_placements ap ON ap.assigned_ad_id = a.id
+         WHERE ap.key_name = ?
+           AND a.is_active = 1
+           AND (a.start_date IS NULL OR a.start_date <= ?)
+           AND (a.end_date IS NULL OR a.end_date >= ?)",
+         [$placement_key, $now, $now]
+    );
+
+    if (!$placements) return '';
+
+    $output = '';
+    foreach ($placements as $ad) {
+        // Track impression
+        db_query("UPDATE ads SET impressions=impressions+1 WHERE id=?", [$ad['id']]);
+
+        $sponsored_label = '<div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>Sponsored</div>';
+
+        // Resolve width and height (placement values override ad values)
+        $w = $ad['placement_width'] ?: $ad['ad_width'];
+        $h = $ad['placement_height'] ?: $ad['ad_height'];
+
+        $size_style = '';
+        if ($placement_key === 'home_mobile_top') {
+            $size_style .= 'width:100% !important;';
+        } else {
+            if ($w) $size_style .= 'width:' . (int)$w . 'px;';
+        }
+        if ($h) $size_style .= 'height:' . (int)$h . 'px;';
+
+        $device_class = '';
+        if ($ad['placement_device'] === 'mobile' || $ad['device_target'] === 'mobile') {
+            $device_class = ' ad-mobile-only';
+        } elseif ($ad['placement_device'] === 'desktop' || $ad['device_target'] === 'desktop') {
+            $device_class = ' ad-desktop-only';
+        }
+
+        $extra_class = '';
+        if ($placement_key === 'home_mobile_top') {
+            $extra_class = ' ad-full-width-mobile';
+            $container_style = 'box-sizing:border-box;';
+        } else {
+            $container_style = 'margin:24px auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;';
+            if ($w) {
+                $container_style .= 'width:100%;max-width:' . (int)$w . 'px;';
+            }
+            if ($h) {
+                $container_style .= 'height:' . (int)$h . 'px;padding:0 16px;display:flex;flex-direction:column;justify-content:center;';
+            } else {
+                $container_style .= 'padding:16px;';
+            }
+        }
+
+        $inner = '';
+        if ($ad['content_type'] === 'image' && $ad['image_url']) {
+            $img_src = str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'];
+            $click_url = $ad['target_url'] ?: '#';
+            $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link" style="display:block;width:100%;height:100%;">'
+                   . '<img src="' . e($img_src) . '" alt="' . e($ad['title']) . '" style="width:100%;' . ($h ? 'height:100%;object-fit:contain;' : 'height:auto;') . 'display:block;border-radius:4px;margin:0 auto">'
+                   . '</a>';
+        } elseif ($ad['content_type'] === 'html') {
+            $inner = '<div class="ad-html-content" style="width:100%;' . ($h ? 'height:100%;' : '') . 'display:block;margin:0 auto;overflow:hidden;">' . $ad['content'] . '</div>';
+        } else {
+            $click_url = $ad['target_url'] ?: '#';
+            $inner = '<a href="' . e($click_url) . '" target="_blank" rel="noopener" data-ad-id="' . $ad['id'] . '" class="ad-click-link" style="font-weight:700;color:var(--accent);text-decoration:underline;font-size:.9rem">'
+                   . e($ad['content'] ?: $ad['title']) . '</a>';
+        }
+
+        $output .= '<div class="ad-sponsored-container' . $device_class . $extra_class . '" data-placement="' . e($placement_key) . '" data-device-target="' . e($ad['placement_device']) . '" data-reload-interval="' . (int)$ad['reload_interval'] . '" style="' . $container_style . '">'
+             . $sponsored_label
+             . '<div style="margin:0 auto;display:block;width:100%;max-width:100%;' . $size_style . '">' . $inner . '</div>'
+             . '</div>';
+    }
+
+    return $output;
+}

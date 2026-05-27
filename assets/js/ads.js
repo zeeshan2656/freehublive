@@ -16,6 +16,27 @@
 
   const device = detectDeviceType();
 
+  function setupAdReload(container, reloadSeconds) {
+    if (container.dataset.reloadIntervalId) {
+      clearInterval(parseInt(container.dataset.reloadIntervalId));
+      delete container.dataset.reloadIntervalId;
+    }
+    
+    if (!reloadSeconds || reloadSeconds <= 0) {
+      return;
+    }
+    
+    const intervalId = setInterval(() => {
+      if (!document.body.contains(container)) {
+        clearInterval(intervalId);
+        return;
+      }
+      loadAd(container);
+    }, reloadSeconds * 1000);
+    
+    container.dataset.reloadIntervalId = intervalId;
+  }
+
   async function loadAd(container) {
     const placement = container.dataset.placement;
     const position = container.dataset.position || 1;
@@ -25,8 +46,15 @@
       const response = await fetch(url);
       const data = await response.json();
       
+      let reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
+      
       if (data.success && data.ad) {
         const ad = data.ad;
+        if (ad.reload_interval !== undefined) {
+          reloadSeconds = parseInt(ad.reload_interval) || 0;
+          container.dataset.reloadInterval = reloadSeconds;
+        }
+        
         container.innerHTML = '';
         container.classList.add('loaded');
         container.style.display = 'block';
@@ -41,13 +69,28 @@
         }
         
         if (placement === 'home_mobile_top') {
-          container.style.width = '100%';
-          container.style.maxWidth = 'none';
-        } else if (ad.ad_width) {
-          container.style.maxWidth = (parseInt(ad.ad_width) + 32) + 'px';
-          container.style.width = '100%';
-          container.style.marginLeft = 'auto';
-          container.style.marginRight = 'auto';
+          // Handled by CSS class ad-full-width-mobile
+        } else {
+          // Reset styles
+          container.style.width = '';
+          container.style.maxWidth = '';
+          container.style.height = '';
+          container.style.padding = '';
+          container.style.display = '';
+          container.style.flexDirection = '';
+          container.style.justifyContent = '';
+
+          if (ad.ad_width) {
+            container.style.width = '100%';
+            container.style.maxWidth = ad.ad_width + 'px';
+          }
+          if (ad.ad_height) {
+            container.style.height = ad.ad_height + 'px';
+            container.style.padding = '0 16px';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.justifyContent = 'center';
+          }
         }
         
         let sizeStyle = '';
@@ -103,12 +146,16 @@
         }
         
         container.appendChild(wrapper);
+        setupAdReload(container, reloadSeconds);
       } else {
         container.style.display = 'none';
+        setupAdReload(container, reloadSeconds);
       }
     } catch (e) {
       console.error('Failed to load ad:', e);
       container.style.display = 'none';
+      const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
+      setupAdReload(container, reloadSeconds);
     }
   }
 
@@ -122,23 +169,6 @@
     const containers = document.querySelectorAll('.ad-sponsored-container');
     containers.forEach(container => {
       loadAd(container);
-      
-      // Auto-refresh visible ads every 60s
-      if (!container.dataset.refreshInterval) {
-        const intervalId = setInterval(() => {
-          const rect = container.getBoundingClientRect();
-          const isVisible = (
-            rect.top >= -500 &&
-            rect.left >= 0 &&
-            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) + 500 &&
-            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-          );
-          if (isVisible) {
-            loadAd(container);
-          }
-        }, 60000);
-        container.dataset.refreshInterval = intervalId;
-      }
     });
   }
 
