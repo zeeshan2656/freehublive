@@ -666,21 +666,28 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
         <!-- Video Approval Info -->
-        <div id="upload-progress" style="margin:12px 0 14px; padding:12px; background:var(--bg2); border:1px solid var(--border); border-radius:12px; display:none">
+        <div id="upload-progress" style="margin:12px 0 14px; padding:14px; background:linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04)); border:1.5px solid var(--accent); border-radius:12px; display:none">
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.85rem; font-weight:700; color:var(--accent); display:flex; align-items:center; gap:6px; margin-bottom:2px">
+              <span id="upload-icon" style="display:inline-block">📤</span>
+              <span id="upload-main-status">Starting upload...</span>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text2)">You can continue filling details while video uploads</div>
+          </div>
           <div style="display:flex; align-items:center; gap:12px">
             <div style="flex:1">
-              <div style="height:10px; background:var(--bg3); border-radius:6px; overflow:hidden">
-                <div id="upload-progress-bar" style="height:100%; width:0%; background:var(--accent)"></div>
+              <div style="height:8px; background:var(--bg3); border-radius:6px; overflow:hidden">
+                <div id="upload-progress-bar" style="height:100%; width:0%; background:linear-gradient(90deg, var(--accent), #7000ff); transition:width 0.3s ease"></div>
               </div>
-              <div style="display:flex; justify-content:space-between; font-size:0.78rem; margin-top:6px">
+              <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:6px; font-weight:600">
                 <span id="upload-percent">0%</span>
                 <span id="upload-status">Idle</span>
               </div>
             </div>
           </div>
-          <div style="display:flex; gap:12px; margin-top:8px; font-size:0.82rem; color:var(--text2)">
-            <div>Speed: <span id="upload-speed">—</span></div>
-            <div>ETA: <span id="upload-eta">—</span></div>
+          <div style="display:flex; gap:16px; margin-top:8px; font-size:0.78rem; color:var(--text2)">
+            <div>Speed: <span id="upload-speed" style="font-weight:600">—</span></div>
+            <div>ETA: <span id="upload-eta" style="font-weight:600">—</span></div>
           </div>
         </div>
 
@@ -700,9 +707,12 @@ require_once __DIR__ . '/../includes/header.php';
           <?php endif; ?>
         </div>
 
-        <button type="submit" class="btn btn-primary w-full" style="justify-content:center; padding:12px 24px; border-radius:12px; font-weight:700; font-size:0.92rem; box-shadow:0 4px 14px rgba(99,102,241,0.3)">
-          Upload &amp; Continue
+        <button type="submit" class="btn btn-primary w-full" style="justify-content:center; padding:12px 24px; border-radius:12px; font-weight:700; font-size:0.92rem; box-shadow:0 4px 14px rgba(99,102,241,0.3); transition:all 0.3s; disabled: opacity 0.6" id="submit-continue-btn">
+          📤 Upload & Continue
         </button>
+        <div style="font-size:0.75rem; color:var(--text3); text-align:center; margin-top:8px; font-weight:500">
+          Upload happens in background — you can edit details immediately
+        </div>
 
       </div>
 
@@ -1134,9 +1144,13 @@ require_once __DIR__ . '/../includes/header.php';
         const statusEl = document.getElementById('upload-status');
         const speedEl = document.getElementById('upload-speed');
         const etaEl = document.getElementById('upload-eta');
+        const mainStatusEl = document.getElementById('upload-main-status');
+        const submitBtn = document.querySelector('button[type="submit"]');
 
         progressBox.style.display = 'block';
-        statusEl.textContent = 'Preparing...';
+        mainStatusEl.textContent = '🔄 Preparing video for upload...';
+        statusEl.textContent = 'Init';
+        if (submitBtn) submitBtn.disabled = true;
 
         // Initialize upload placeholder on server
         const meta = {
@@ -1153,13 +1167,27 @@ require_once __DIR__ . '/../includes/header.php';
         });
         const initData = await initRes.json();
         if (!initData.success) {
-          statusEl.textContent = 'Init failed';
+          mainStatusEl.textContent = '✗ Initialization failed';
+          statusEl.textContent = 'Failed';
+          if (submitBtn) submitBtn.disabled = false;
           return;
         }
         const VID = initData.data.video_id;
         const TOKEN = initData.data.upload_token;
+        
+        // Store on form immediately so submit handler can use it
+        document.getElementById('upload-form').dataset.videoId = VID;
+        document.getElementById('upload-form').dataset.uploadToken = TOKEN;
+        
+        // Enable button immediately after init succeeds - user can click NOW
+        mainStatusEl.textContent = '📤 Uploading video in background...';
+        statusEl.textContent = 'Upload';
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.style.opacity = '1';
+        }
 
-        // Start resumable chunk upload
+        // Start resumable chunk upload (background - does NOT block the page)
         const CHUNK = 5 * 1024 * 1024; // 5MB
         const total = f.size;
         let uploaded = 0;
@@ -1174,6 +1202,7 @@ require_once __DIR__ . '/../includes/header.php';
         let lastTime = Date.now();
         let lastBytes = uploaded;
 
+        mainStatusEl.textContent = '📤 Uploading video in background...';
         statusEl.textContent = 'Uploading';
 
         for (let start = uploaded; start < total; start += CHUNK) {
@@ -1188,8 +1217,12 @@ require_once __DIR__ . '/../includes/header.php';
           });
           const j = await resp.json();
           if (!j.success) {
-            statusEl.textContent = 'Upload error';
-            break;
+            statusEl.textContent = 'Upload error - retrying...';
+          mainStatusEl.textContent = '⚠️ Upload error - retrying...';
+            // Don't break; let it retry
+            await new Promise(r => setTimeout(r, 1000));
+            start -= CHUNK; // retry this chunk
+            continue;
           }
 
           uploaded = j.data.uploaded || Math.min(end, total);
@@ -1210,19 +1243,22 @@ require_once __DIR__ . '/../includes/header.php';
 
         if (uploaded >= total) {
           statusEl.textContent = 'Finalizing';
+          mainStatusEl.textContent = '⏳ Finalizing upload...';
           // Finalize and move to permanent file
           const finalizeResp = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${VID}&token=${TOKEN}&finalize=1&filename=${encodeURIComponent(f.name)}`, { method: 'POST', body: '' });
           const fj = await finalizeResp.json();
           if (fj.success) {
             percentEl.textContent = '100%'; barEl.style.width='100%';
-            statusEl.textContent = 'Completed';
+            statusEl.textContent = 'Complete';
+            mainStatusEl.textContent = '✅ Upload complete! Video processing started...';
             // update local hidden duration if known
             const durInput = document.getElementById('duration-seconds');
             if (durInput && parseInt(durInput.value) > 0) {
               await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_duration', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({video_id:VID,duration:parseInt(durInput.value)}) });
             }
           } else {
-            statusEl.textContent = 'Finalize failed';
+            statusEl.textContent = 'Failed';
+            mainStatusEl.textContent = '✗ Upload finalization failed';
           }
         }
 
@@ -1313,6 +1349,19 @@ document.getElementById('upload-form').addEventListener('submit', async function
   e.preventDefault();
   const form = e.target;
   const vid = form.dataset.videoId ? parseInt(form.dataset.videoId) : 0;
+  const token = form.dataset.uploadToken || '';
+  
+  if (!vid) {
+    alert('Video not initialized yet. Please wait a moment and try again.');
+    return;
+  }
+
+  const submitBtn = document.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Redirecting...';
+  }
+
   const meta = {
     video_id: vid,
     title: document.getElementById('title-field')?.value || '',
@@ -1323,22 +1372,26 @@ document.getElementById('upload-form').addEventListener('submit', async function
   };
 
   try {
-    const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({meta})
-    });
-    const j = await res.json();
-    if (j.success) {
-      // Redirect to thumbnail step which will render via GET param
-      const targetId = vid || j.data.video_id || 0;
-      if (targetId) {
-        window.location.href = '<?= BASE_URL ?>/creator/upload.php?thumb_for=' + targetId;
-      } else {
-        alert('Saved');
-      }
-    } else {
-      alert('Could not save metadata');
+    // Save metadata (non-blocking - fire and forget for speed)
+    fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
+      method: 'POST', 
+      headers: {'Content-Type':'application/json'}, 
+      body: JSON.stringify({meta})
+    }).catch(e => console.error('Metadata save failed:', e));
+
+    // Redirect immediately - don't wait for metadata save or upload to finish
+    // The upload continues in the background
+    setTimeout(() => {
+      window.location.href = '<?= BASE_URL ?>/creator/upload.php?thumb_for=' + vid;
+    }, 200);
+  } catch(e) { 
+    console.error(e); 
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Upload & Continue';
     }
-  } catch(e) { console.error(e); alert('Error saving'); }
+    alert('Error - please try again'); 
+  }
 });
 </script>
 <?php endif; ?>
