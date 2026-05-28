@@ -739,6 +739,9 @@ $sidebar_path = get_sidebar_path();
         <a href="<?= BASE_URL ?>/profile.php" class="studio-nav-item <?= $current_page === 'profile.php' ? 'active' : '' ?>">
           <span>👤 Profile</span>
         </a>
+        <a href="<?= BASE_URL ?>/channel.php?id=<?= auth_user()['id'] ?>" class="studio-nav-item <?= $current_page === 'channel.php' && ($_GET['id'] ?? 0) == auth_user()['id'] ? 'active' : '' ?>">
+          <span>📺 My Channel</span>
+        </a>
         <a href="<?= BASE_URL ?>/settings.php" class="studio-nav-item <?= $current_page === 'settings.php' && !str_contains($_SERVER['PHP_SELF'], '/admin/') ? 'active' : '' ?>">
           <span>⚙️ Settings</span>
         </a>

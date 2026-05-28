@@ -30,6 +30,21 @@ $pg     = paginate($total, 20, $page);
 $videos = db_fetchAll("SELECT * FROM videos WHERE $where ORDER BY created_at DESC LIMIT 20 OFFSET {$pg['offset']}");
 // Duration sync removed for performance — synced via watch.php instead
 $meta_title = 'My Videos';
+$header_actions = '
+<style>
+@media (max-width: 576px) {
+  .header-upload-btn span { display: none !important; }
+  .header-upload-btn { padding: 8px !important; width: 34px; height: 34px; justify-content: center; border-radius: 50% !important; }
+}
+</style>
+<a href="' . BASE_URL . '/creator/upload.php" class="btn btn-primary btn-sm flex gap-1 header-upload-btn" style="border-radius: 18px; padding: 6px 12px;" title="Upload Video">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="flex-shrink:0;">
+    <polyline points="17 8 12 3 7 8"></polyline>
+    <line x1="12" y1="3" x2="12" y2="15"></line>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+  </svg>
+  <span>Upload Video</span>
+</a>';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 

@@ -136,6 +136,8 @@ $categories = db_fetchAll("SELECT * FROM categories WHERE is_active=1 ORDER BY s
 $meta_title = 'Upload Video';
 require_once __DIR__ . '/../includes/header.php';
 ?>
+<script>document.body.classList.add('upload-single-screen');</script>
+
 
 <style>
 /* ── YouTube Style Upload Redesign ── */
@@ -385,9 +387,49 @@ require_once __DIR__ . '/../includes/header.php';
   color: var(--text3);
 }
 
+/* Custom scrollbar for scrollable inner areas */
+.wizard-main-scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+.wizard-main-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+.wizard-main-scrollable::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.wizard-main-scrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--text3);
+}
+
 @media(max-width: 860px) {
-  .wizard-layout-cols { grid-template-columns: 1fr; }
-  .thumb-grid { grid-template-columns: repeat(2, 1fr); }
+  body.upload-single-screen .dashboard-main-viewport,
+  body.upload-single-screen .dashboard-content-scroll {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .upload-wizard {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 8px 4px 32px !important;
+  }
+  .wizard-layout-cols {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .wizard-main-panel {
+    padding: 16px 12px !important;
+    border-radius: 12px !important;
+  }
+  .wizard-main-scrollable {
+    overflow: visible !important;
+    height: auto !important;
+    flex: none !important;
+  }
+  .thumb-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
 }
 
 @media(max-width: 600px) {
@@ -407,6 +449,69 @@ require_once __DIR__ . '/../includes/header.php';
     margin: 0 8px;
   }
 }
+
+@media (min-width: 861px) {
+  body.upload-single-screen .dashboard-main-viewport {
+    overflow: hidden !important;
+  }
+  body.upload-single-screen .dashboard-content-scroll {
+    height: calc(100vh - 50px) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 16px 20px !important;
+  }
+  .upload-wizard {
+    height: 100% !important;
+    max-width: 1200px !important;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 16px;
+  }
+  body.upload-single-screen .step-progress-bar {
+    margin-bottom: 0 !important;
+    padding: 12px 20px !important;
+    flex-shrink: 0;
+  }
+  .wizard-layout-cols {
+    flex: 1;
+    min-height: 0;
+    height: calc(100% - 10px);
+    grid-template-columns: 1.6fr 1fr;
+    align-items: stretch;
+    gap: 20px;
+  }
+  .wizard-main-panel {
+    height: 100% !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 20px !important;
+  }
+  .wizard-main-scrollable {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+  .wizard-preview-panel {
+    height: 100% !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+  }
+  
+  /* Make sure step 2 panel handles flex correctly */
+  #thumb-step {
+    display: flex;
+    flex-direction: column;
+    height: 100% !important;
+    overflow: hidden;
+  }
+}
+
 </style>
 
 <div class="upload-wizard">
@@ -461,69 +566,72 @@ require_once __DIR__ . '/../includes/header.php';
           </button>
         </div>
 
-        <!-- File Upload Dragzone -->
-        <div id="upload-file-container">
-          <div class="upload-dropzone" id="video-zone" onclick="document.getElementById('video-file').click()">
-            <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <div class="upload-title" id="video-zone-text" style="font-size: 0.95rem">Drag &amp; drop your video here</div>
-            <div class="upload-sub" style="font-size: 0.76rem; opacity: 0.8">MP4, WebM, MOV — up to 2GB</div>
-          </div>
-          <input type="file" id="video-file" name="video" accept="video/mp4,video/webm,video/quicktime" style="display:none">
-        </div>
-
-        <!-- Embed Link input -->
-        <div id="upload-embed-container" style="display:none">
-          <div class="form-group" style="margin-bottom: 20px">
-            <label class="form-label" style="font-weight: 700">Video Embed URL</label>
-            <div style="display:flex; gap:10px">
-              <input class="form-input" type="url" id="embed-url-input" name="embed_url" placeholder="Paste YouTube link (e.g., https://www.youtube.com/watch?v=...) or direct MP4 link" style="border-radius: 8px">
-              <button type="button" class="btn btn-outline" onclick="probeEmbedLink()" style="border-radius: 8px; font-weight:600">Verify</button>
+        <div class="wizard-main-scrollable">
+          <!-- File Upload Dragzone -->
+          <div id="upload-file-container">
+            <div class="upload-dropzone" id="video-zone" onclick="document.getElementById('video-file').click()">
+              <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <div class="upload-title" id="video-zone-text" style="font-size: 0.95rem">Drag &amp; drop your video here</div>
+              <div class="upload-sub" style="font-size: 0.76rem; opacity: 0.8">MP4, WebM, MOV — up to 2GB</div>
             </div>
-            <p class="text-xs text-muted" style="margin-top: 6px; line-height: 1.4">Supports YouTube standard URLs, short URLs, and direct URLs ending in .mp4 or .webm.</p>
-          </div>
-        </div>
-
-        <div style="margin-top:24px">
-          <div class="wizard-section-lbl">Video Details</div>
-          
-          <div class="form-group">
-            <label class="form-label">Title *</label>
-            <input class="form-input" type="text" name="title" id="title-field" required maxlength="200" placeholder="Give your video a catchy title" value="<?= e($_POST['title'] ?? '') ?>" style="border-radius: 8px">
+            <input type="file" id="video-file" name="video" accept="video/mp4,video/webm,video/quicktime" style="display:none">
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Description</label>
-            <textarea class="form-input" name="description" id="desc-field" rows="4" placeholder="Tell viewers what your video is about…" style="resize:vertical; border-radius: 8px"><?= e($_POST['description'] ?? '') ?></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Tags <span class="text-muted">(comma separated)</span></label>
-            <input class="form-input" type="text" name="tags" id="tags-field" maxlength="500" placeholder="gaming, music, vlog" value="<?= e($_POST['tags'] ?? '') ?>" style="border-radius: 8px">
-          </div>
-
-          <div class="stat-grid-2" style="margin-top:20px">
-            <div class="form-group">
-              <label class="form-label">Categories (Select one or more)</label>
-              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
-                <?php foreach ($categories as $c): ?>
-                <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
-                  <input type="checkbox" name="category_ids[]" value="<?= $c['id'] ?>" <?= in_array($c['id'], $_POST['category_ids'] ?? []) ? 'checked' : '' ?>>
-                  <span><?= e($c['name']) ?></span>
-                </label>
-                <?php endforeach; ?>
+          <!-- Embed Link input -->
+          <div id="upload-embed-container" style="display:none">
+            <div class="form-group" style="margin-bottom: 20px">
+              <label class="form-label" style="font-weight: 700">Video Embed URL</label>
+              <div style="display:flex; gap:10px">
+                <input class="form-input" type="url" id="embed-url-input" name="embed_url" placeholder="Paste YouTube link (e.g., https://www.youtube.com/watch?v=...) or direct MP4 link" style="border-radius: 8px">
+                <button type="button" class="btn btn-outline" onclick="probeEmbedLink()" style="border-radius: 8px; font-weight:600">Verify</button>
               </div>
+              <p class="text-xs text-muted" style="margin-top: 6px; line-height: 1.4">Supports YouTube standard URLs, short URLs, and direct URLs ending in .mp4 or .webm.</p>
             </div>
+          </div>
+
+          <div style="margin-top:24px">
+            <div class="wizard-section-lbl">Video Details</div>
             
             <div class="form-group">
-              <label class="form-label">Visibility</label>
-              <select class="form-input form-select" name="visibility" style="border-radius: 8px">
-                <option value="public">Public</option>
-                <option value="unlisted">Unlisted</option>
-                <option value="private">Private</option>
-              </select>
+              <label class="form-label">Title *</label>
+              <input class="form-input" type="text" name="title" id="title-field" required maxlength="200" placeholder="Give your video a catchy title" value="<?= e($_POST['title'] ?? '') ?>" style="border-radius: 8px">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <textarea class="form-input" name="description" id="desc-field" rows="4" placeholder="Tell viewers what your video is about…" style="resize:vertical; border-radius: 8px"><?= e($_POST['description'] ?? '') ?></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Tags <span class="text-muted">(comma separated)</span></label>
+              <input class="form-input" type="text" name="tags" id="tags-field" maxlength="500" placeholder="gaming, music, vlog" value="<?= e($_POST['tags'] ?? '') ?>" style="border-radius: 8px">
+            </div>
+
+            <div class="stat-grid-2" style="margin-top:20px">
+              <div class="form-group">
+                <label class="form-label">Categories (Select one or more)</label>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
+                  <?php foreach ($categories as $c): ?>
+                  <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
+                    <input type="checkbox" name="category_ids[]" value="<?= $c['id'] ?>" <?= in_array($c['id'], $_POST['category_ids'] ?? []) ? 'checked' : '' ?>>
+                    <span><?= e($c['name']) ?></span>
+                  </label>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Visibility</label>
+                <select class="form-input form-select" name="visibility" style="border-radius: 8px">
+                  <option value="public">Public</option>
+                  <option value="unlisted">Unlisted</option>
+                  <option value="private">Private</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
+
 
       </div>
 
@@ -593,32 +701,35 @@ require_once __DIR__ . '/../includes/header.php';
            style="display:none"></video>
     <canvas id="thumb-canvas" style="display:none"></canvas>
 
-    <div style="margin-bottom: 20px">
-      <h2 style="font-size:1.15rem; font-weight:800; margin-bottom:6px">&#127775; Select or Upload Thumbnail</h2>
-      <p class="text-muted text-sm" style="line-height:1.5; margin:0">
-        Choose a display thumbnail for your video. You can select one of our auto-extracted frames, keep the YouTube fetched thumbnail, or upload a custom image.
-      </p>
-    </div>
-
-    <!-- Thumbnails option grid -->
-    <div class="thumb-grid" id="thumb-grid">
-      <?php for($i=0; $i<10; $i++): ?>
-      <div class="thumb-loading" id="tl-<?= $i ?>">
-        <span>Loading frame…</span>
+    <div class="wizard-main-scrollable">
+      <div style="margin-bottom: 20px">
+        <h2 style="font-size:1.15rem; font-weight:800; margin-bottom:6px">&#127775; Select or Upload Thumbnail</h2>
+        <p class="text-muted text-sm" style="line-height:1.5; margin:0">
+          Choose a display thumbnail for your video. You can select one of our auto-extracted frames, keep the YouTube fetched thumbnail, or upload a custom image.
+        </p>
       </div>
-      <?php endfor; ?>
-    </div>
 
-    <!-- Selected thumbnail preview box -->
-    <div id="thumb-select-info" style="display:none; margin-top:20px; padding:16px; background:rgba(99,102,241,0.06); border-radius:12px; border:1px solid rgba(99,102,241,0.25)">
-      <div style="display:flex; align-items:center; gap:16px">
-        <img id="selected-thumb-preview" src="" style="width:144px; aspect-ratio:16/9; border-radius:8px; object-fit:cover; border:1px solid var(--border)">
-        <div>
-          <div style="font-weight:800; font-size:0.95rem; margin-bottom:2px">Selected Thumbnail</div>
-          <p class="text-sm text-muted" style="margin:0">Click the button below to confirm your selection and save.</p>
+      <!-- Thumbnails option grid -->
+      <div class="thumb-grid" id="thumb-grid">
+        <?php for($i=0; $i<10; $i++): ?>
+        <div class="thumb-loading" id="tl-<?= $i ?>">
+          <span>Loading frame…</span>
+        </div>
+        <?php endfor; ?>
+      </div>
+
+      <!-- Selected thumbnail preview box -->
+      <div id="thumb-select-info" style="display:none; margin-top:20px; padding:16px; background:rgba(99,102,241,0.06); border-radius:12px; border:1px solid rgba(99,102,241,0.25)">
+        <div style="display:flex; align-items:center; gap:16px">
+          <img id="selected-thumb-preview" src="" style="width:144px; aspect-ratio:16/9; border-radius:8px; object-fit:cover; border:1px solid var(--border)">
+          <div>
+            <div style="font-weight:800; font-size:0.95rem; margin-bottom:2px">Selected Thumbnail</div>
+            <p class="text-sm text-muted" style="margin:0">Click the button below to confirm your selection and save.</p>
+          </div>
         </div>
       </div>
     </div>
+
 
     <!-- Actions area -->
     <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border); display:flex; gap:12px; align-items:center; flex-wrap:wrap">

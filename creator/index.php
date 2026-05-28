@@ -60,29 +60,89 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
     <?php else: ?>
     <!-- My Videos -->
-    <div class="card">
-      <div class="section-header" style="margin-bottom:16px">
-        <h3 style="font-weight:700">My Videos</h3>
-        <a href="<?= BASE_URL ?>/creator/videos.php" class="see-all">Manage All &rarr;</a>
+    <div class="card" style="padding: 20px;">
+      <style>
+        .studio-table-row:hover {
+          background-color: rgba(255, 255, 255, 0.02) !important;
+        }
+        [data-theme="light-white"] .studio-table-row:hover,
+        [data-theme="light-blue"] .studio-table-row:hover,
+        [data-theme="light-green"] .studio-table-row:hover,
+        [data-theme="pink"] .studio-table-row:hover {
+          background-color: rgba(0, 0, 0, 0.015) !important;
+        }
+      </style>
+      <div class="section-header" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-weight:700; font-size: 1.05rem; color: var(--text);">My Videos</h3>
+        <a href="<?= BASE_URL ?>/creator/videos.php" class="see-all" style="font-size: 0.82rem; color: var(--accent); font-weight: 600;">Manage All &rarr;</a>
       </div>
-      <?php foreach ($my_videos as $v): ?>
-      <div class="video-row">
-        <img src="<?= thumb_url($v['thumbnail']) ?>" style="width:96px;aspect-ratio:16/9;border-radius:6px;object-fit:cover;flex-shrink:0" loading="lazy">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:.88rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"><?= e($v['title']) ?></div>
-          <div class="flex gap-3 text-muted text-xs" style="margin-top:4px">
-            <span><?= format_number((int)$v['views']) ?> views</span>
-            <span><?= format_number((int)$v['likes']) ?> likes</span>
-            <span><?= format_duration((int)$v['duration']) ?></span>
-            <span><?= time_ago($v['created_at']) ?></span>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>"><?= $v['status'] ?></span>
-          <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" class="btn btn-outline btn-sm" target="_blank">View</a>
-        </div>
+      
+      <div class="table-wrap" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border); color: var(--text2); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;">
+              <th style="padding: 10px 8px; font-weight: 600;">Video</th>
+              <th style="padding: 10px 8px; font-weight: 600;">Status</th>
+              <th style="padding: 10px 8px; font-weight: 600;">Views</th>
+              <th style="padding: 10px 8px; font-weight: 600;">Likes</th>
+              <th style="padding: 10px 8px; font-weight: 600;">Duration</th>
+              <th style="padding: 10px 8px; font-weight: 600;">Date</th>
+              <th style="padding: 10px 8px; font-weight: 600; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($my_videos as $v): ?>
+            <tr class="studio-table-row" style="border-bottom: 1px solid var(--border); transition: background-color 0.15s;">
+              <td style="padding: 10px 8px;">
+                <div class="flex gap-3" style="align-items: center;">
+                  <div style="position: relative; flex-shrink: 0; width: 72px; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden; background: #0c0c0d;">
+                    <img src="<?= thumb_url($v['thumbnail']) ?>" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy">
+                    <span style="position: absolute; bottom: 3px; right: 3px; background: rgba(0,0,0,0.85); color: #fff; font-size: 0.6rem; font-weight: 700; padding: 1px 3px; border-radius: 2px; letter-spacing: 0.2px;">
+                      <?= format_duration((int)$v['duration']) ?>
+                    </span>
+                  </div>
+                  <div style="min-width: 0;">
+                    <div style="font-weight: 600; font-size: 0.82rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;" title="<?= e($v['title']) ?>">
+                      <?= e($v['title']) ?>
+                    </div>
+                    <div style="font-size: 0.7rem; color: var(--text2); margin-top: 2px;">
+                      <?= e(ucfirst($v['visibility'] ?? 'public')) ?>
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td style="padding: 10px 8px; vertical-align: middle;">
+                <span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>" style="font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase;">
+                  <?= e($v['status']) ?>
+                </span>
+              </td>
+              <td style="padding: 10px 8px; font-size: 0.8rem; color: var(--text); font-weight: 500; vertical-align: middle;">
+                <?= format_number((int)$v['views']) ?>
+              </td>
+              <td style="padding: 10px 8px; font-size: 0.8rem; color: var(--text2); vertical-align: middle;">
+                <?= format_number((int)$v['likes']) ?>
+              </td>
+              <td style="padding: 10px 8px; font-size: 0.8rem; color: var(--text2); vertical-align: middle;">
+                <?= format_duration((int)$v['duration']) ?>
+              </td>
+              <td style="padding: 10px 8px; font-size: 0.72rem; color: var(--text2); vertical-align: middle;">
+                <?= date('M j, Y', strtotime($v['created_at'])) ?>
+              </td>
+              <td style="padding: 10px 8px; text-align: right; vertical-align: middle;">
+                <div class="flex gap-1" style="justify-content: flex-end; align-items: center;">
+                  <a href="<?= BASE_URL ?>/creator/edit.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline" style="padding: 3px 6px; font-size: 0.72rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px;" title="Edit Video">
+                    <span>&#9998;</span> Edit
+                  </a>
+                  <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" class="btn btn-sm btn-outline" style="padding: 3px 5px; font-size: 0.72rem; border-radius: 4px; display: inline-flex; align-items: center;" target="_blank" title="View Video">
+                    <span>&#128065;</span>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
       </div>
-      <?php endforeach; ?>
     </div>
     <?php endif; ?>
 </div>

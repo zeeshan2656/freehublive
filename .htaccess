@@ -25,6 +25,16 @@ Options -Indexes
     AddOutputFilterByType DEFLATE font/woff font/woff2 font/ttf font/otf
     AddOutputFilterByType DEFLATE application/vnd.ms-fontobject
 </IfModule>
+<IfModule mod_gzip.c>
+    mod_gzip_on Yes
+    mod_gzip_dechunk Yes
+    mod_gzip_item_include file \.(html?|txt|css|js|php|sun|svg|xml)$
+    mod_gzip_item_include mime ^text/.*
+    mod_gzip_item_include mime ^application/x-javascript.*
+    mod_gzip_item_exclude mime ^image/.*
+    mod_gzip_item_exclude rsphdr ^Content-Encoding:.*gzip.*
+</IfModule>
+
 
 # ── Browser caching (aggressive for versioned assets) ────────
 <IfModule mod_expires.c>

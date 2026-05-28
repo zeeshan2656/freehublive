@@ -76,24 +76,35 @@ require_once __DIR__ . '/includes/header.php';
 <div class="container channel-page">
   <!-- Channel Header -->
   <div class="channel-header">
-    <img src="<?= avatar_url($channel['avatar']) ?>" alt="<?= e($channel['channel_name']??$channel['username']) ?>"
-         class="avatar channel-avatar-lg" loading="eager">
-    <div style="flex:1;min-width:0">
-      <h1 style="font-size:1.5rem;font-weight:800;margin-bottom:4px"><?= e($channel['channel_name'] ?: $channel['username']) ?></h1>
-      <div class="flex gap-3 text-muted text-sm">
-        <span><?= format_number((int)$channel['subscribers']) ?> subscribers</span>
-        <span>·</span>
-        <span><?= $total ?> videos</span>
-        <span>·</span>
-        <span>Joined <?= date('M Y', strtotime($channel['created_at'])) ?></span>
-      </div>
-      <?php if ($channel['bio']): ?>
-      <p style="margin-top:8px;font-size:.875rem;color:var(--text2);line-height:1.6;max-width:600px"><?= e(truncate($channel['bio'],200)) ?></p>
+    <div class="channel-avatar-sub-row">
+      <img src="<?= avatar_url($channel['avatar']) ?>" alt="<?= e($channel['channel_name']??$channel['username']) ?>"
+           class="avatar channel-avatar-lg" loading="eager">
+      <?php if (is_logged_in() && auth_user()['id'] != $channel_id): ?>
+      <button class="btn btn-primary sub-trigger-btn mobile-only-sub-btn" data-channel="<?= $channel_id ?>">
+        <?= $is_subscribed ? 'Subscribed ✓' : 'Subscribe' ?>
+      </button>
       <?php endif; ?>
     </div>
-    <div>
+    
+    <div class="channel-header-info">
+      <div class="channel-title-row">
+        <h1 class="channel-name-title"><?= e($channel['channel_name'] ?: $channel['username']) ?></h1>
+        <div class="channel-meta-stats text-muted text-sm">
+          <span class="stat-subscribers"><?= format_number((int)$channel['subscribers']) ?> subscribers</span>
+          <span class="meta-separator">·</span>
+          <span class="stat-videos"><?= $total ?> videos</span>
+          <span class="meta-separator joined-sep">·</span>
+          <span class="joined-date">Joined <?= date('M Y', strtotime($channel['created_at'])) ?></span>
+        </div>
+      </div>
+      <?php if ($channel['bio']): ?>
+      <p class="channel-bio-text"><?= e(truncate($channel['bio'],200)) ?></p>
+      <?php endif; ?>
+    </div>
+    
+    <div class="channel-header-action-desktop">
       <?php if (is_logged_in() && auth_user()['id'] != $channel_id): ?>
-      <button class="btn btn-primary" id="sub-btn" data-channel="<?= $channel_id ?>">
+      <button class="btn btn-primary sub-trigger-btn" id="sub-btn" data-channel="<?= $channel_id ?>">
         <?= $is_subscribed ? 'Subscribed ✓' : 'Subscribe' ?>
       </button>
       <?php endif; ?>
@@ -105,10 +116,21 @@ require_once __DIR__ . '/includes/header.php';
     <a href="?id=<?= $channel_id ?>&tab=videos" class="channel-tab <?= $tab==='videos'?'active':'' ?>">Videos</a>
     <a href="?id=<?= $channel_id ?>&tab=playlists" class="channel-tab <?= $tab==='playlists'?'active':'' ?>">Playlists</a>
     <a href="?id=<?= $channel_id ?>&tab=about" class="channel-tab <?= $tab==='about'?'active':'' ?>">About</a>
-    <div class="channel-sort">
+    
+    <!-- Desktop sorting (hidden on mobile) -->
+    <div class="channel-sort channel-sort-desktop">
       <?php foreach(['latest'=>'Latest','views'=>'Popular','oldest'=>'Oldest'] as $s=>$l): ?>
       <a href="?id=<?= $channel_id ?>&tab=videos&sort=<?= $s ?>" class="btn btn-sm <?= $sort===$s?'btn-primary':'btn-outline' ?>"><?= $l ?></a>
       <?php endforeach; ?>
+    </div>
+    
+    <!-- Mobile sorting (dropdown, hidden on desktop) -->
+    <div class="channel-sort-mobile">
+      <select onchange="location = this.value;" class="sort-dropdown-select" aria-label="Sort videos">
+        <?php foreach(['latest'=>'Latest','views'=>'Popular','oldest'=>'Oldest'] as $s=>$l): ?>
+        <option value="?id=<?= $channel_id ?>&tab=videos&sort=<?= $s ?>" <?= $sort===$s?'selected':'' ?>><?= $l ?></option>
+        <?php endforeach; ?>
+      </select>
     </div>
   </div>
 
@@ -134,28 +156,27 @@ require_once __DIR__ . '/includes/header.php';
       </div>
       <div class="video-info">
         <div class="video-title"><?= e($v['title']) ?></div>
-        <?php if ($is_owner): ?>
-          <div style="margin-top:4px;display:flex;gap:4px">
-            <span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>" style="font-size:.7rem;padding:2px 6px"><?= $v['status'] ?></span>
+        <div class="video-card-meta-row">
+          <?php if ($is_owner): ?>
+            <span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>"><?= $v['status'] ?></span>
             <?php if ($v['visibility']!=='public'): ?>
-              <span class="badge badge-gray" style="font-size:.7rem;padding:2px 6px"><?= $v['visibility'] ?></span>
+              <span class="badge badge-gray"><?= $v['visibility'] ?></span>
             <?php endif; ?>
-          </div>
-        <?php endif; ?>
-        <div class="video-meta" style="margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px">
+          <?php endif; ?>
+          <span class="meta-item-views" style="display:inline-flex;align-items:center;gap:3px">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             <?= format_number((int)$v['views']) ?>
           </span>
           <span>·</span>
           <span><?= time_ago($v['published_at']??$v['created_at']) ?></span>
+          <?php if ($is_owner && is_creator()): ?>
+            <span>·</span>
+            <span class="video-earnings-inline" title="Watch-time earnings on this video">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:2px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <?= e(fh_format_money($earningsMap[(int)$v['id']] ?? 0.0, fh_user_currency())) ?>
+            </span>
+          <?php endif; ?>
         </div>
-        <?php if ($is_owner && is_creator()): ?>
-        <div class="video-earnings" title="Watch-time earnings on this video">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          <span><?= e(fh_format_money($earningsMap[(int)$v['id']] ?? 0.0, fh_user_currency())) ?> earned</span>
-        </div>
-        <?php endif; ?>
       </div>
     </article>
     <?php endforeach; ?>
@@ -198,13 +219,17 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <script>
-document.getElementById('sub-btn')?.addEventListener('click', async function() {
-  const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=subscribe', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({channel_id: <?= $channel_id ?>})
+document.querySelectorAll('.sub-trigger-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=subscribe', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({channel_id: <?= $channel_id ?>})
+    });
+    const d = await res.json();
+    document.querySelectorAll('.sub-trigger-btn').forEach(b => {
+      b.textContent = d.subscribed ? 'Subscribed ✓' : 'Subscribe';
+    });
   });
-  const d = await res.json();
-  this.textContent = d.subscribed ? 'Subscribed ✓' : 'Subscribe';
 });
 </script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

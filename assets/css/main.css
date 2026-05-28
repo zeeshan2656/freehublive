@@ -402,14 +402,53 @@ input,select,textarea{font-family:inherit;outline:none}
 .form-error{color:var(--red);font-size:.8rem;margin-top:4px}
 
 /* ── Cards / Panels ── */
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;min-width:0;width:100%}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;min-width:0;width:100%;border-top: 4px solid var(--accent);}
 .card-sm{padding:16px}
-.stat-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  padding:20px;display:flex;flex-direction:column;gap:4px;
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform var(--trans), box-shadow var(--trans), border-color var(--trans);
+  position: relative;
+  overflow: hidden;
 }
-.stat-value{font-size:1.8rem;font-weight:800;font-family:var(--font2)}
-.stat-label{font-size:.8rem;color:var(--text2)}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  opacity: 0.85;
+}
+/* Disable default top border on custom status gradient cards */
+.stat-card[style*="background"]::before {
+  display: none;
+}
+.stat-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-family: var(--font2);
+  line-height: 1.25;
+}
+.stat-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text2);
+}
 .stat-change{font-size:.8rem;font-weight:500}
 .stat-change.up{color:var(--green)}
 .stat-change.down{color:var(--red)}
@@ -631,12 +670,68 @@ tbody tr:hover{background:var(--bg3)}
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
-.channel-sort {
+.channel-sort, .channel-sort-desktop {
   margin-left: auto;
   display: flex;
   gap: 8px;
   padding-bottom: 8px;
   flex-shrink: 0;
+}
+.channel-avatar-sub-row {
+  display: block;
+}
+.mobile-only-sub-btn {
+  display: none;
+}
+.channel-header-info {
+  flex: 1;
+  min-width: 0;
+}
+.channel-title-row {
+  display: block;
+}
+.channel-name-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.channel-meta-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.channel-bio-text {
+  margin-top: 8px;
+  font-size: .875rem;
+  color: var(--text2);
+  line-height: 1.6;
+  max-width: 600px;
+}
+.channel-header-action-desktop {
+  display: block;
+}
+.channel-sort-mobile {
+  display: none;
+}
+.video-card-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text2);
+}
+.video-card-meta-row .badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  text-transform: capitalize;
+}
+.video-earnings-inline {
+  display: inline-flex;
+  align-items: center;
+  color: var(--green);
+  font-weight: 600;
 }
 
 .watch-page .watch-info { padding: 16px 0; }
@@ -841,16 +936,85 @@ tbody tr:hover{background:var(--bg3)}
 
   .channel-cover { height: 120px; margin: -16px -16px 0; }
   .channel-page { margin-top: -40px; padding: 0 16px; }
+  .channel-header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    margin-bottom: 20px !important;
+  }
+  .channel-avatar-sub-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
   .channel-header .channel-avatar-lg {
     width: 72px; height: 72px; border-width: 3px;
   }
-  .channel-header h1 { font-size: 1.2rem !important; }
-  .channel-tabs { gap: 12px; margin-bottom: 16px; }
-  .channel-sort {
-    margin-left: 0;
+  .mobile-only-sub-btn {
+    display: block !important;
+  }
+  .channel-header-action-desktop {
+    display: none !important;
+  }
+  .channel-header-info {
     width: 100%;
-    overflow-x: auto;
-    padding-bottom: 12px;
+  }
+  .channel-title-row {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .channel-name-title {
+    font-size: 1.25rem !important;
+    margin-bottom: 0 !important;
+  }
+  .channel-meta-stats {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .channel-meta-stats .joined-sep,
+  .channel-meta-stats .joined-date {
+    display: none !important;
+  }
+  .channel-tabs { gap: 12px; margin-bottom: 16px; }
+  .channel-sort-desktop {
+    display: none !important;
+  }
+  .channel-sort-mobile {
+    display: block !important;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .sort-dropdown-select {
+    appearance: none;
+    background-color: var(--bg2);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239ca3af' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 10px;
+    padding: 6px 32px 6px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .sort-dropdown-select:focus {
+    border-color: var(--accent);
+  }
+  .channel-page .grid-6 {
+    margin-left: -32px !important;
+    margin-right: -32px !important;
+    width: calc(100% + 64px) !important;
   }
 
   .card { padding: 16px; }
@@ -1308,8 +1472,33 @@ tbody tr:hover{background:var(--bg3)}
 
 @media (max-width: 576px) {
   .stat-grid-4, .stat-grid-3, .stat-grid-2 {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
+  }
+}
+
+/* Custom Layout overrides for watch earnings stats */
+.fh-watch-earnings-stats {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 12px !important;
+}
+
+@media (max-width: 768px) {
+  .fh-watch-earnings-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .fh-watch-earnings-stats > div:nth-child(3) {
+    grid-column: span 2 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .fh-watch-earnings-stats {
+    grid-template-columns: 1fr !important;
+  }
+  .fh-watch-earnings-stats > div:nth-child(3) {
+    grid-column: auto !important;
   }
 }
 

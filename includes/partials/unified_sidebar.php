@@ -18,6 +18,9 @@ $role = $sidebar_role ?? (auth_user()['role'] ?? 'viewer');
   <a href="<?= BASE_URL ?>/earnings.php" class="studio-nav-item <?= $current_page === 'earnings.php' ? 'active' : '' ?>">&#128176; Earnings</a>
   <a href="<?= BASE_URL ?>/withdrawal.php" class="studio-nav-item <?= $current_page === 'withdrawal.php' ? 'active' : '' ?>">&#128179; Withdrawal</a>
   <a href="<?= BASE_URL ?>/profile.php?tab=profile" class="studio-nav-item <?= ($current_page === 'profile.php' && $current_tab === 'profile') ? 'active' : '' ?>">&#128100; Profile</a>
+  <?php if ($role === 'creator'): ?>
+  <a href="<?= BASE_URL ?>/channel.php?id=<?= auth_user()['id'] ?>" class="studio-nav-item <?= $current_page === 'channel.php' && ($_GET['id'] ?? 0) == auth_user()['id'] ? 'active' : '' ?>">&#128250; My Channel</a>
+  <?php endif; ?>
   <a href="<?= BASE_URL ?>/profile.php?tab=settings" class="studio-nav-item <?= ($current_page === 'profile.php' && $current_tab === 'settings') ? 'active' : '' ?>">&#9881; Settings</a>
   <hr style="border-color:var(--border);margin:12px 0">
   <a href="<?= BASE_URL ?>/" class="studio-nav-item">&#127968; View Site</a>
