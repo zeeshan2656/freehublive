@@ -1,6 +1,5 @@
 
 
-
 <?php
 /**
  * Hostinger database credentials (this file stays on the server only).
@@ -14,3 +13,5 @@ return [
     'name'    => 'u434697879_yt',
     'charset' => 'utf8mb4',
 ];
+
+

@@ -1726,5 +1726,93 @@ tbody tr:hover{background:var(--bg3)}
   margin: 16px auto;
 }
 
+/* ==========================================================================
+   Creator Studio & Dashboard Layout Fixes
+   ========================================================================== */
+
+/* 1. Desktop Dashboard Stats Grids Spacing */
+@media (min-width: 769px) {
+  body.dashboard-page .fh-watch-earnings-stats {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px !important;
+    margin-bottom: 24px !important;
+  }
+  body.dashboard-page .stat-grid-4 {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 20px !important;
+    margin-bottom: 28px !important;
+  }
+  body.dashboard-page .stat-grid-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px !important;
+    margin-bottom: 28px !important;
+  }
+  body.dashboard-page .stat-grid-2 {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 20px !important;
+    margin-bottom: 28px !important;
+  }
+}
+
+/* 2. Mobile Dashboard Pages Edge-to-Edge components */
+@media (max-width: 768px) {
+  body.dashboard-page .dashboard-content-scroll {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  body.dashboard-page .container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  body.dashboard-page .profile-page {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  body.dashboard-page .container > .flex:not(.fh-watch-earnings-stats):not(.stat-grid-4):not(.stat-grid-3):not(.stat-grid-2) {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  body.dashboard-page .card {
+    padding: 16px !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+  }
+  body.dashboard-page .stat-card,
+  body.dashboard-page .prof-card,
+  body.dashboard-page .prof-cover-wrap {
+    border-left: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Table layout for tables directly in the container */
+  body.dashboard-page .container > .table-wrap {
+    margin: 0 !important;
+    width: 100% !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Table layout for tables inside cards */
+  body.dashboard-page .card .table-wrap {
+    margin-left: -16px !important;
+    margin-right: -16px !important;
+    width: calc(100% + 32px) !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+  }
+}
+
+
 
 
