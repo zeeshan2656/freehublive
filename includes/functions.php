@@ -829,3 +829,111 @@ function render_ad_placeholder(string $placement_key): string {
 
     return $output;
 }
+
+/**
+ * Automatically minifies and caches static CSS/JS files and returns the optimized URL.
+ */
+function fh_asset_url(string $path): string {
+    $fullPath = __DIR__ . '/../' . ltrim($path, '/');
+    if (!file_exists($fullPath)) {
+        return BASE_URL . '/' . ltrim($path, '/');
+    }
+
+    $ext = pathinfo($fullPath, PATHINFO_EXTENSION);
+    if (($ext === 'css' || $ext === 'js') && !str_contains($path, '.min.')) {
+        $minPath = str_replace('.' . $ext, '.min.' . $ext, $fullPath);
+        
+        // Auto-regenerate minified version if original is newer or minified file doesn't exist
+        if (!file_exists($minPath) || filemtime($fullPath) > filemtime($minPath)) {
+            $content = file_get_contents($fullPath);
+            if ($ext === 'css') {
+                // ── Safe CSS Minification ──
+                // Strip comments
+                $result = '';
+                $i = 0;
+                $len = strlen($content);
+                while ($i < $len) {
+                    if ($content[$i] === '/' && $i + 1 < $len && $content[$i+1] === '*') {
+                        $end = strpos($content, '*/', $i + 2);
+                        if ($end === false) break;
+                        $i = $end + 2;
+                    } else {
+                        $result .= $content[$i];
+                        $i++;
+                    }
+                }
+                // Normalize newlines
+                $result = str_replace(["\r\n", "\r"], "\n", $result);
+                // Remove empty lines and clean leading/trailing whitespace
+                $lines = explode("\n", $result);
+                $cleaned = [];
+                foreach ($lines as $line) {
+                    $trimmed = trim($line);
+                    if ($trimmed !== '') {
+                        $cleaned[] = $trimmed;
+                    }
+                }
+                $result = implode("\n", $cleaned);
+                // Remove spaces around braces, colons, semi-colons
+                $result = preg_replace('/\s*([{}::;,])\s*/', '$1', $result);
+                // Remove redundant spaces
+                $content = preg_replace('/\s+/', ' ', $result);
+            } else {
+                // ── Safe JS Minification ──
+                $result = '';
+                $i = 0;
+                $len = strlen($content);
+                while ($i < $len) {
+                    // Skip strings so we don't alter comments/whitespaces inside them
+                    if ($content[$i] === '"' || $content[$i] === "'" || $content[$i] === '`') {
+                        $quote = $content[$i];
+                        $result .= $quote;
+                        $i++;
+                        while ($i < $len) {
+                            if ($content[$i] === '\\') {
+                                $result .= $content[$i] . ($content[$i+1] ?? '');
+                                $i += 2;
+                            } elseif ($content[$i] === $quote) {
+                                $result .= $quote;
+                                $i++;
+                                break;
+                            } else {
+                                $result .= $content[$i];
+                                $i++;
+                            }
+                        }
+                    } elseif ($content[$i] === '/' && $i + 1 < $len && $content[$i+1] === '*') {
+                        $end = strpos($content, '*/', $i + 2);
+                        if ($end === false) break;
+                        $i = $end + 2;
+                    } elseif ($content[$i] === '/' && $i + 1 < $len && $content[$i+1] === '/') {
+                        $end = strpos($content, "\n", $i + 2);
+                        if ($end === false) break;
+                        $i = $end;
+                    } else {
+                        $result .= $content[$i];
+                        $i++;
+                    }
+                }
+                // Normalize newlines
+                $result = str_replace(["\r\n", "\r"], "\n", $result);
+                // Clean leading/trailing spaces and remove empty lines (keeps newlines for ASI)
+                $lines = explode("\n", $result);
+                $cleaned = [];
+                foreach ($lines as $line) {
+                    $trimmed = trim($line);
+                    if ($trimmed !== '') {
+                        $cleaned[] = $trimmed;
+                    }
+                }
+                $content = implode("\n", $cleaned);
+            }
+            @file_put_contents($minPath, trim($content));
+        }
+        $minUrlPath = str_replace('.' . $ext, '.min.' . $ext, $path);
+        return BASE_URL . '/' . ltrim($minUrlPath, '/') . '?v=' . filemtime($minPath);
+    }
+
+    return BASE_URL . '/' . ltrim($path, '/') . '?v=' . filemtime($fullPath);
+}
+

@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.05.28.1';
+    $migration_version = '2026.05.28.2';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -458,6 +458,32 @@ function fh_run_migrations(): void {
         $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = 'video_player_overlay'");
         if ((int)$check['c'] === 0) {
             db_query("INSERT INTO ad_placements (key_name, name, device_target, ad_display_duration, ad_trigger_count) VALUES ('video_player_overlay', 'Video Player Overlay Ad', 'all', 5, 3)");
+        }
+    }
+
+    // 8. Performance Tuning Compound Indexes
+    if (fh_table_exists('videos')) {
+        if (!fh_index_exists('videos', 'idx_vid_status_visibility_pub')) {
+            db_query("ALTER TABLE videos ADD INDEX idx_vid_status_visibility_pub (status, visibility, published_at DESC)");
+        }
+        if (!fh_index_exists('videos', 'idx_vid_status_visibility_views')) {
+            db_query("ALTER TABLE videos ADD INDEX idx_vid_status_visibility_views (status, visibility, views DESC)");
+        }
+        if (!fh_index_exists('videos', 'idx_vid_feat_status_vis_pub')) {
+            db_query("ALTER TABLE videos ADD INDEX idx_vid_feat_status_vis_pub (featured, status, visibility, published_at DESC)");
+        }
+        if (!fh_index_exists('videos', 'idx_vid_cat_status_vis_views')) {
+            db_query("ALTER TABLE videos ADD INDEX idx_vid_cat_status_vis_views (category_id, status, visibility, views DESC)");
+        }
+    }
+    if (fh_table_exists('video_categories')) {
+        if (!fh_index_exists('video_categories', 'idx_vc_cat_vid')) {
+            db_query("ALTER TABLE video_categories ADD INDEX idx_vc_cat_vid (category_id, video_id)");
+        }
+    }
+    if (fh_table_exists('comments')) {
+        if (!fh_index_exists('comments', 'idx_comm_vid_status_created')) {
+            db_query("ALTER TABLE comments ADD INDEX idx_comm_vid_status_created (video_id, status, created_at DESC)");
         }
     }
 

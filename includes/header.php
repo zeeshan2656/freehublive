@@ -122,8 +122,8 @@ input,select,textarea{font-family:inherit;outline:none}
 </style>
 
 <!-- ── Main CSS (async — non-blocking) ── -->
-<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= filemtime(__DIR__ . '/../assets/css/main.css') ?>" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= filemtime(__DIR__ . '/../assets/css/main.css') ?>"></noscript>
+<link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.css') ?>" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.css') ?>"></noscript>
 
 <!-- ── Fonts (async — non-blocking) ── -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" onload="this.rel='stylesheet'">

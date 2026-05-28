@@ -40,24 +40,27 @@ if (!$viewRow) {
     $view_session_id = (int)$viewRow['id'];
 }
 
-// Related
+// Related (optimized indexed UNION query)
 $related = db_fetchAll(
-    "SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
-     JOIN users u ON u.id=v.user_id
-     WHERE v.id!=? AND v.status='published' AND v.visibility='public'
-     AND (
-       v.category_id=?
-       OR EXISTS (SELECT 1 FROM video_categories vc1 WHERE vc1.video_id = v.id AND vc1.category_id = ?)
-       OR EXISTS (
-         SELECT 1 FROM video_categories vc2 
-         WHERE vc2.video_id = v.id 
-         AND vc2.category_id IN (SELECT category_id FROM video_categories WHERE video_id = ?)
-       )
-       OR MATCH(v.title,v.description,v.tags) AGAINST(?)
-     )
-     ORDER BY v.views DESC LIMIT 12",
-    [$vid, $video['category_id'], $video['category_id'], $vid, $video['title']]
+    "(SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
+      JOIN users u ON u.id=v.user_id
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.category_id=?
+      ORDER BY v.views DESC LIMIT 12)
+     UNION
+     (SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
+      JOIN users u ON u.id=v.user_id
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public'
+      AND EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = ?)
+      ORDER BY v.views DESC LIMIT 12)
+     UNION
+     (SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
+      JOIN users u ON u.id=v.user_id
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public'
+      ORDER BY v.views DESC LIMIT 12)
+     LIMIT 12",
+    [$vid, $video['category_id'], $vid, $video['category_id'], $vid]
 );
+
 
 // User reaction
 $user_reaction = null;
@@ -88,10 +91,18 @@ require_once __DIR__ . '/includes/header.php';
         if ($yt_id):
         ?>
           <iframe id="fh-youtube-player" width="100%" height="100%"
-                  src="https://www.youtube.com/embed/<?= e($yt_id) ?>?autoplay=1&enablejsapi=1"
+                  data-src="https://www.youtube.com/embed/<?= e($yt_id) ?>?autoplay=1&enablejsapi=1"
                   frameborder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowfullscreen style="width:100%;height:100%;border:none;display:block"></iframe>
+          <script>
+            window.addEventListener('load', () => {
+              const player = document.getElementById('fh-youtube-player');
+              if (player) {
+                player.src = player.getAttribute('data-src');
+              }
+            });
+          </script>
         <?php else: ?>
           <video id="fh-player" playsinline preload="metadata"
                  poster="<?= thumb_url($video['thumbnail']) ?>"
@@ -693,19 +704,21 @@ window.FH_WATCH = {
 };
 window.FH_VIDEO_DURATION = <?= (int)$video['duration'] ?>;
 </script>
-<script src="<?= BASE_URL ?>/assets/js/video-player-ads.js" defer></script>
+<script src="<?= fh_asset_url('assets/js/video-player-ads.js') ?>" defer></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('load', () => {
   if (document.getElementById('player-wrapper')) {
-    new FHVideoAdManager({
-      playerId: 'fh-player',
-      ytPlayerId: 'fh-youtube-player',
-      videoId: <?= (int)$vid ?>,
-      baseUrl: '<?= BASE_URL ?>',
-      device: '<?= detect_device() ?>'
-    });
+    setTimeout(() => {
+      new FHVideoAdManager({
+        playerId: 'fh-player',
+        ytPlayerId: 'fh-youtube-player',
+        videoId: <?= (int)$vid ?>,
+        baseUrl: '<?= BASE_URL ?>',
+        device: '<?= detect_device() ?>'
+      });
+    }, 50);
   }
 });
 </script>
-<script src="<?= BASE_URL ?>/assets/js/watchtime.js" defer></script>
+<script src="<?= fh_asset_url('assets/js/watchtime.js') ?>" defer></script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
