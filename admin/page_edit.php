@@ -18,6 +18,8 @@ if ($id > 0) {
     }
 }
 
+$sections = db_fetchAll("SELECT * FROM footer_sections ORDER BY sort_order ASC, id ASC");
+
 // Define header action buttons to render in sticky header (removes second heading, moves button)
 $header_actions = '
     <button type="button" class="btn btn-outline btn-sm" id="btn-preview-page" style="margin-right: 8px; display: inline-flex; align-items: center; gap: 6px;">
@@ -71,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
             'meta_keywords' => $meta_keywords ?: null,
             'status' => $status,
             'publish_at' => $publish_at,
+            'footer_section_id' => $_POST['footer_section_id'] === '' ? null : (int)$_POST['footer_section_id'],
         ];
 
         if ($page) {
@@ -133,6 +136,18 @@ require_once __DIR__ . '/partials/admin_head.php';
                     <div id="schedule-datetime-container" style="display: <?= (isset($_POST['status']) ? $_POST['status'] === 'scheduled' : ($page && $page['status'] === 'scheduled')) ? 'block' : 'none' ?>; margin-bottom: 16px;">
                         <label for="publish_at" style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.88rem;">Schedule Publish Date & Time</label>
                         <input type="datetime-local" id="publish_at" name="publish_at" value="<?= $page && $page['publish_at'] ? date('Y-m-d\TH:i', strtotime($page['publish_at'])) : '' ?>" style="width: 100%; padding: 9px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg3); color: var(--text); outline: none;">
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label for="footer_section_id" style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.88rem;">Footer Section / Group</label>
+                        <select id="footer_section_id" name="footer_section_id" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg3); color: var(--text); outline: none; cursor: pointer;">
+                            <option value="">-- None (Unassigned) --</option>
+                            <?php foreach ($sections as $sec): ?>
+                                <option value="<?= $sec['id'] ?>" <?= (isset($_POST['footer_section_id']) ? (int)$_POST['footer_section_id'] === $sec['id'] : ($page && (int)$page['footer_section_id'] === $sec['id'])) ? 'selected' : '' ?>>
+                                    <?= e($sec['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <div style="margin-bottom: 0;">

@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.05.28.2';
+    $migration_version = '2026.05.28.7';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -118,6 +118,19 @@ function fh_run_migrations(): void {
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_token (token),
             INDEX idx_email (email)
+        ) ENGINE=InnoDB");
+    }
+
+    // ── Watch later / saved videos table ────────────────────
+    if (!fh_table_exists('watch_later')) {
+        db_query("CREATE TABLE watch_later (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            video_id INT UNSIGNED NOT NULL,
+            added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_wl (user_id, video_id),
+            FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
         ) ENGINE=InnoDB");
     }
 
@@ -432,11 +445,13 @@ function fh_run_migrations(): void {
         }
     }
 
-    // 6. Add default placements for watch page
+    // 6. Add default placements for watch page and footer
     if (fh_table_exists('ad_placements')) {
         $watch_placements = [
             ['watch_sidebar', 'Watch Page Sidebar Banner', 'all'],
-            ['watch_below_player', 'Watch Page Below Player Banner', 'all']
+            ['watch_below_player', 'Watch Page Below Player Banner', 'all'],
+            ['watch_up_next', 'Watch Page Up Next Banner', 'all'],
+            ['above_footer', 'Above Footer Banner', 'all']
         ];
         foreach ($watch_placements as $wp) {
             $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = ?", [$wp[0]]);
@@ -485,6 +500,78 @@ function fh_run_migrations(): void {
         if (!fh_index_exists('comments', 'idx_comm_vid_status_created')) {
             db_query("ALTER TABLE comments ADD INDEX idx_comm_vid_status_created (video_id, status, created_at DESC)");
         }
+    }
+
+    // 9. Footer Sections Database Tables and Setup
+    if (!fh_table_exists('footer_sections')) {
+        db_query("CREATE TABLE footer_sections (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        
+        $default_sections = [
+            ['Platform', 1],
+            ['Programs & Guidelines', 2],
+            ['Legal & Policies', 3]
+        ];
+        foreach ($default_sections as $sec) {
+            db_query("INSERT INTO footer_sections (name, sort_order) VALUES (?, ?)", [$sec[0], $sec[1]]);
+        }
+    }
+
+    if (fh_table_exists('pages')) {
+        if (!fh_column_exists('pages', 'footer_section_id')) {
+            db_query("ALTER TABLE pages ADD COLUMN footer_section_id INT UNSIGNED DEFAULT NULL AFTER is_published");
+            db_query("ALTER TABLE pages ADD INDEX idx_pages_footer_section (footer_section_id)");
+            
+            // Assign default/initial pages to their footer sections
+            $platform_id = db_fetch("SELECT id FROM footer_sections WHERE name = 'Platform'")['id'] ?? null;
+            $guidelines_id = db_fetch("SELECT id FROM footer_sections WHERE name = 'Programs & Guidelines'")['id'] ?? null;
+            $legal_id = db_fetch("SELECT id FROM footer_sections WHERE name = 'Legal & Policies'")['id'] ?? null;
+            
+            if ($platform_id) {
+                db_query("UPDATE pages SET footer_section_id = ? WHERE slug IN ('about-us', 'contact-us')", [$platform_id]);
+            }
+            if ($guidelines_id) {
+                db_query("UPDATE pages SET footer_section_id = ? WHERE slug IN ('creator-page', 'viewer-page', 'community-guidelines')", [$guidelines_id]);
+            }
+            if ($legal_id) {
+                db_query("UPDATE pages SET footer_section_id = ? WHERE slug IN ('privacy-policy', 'disclaimer', 'payment-policy', 'terms-conditions')", [$legal_id]);
+            }
+        }
+    }
+
+    // ── Playlists table ────────────────────────────────────
+    if (!fh_table_exists('playlists')) {
+        db_query("CREATE TABLE playlists (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            description TEXT DEFAULT NULL,
+            thumbnail VARCHAR(255) DEFAULT NULL,
+            visibility ENUM('public', 'private') NOT NULL DEFAULT 'private',
+            video_count INT UNSIGNED NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_user (user_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB");
+    }
+
+    // ── Playlist items table ───────────────────────────────
+    if (!fh_table_exists('playlist_items')) {
+        db_query("CREATE TABLE playlist_items (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            playlist_id INT UNSIGNED NOT NULL,
+            video_id INT UNSIGNED NOT NULL,
+            position INT UNSIGNED NOT NULL DEFAULT 0,
+            added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_playlist_video (playlist_id, video_id),
+            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+            FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB");
     }
 
     // ── All migrations passed — write flag to skip on next request ──

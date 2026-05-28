@@ -712,6 +712,12 @@ $sidebar_path = get_sidebar_path();
         <a href="<?= BASE_URL ?>/admin/settings.php" class="studio-nav-item <?= $current_page === 'settings.php' && str_contains($_SERVER['PHP_SELF'], '/admin/') ? 'active' : '' ?>">
           <span>⚙️ Settings</span>
         </a>
+        <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
+          <span>📥 Saved Videos</span>
+        </a>
+        <a href="<?= BASE_URL ?>/dashboard.php?tab=subscriptions" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'subscriptions' ? 'active' : '' ?>">
+          <span>🔔 Subscribed Channels</span>
+        </a>
         <a href="<?= BASE_URL ?>/profile.php" class="studio-nav-item <?= $current_page === 'profile.php' ? 'active' : '' ?>">
           <span>👤 Profile</span>
         </a>
@@ -736,6 +742,12 @@ $sidebar_path = get_sidebar_path();
         <a href="<?= BASE_URL ?>/withdrawal.php" class="studio-nav-item <?= $current_page === 'withdrawal.php' ? 'active' : '' ?>">
           <span>💳 Withdrawal</span>
         </a>
+        <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
+          <span>📥 Saved Videos</span>
+        </a>
+        <a href="<?= BASE_URL ?>/dashboard.php?tab=subscriptions" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'subscriptions' ? 'active' : '' ?>">
+          <span>🔔 Subscribed Channels</span>
+        </a>
         <a href="<?= BASE_URL ?>/profile.php" class="studio-nav-item <?= $current_page === 'profile.php' ? 'active' : '' ?>">
           <span>👤 Profile</span>
         </a>
@@ -753,6 +765,12 @@ $sidebar_path = get_sidebar_path();
         </a>
         <a href="<?= BASE_URL ?>/withdrawal.php" class="studio-nav-item <?= $current_page === 'withdrawal.php' ? 'active' : '' ?>">
           <span>💳 Withdrawal</span>
+        </a>
+        <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
+          <span>📥 Saved Videos</span>
+        </a>
+        <a href="<?= BASE_URL ?>/dashboard.php?tab=subscriptions" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'subscriptions' ? 'active' : '' ?>">
+          <span>🔔 Subscribed Channels</span>
         </a>
         <a href="<?= BASE_URL ?>/profile.php" class="studio-nav-item <?= $current_page === 'profile.php' ? 'active' : '' ?>">
           <span>👤 Profile</span>

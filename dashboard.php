@@ -37,6 +37,7 @@ $earnings = db_fetchAll(
 );
 
 // --- Date Filters & Analytics Queries ---
+$tab     = $_GET['tab'] ?? 'dashboard';
 $period  = $_GET['period'] ?? '30';
 $from    = $_GET['from'] ?? '';
 $to      = $_GET['to'] ?? '';
@@ -109,6 +110,91 @@ require_once __DIR__ . '/includes/header.php';
 
       <?php $watch_stats_user_id = $uid; require __DIR__ . '/includes/partials/watch_earnings_stats.php'; ?>
 
+      <?php if ($tab === 'subscriptions'): ?>
+      <div class="card" style="padding:24px">
+        <h3 style="font-weight:800;font-size:1.2rem;display:flex;align-items:center;gap:8px;margin-bottom:20px">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Subscribed Channels
+        </h3>
+        
+        <?php
+        $subs = db_fetchAll(
+            "SELECT u.id, u.username, u.channel_name, u.avatar, u.subscribers
+             FROM subscriptions s
+             JOIN users u ON s.channel_id = u.id
+             WHERE s.subscriber_id = ?
+             ORDER BY s.created_at DESC",
+            [$auth_uid]
+        );
+        ?>
+        
+        <?php if ($subs): ?>
+          <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+            <?php foreach ($subs as $sub): ?>
+              <div class="stat-card" style="padding:16px; display:flex; align-items:center; justify-content:space-between; gap:16px; border-radius:var(--radius-lg); border:1px solid var(--border); background:var(--bg2);">
+                <div style="display:flex; align-items:center; gap:12px; min-width:0">
+                  <img src="<?= avatar_url($sub['avatar']) ?>" class="avatar" width="48" height="48" style="flex-shrink:0; border-radius:50%; object-fit:cover">
+                  <div style="min-width:0">
+                    <div style="font-weight:700; font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text)">
+                      <?= e($sub['channel_name'] ?: $sub['username']) ?>
+                    </div>
+                    <div class="text-muted text-xs" style="margin-top:2px">
+                      <?= format_number((int)$sub['subscribers']) ?> subscribers
+                    </div>
+                  </div>
+                </div>
+                <a href="<?= BASE_URL ?>/channel.php?id=<?= $sub['id'] ?>" class="btn btn-outline btn-sm" style="padding: 6px 12px; font-size: 0.78rem; font-weight: 600; display:inline-flex; align-items:center; border-radius:14px">
+                  Visit Channel
+                </a>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <div style="text-align:center; padding:48px 24px; color:var(--text2)">
+            <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px; opacity:.4"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <p style="font-size:.9rem">You haven't subscribed to any channels yet.</p>
+            <a href="<?= BASE_URL ?>/" class="btn btn-primary btn-sm" style="margin-top:16px">Explore Videos</a>
+          </div>
+        <?php endif; ?>
+      </div>
+      <?php elseif ($tab === 'saved'): ?>
+      <?php
+        $savedVideos = db_fetchAll(
+            "SELECT v.*, u.username, u.channel_name, u.avatar
+             FROM watch_later w
+             JOIN videos v ON v.id = w.video_id
+             JOIN users u ON u.id = v.user_id
+             WHERE w.user_id = ?
+             ORDER BY w.added_at DESC",
+            [$uid]
+        );
+        $savedRef = auth_user()['ref_code'] ?? '';
+      ?>
+      <div class="card" style="padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+          <h3 style="font-weight:800;font-size:1.2rem;display:flex;align-items:center;gap:8px">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M5 11.5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6.5"/><path d="M5 11.5l7 7 7-7"/></svg>
+            Saved Videos
+          </h3>
+          <span class="text-muted" style="font-size:.9rem">Showing <?= format_number(count($savedVideos)) ?> saved video<?= count($savedVideos) === 1 ? '' : 's' ?></span>
+        </div>
+
+        <?php if ($savedVideos): ?>
+          <div class="grid grid-6">
+            <?php foreach ($savedVideos as $video): ?>
+              <?= render_video_card($video, fh_video_card_opts($video, [], $savedRef)) ?>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <div style="text-align:center; padding:48px 24px; color:var(--text2)">
+            <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px; opacity:.4"><path d="M5 13l4 4 10-10"/><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
+            <p style="font-size:.95rem; margin-top:8px;">No saved videos yet.</p>
+            <p class="text-muted" style="margin-top:6px; font-size:.9rem">Save videos from the watch page to see them here.</p>
+            <a href="<?= BASE_URL ?>/" class="btn btn-primary btn-sm" style="margin-top:14px">Browse Videos</a>
+          </div>
+        <?php endif; ?>
+      </div>
+      <?php else: ?>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:32px;margin-bottom:16px">
         <h3 style="font-weight:800;font-size:1.2rem;display:flex;align-items:center;gap:8px">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z"/></svg>
@@ -275,6 +361,7 @@ require_once __DIR__ . '/includes/header.php';
         <p class="text-muted text-sm">No earnings yet. Interact with ads on video watch pages to start earning.</p>
         <?php endif; ?>
       </div>
+      <?php endif; ?>
       <?php endif; ?>
     </div>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

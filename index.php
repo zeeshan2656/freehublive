@@ -224,33 +224,36 @@ function bindLoadMore() {
         data.videos.forEach(v => {
           const el = document.createElement('article');
           el.className = 'video-card fade-in';
-          el.onclick = () => location.href = v.url;
+          const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
+          el.onclick = () => location.href = watchUrl;
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`
             : `<span class="video-duration video-duration--pending">…</span>`;
           const earnHtml = (FH_CREATOR_ID && v.user_id === FH_CREATOR_ID && v.earnings_fmt)
-            ? `<div class="video-earnings" title="Watch-time earnings on this video"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
+            ? `<div class="video-card-earnings-box" title="Watch-time earnings on this video"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
             : '';
+          const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
           el.innerHTML = `
             <div class="video-thumb" style="position:relative">
               <img src="${v.thumbnail}" alt="${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
               ${durBadge}
             </div>
-            <div class="video-info">
-              <div class="flex gap-3" style="align-items:flex-start">
-                <img src="${v.avatar}" class="channel-avatar" loading="lazy" width="32" height="32">
-                <div style="min-width:0">
+            <div class="video-card-body">
+              <div class="video-card-info-wrap">
+                <img src="${v.avatar}" alt="${v.channel}" class="video-card-avatar" loading="lazy" width="44" height="44">
+                <div style="min-width:0;">
                   <div class="video-title">${v.title}</div>
-                  <div class="video-meta">
-                    <span>${v.channel}</span><span>·</span>
-                    <span style="display:inline-flex;align-items:center;gap:3px">
-                      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                      ${v.views}
-                    </span><span>·</span><span>${v.ago}</span>
-                  </div>
-                  ${earnHtml}
+                  <div class="video-card-subtitle">${v.channel}</div>
                 </div>
               </div>
+              <div class="video-card-stats-row">
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>${v.views}</span>
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>${v.likes || 0}</span>
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h4"/></svg>${v.comments || 0}</span>
+                <span>·</span>
+                <span>${v.ago}</span>
+              </div>
+              ${earnHtml}
             </div>`;
           grid.appendChild(el);
         });

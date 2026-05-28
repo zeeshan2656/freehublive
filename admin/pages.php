@@ -88,6 +88,9 @@ $pages = db_fetchAll("SELECT * FROM pages WHERE $where ORDER BY title ASC", $par
 
 // Define sticky header action button (moves Create button up to dashboard bar)
 $header_actions = '
+    <a href="' . BASE_URL . '/admin/footer_sections.php" class="btn btn-outline btn-sm" style="margin-right: 8px;">
+        ⚙️ Footer Sections
+    </a>
     <a href="' . BASE_URL . '/admin/page_edit.php" class="btn btn-primary btn-sm">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right: 4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Create New Page

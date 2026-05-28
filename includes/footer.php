@@ -10,45 +10,42 @@
   transform: translateX(4px);
 }
 </style>
+
+<!-- Above Footer Ad Placement -->
+<div class="ad-above-footer-container" style="padding: 0 20px; width: 100%; max-width: 1400px; margin: 20px auto 0;">
+  <?= render_ad_placeholder('above_footer') ?>
+</div>
+
 <footer class="site-footer">
   <div class="container">
-    <div class="grid grid-4" style="margin-bottom:32px">
-      <!-- Column 1: Brand Info -->
+    <?php
+    $sections = db_fetchAll("SELECT * FROM footer_sections ORDER BY sort_order ASC, id ASC");
+    ?>
+    <div class="grid footer-grid" style="margin-bottom:16px">
+      <?php foreach ($sections as $section): ?>
       <div>
-        <div style="margin-bottom:10px"><?= render_site_logo('footer', false) ?></div>
-        <p style="font-size:.83rem;color:var(--text2);line-height:1.7"><?= e(setting('site_tagline','Watch. Share. Earn.')) ?></p>
-      </div>
-      
-      <!-- Column 2: Platform -->
-      <div>
-        <div style="font-weight:600;margin-bottom:12px;font-size:.9rem;color:var(--text)">Platform</div>
-        <div class="flex-col gap-2">
-          <a href="<?= BASE_URL ?>/" class="text-muted text-sm footer-link">Home</a>
-          <a href="<?= BASE_URL ?>/page.php?slug=about-us" class="text-muted text-sm footer-link">About Us</a>
-          <a href="<?= BASE_URL ?>/page.php?slug=contact-us" class="text-muted text-sm footer-link">Contact Us</a>
+        <div class="footer-section-title" style="font-weight:600;margin-bottom:12px;font-size:.9rem;color:var(--text)"><?= e($section['name']) ?></div>
+        <div class="footer-section-links">
+          <?php
+          $sec_pages = db_fetchAll(
+              "SELECT title, slug FROM pages WHERE footer_section_id = ? AND is_published = 1 ORDER BY id ASC",
+              [$section['id']]
+          );
+          
+          $has_home = (strtolower(trim($section['name'])) === 'platform');
+          if ($has_home): ?>
+            <a href="<?= BASE_URL ?>/" class="text-muted text-sm footer-link">Home</a>
+          <?php endif; ?>
+          
+          <?php foreach ($sec_pages as $idx => $p): ?>
+            <?php if ($idx > 0 || $has_home): ?>
+              <span class="footer-section-separator">·</span>
+            <?php endif; ?>
+            <a href="<?= BASE_URL ?>/page.php?slug=<?= e($p['slug']) ?>" class="text-muted text-sm footer-link"><?= e($p['title']) ?></a>
+          <?php endforeach; ?>
         </div>
       </div>
-      
-      <!-- Column 3: Guidelines -->
-      <div>
-        <div style="font-weight:600;margin-bottom:12px;font-size:.9rem;color:var(--text)">Programs & Guidelines</div>
-        <div class="flex-col gap-2">
-          <a href="<?= BASE_URL ?>/page.php?slug=creator-page" class="text-muted text-sm footer-link">Creator Page</a>
-          <a href="<?= BASE_URL ?>/page.php?slug=viewer-page" class="text-muted text-sm footer-link">Viewer Page</a>
-          <a href="<?= BASE_URL ?>/page.php?slug=community-guidelines" class="text-muted text-sm footer-link">Community Guidelines</a>
-        </div>
-      </div>
-      
-      <!-- Column 4: Legal -->
-      <div>
-        <div style="font-weight:600;margin-bottom:12px;font-size:.9rem;color:var(--text)">Legal & Policies</div>
-        <div class="flex-col gap-2">
-          <a href="<?= BASE_URL ?>/page.php?slug=privacy-policy" class="text-muted text-sm footer-link">Privacy Policy</a>
-          <a href="<?= BASE_URL ?>/page.php?slug=disclaimer" class="text-muted text-sm footer-link">Disclaimer</a>
-          <a href="<?= BASE_URL ?>/page.php?slug=payment-policy" class="text-muted text-sm footer-link">Payment & Payout Policy</a>
-          <a href="<?= BASE_URL ?>/page.php?slug=terms-conditions" class="text-muted text-sm footer-link">Terms & Conditions</a>
-        </div>
-      </div>
+      <?php endforeach; ?>
     </div>
     <div class="site-footer-bottom">
       <span>&copy; <?= date('Y') ?> <?= e(setting('site_name','FreeHub')) ?>. All rights reserved.</span>

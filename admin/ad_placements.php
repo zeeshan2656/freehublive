@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         $orig = db_fetch("SELECT key_name FROM ad_placements WHERE id = ?", [$id]);
         $protected_keys = [
             'landing_trending', 'landing_latest', 'search_grid', 'category_grid',
-            'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay'
+            'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay', 'watch_up_next', 'above_footer'
         ];
         if ($orig && in_array($orig['key_name'], $protected_keys)) {
             flash('error', 'Cannot delete system default placements.');
@@ -414,7 +414,7 @@ require_once __DIR__ . '/partials/admin_head.php';
 
                   <!-- Delete Action Form (only for duplicated items) -->
                   <?php 
-                  $protected_keys = ['landing_trending', 'landing_latest', 'search_grid', 'category_grid', 'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay'];
+                  $protected_keys = ['landing_trending', 'landing_latest', 'search_grid', 'category_grid', 'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay', 'watch_up_next'];
                   if (!in_array($p['key_name'], $protected_keys)): 
                   ?>
                     <form method="POST" style="display:inline-block; margin: 0;" onsubmit="return confirm('Are you sure you want to delete this duplicated placement?');">

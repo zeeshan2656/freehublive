@@ -31,7 +31,10 @@ if ($is_owner) {
     $total  = db_count('videos', "user_id=?", [$channel_id]);
     $pg     = paginate($total, 12, $page);
     $videos = db_fetchAll(
-        "SELECT * FROM videos WHERE user_id=?
+        "SELECT v.*, u.username, u.channel_name, u.avatar
+         FROM videos v
+         JOIN users u ON u.id = v.user_id
+         WHERE v.user_id = ?
          ORDER BY $order LIMIT 12 OFFSET {$pg['offset']}", [$channel_id]
     );
 } else {
@@ -39,7 +42,9 @@ if ($is_owner) {
     $total  = db_count('videos', "user_id=? AND status='published' AND visibility='public'", [$channel_id]);
     $pg     = paginate($total, 12, $page);
     $videos = db_fetchAll(
-        "SELECT * FROM videos WHERE user_id=? AND status='published' AND visibility='public'
+        "SELECT v.*, u.username, u.channel_name, u.avatar
+         FROM videos v JOIN users u ON u.id = v.user_id
+         WHERE v.user_id=? AND v.status='published' AND v.visibility='public'
          ORDER BY $order LIMIT 12 OFFSET {$pg['offset']}", [$channel_id]
     );
 }
@@ -54,6 +59,8 @@ if ($is_owner && is_creator() && $videos) {
     // Duration sync removed for performance — synced via watch.php instead
     $earningsMap = fh_creator_video_earnings_map($channel_id, array_column($videos, 'id'));
 }
+
+$ref = auth_user()['ref_code'] ?? '';
 
 $meta_title = ($channel['channel_name'] ?: $channel['username']) . ' — ' . setting('site_name','FreeHub');
 $meta_desc  = truncate($channel['bio'] ?? '', 160);
@@ -79,8 +86,8 @@ require_once __DIR__ . '/includes/header.php';
     <div class="channel-avatar-sub-row">
       <img src="<?= avatar_url($channel['avatar']) ?>" alt="<?= e($channel['channel_name']??$channel['username']) ?>"
            class="avatar channel-avatar-lg" loading="eager">
-      <?php if (is_logged_in() && auth_user()['id'] != $channel_id): ?>
-      <button class="btn btn-primary sub-trigger-btn mobile-only-sub-btn" data-channel="<?= $channel_id ?>">
+      <?php if (!is_logged_in() || auth_user()['id'] != $channel_id): ?>
+      <button class="btn <?= $is_subscribed ? 'btn-subscribed' : 'btn-primary' ?> sub-trigger-btn mobile-only-sub-btn" data-channel="<?= $channel_id ?>">
         <?= $is_subscribed ? 'Subscribed ✓' : 'Subscribe' ?>
       </button>
       <?php endif; ?>
@@ -103,8 +110,8 @@ require_once __DIR__ . '/includes/header.php';
     </div>
     
     <div class="channel-header-action-desktop">
-      <?php if (is_logged_in() && auth_user()['id'] != $channel_id): ?>
-      <button class="btn btn-primary sub-trigger-btn" id="sub-btn" data-channel="<?= $channel_id ?>">
+      <?php if (!is_logged_in() || auth_user()['id'] != $channel_id): ?>
+      <button class="btn <?= $is_subscribed ? 'btn-subscribed' : 'btn-primary' ?> sub-trigger-btn" id="sub-btn" data-channel="<?= $channel_id ?>">
         <?= $is_subscribed ? 'Subscribed ✓' : 'Subscribe' ?>
       </button>
       <?php endif; ?>
@@ -139,47 +146,8 @@ require_once __DIR__ . '/includes/header.php';
   <?php if ($videos): ?>
   <div class="grid grid-6">
     <?php foreach ($videos as $v):
-      $ref = auth_user()['ref_code'] ?? '';
-      $url = BASE_URL . '/watch.php?v=' . $v['id'] . ($ref ? '&ref='.$ref : '');
-      $thumb = thumb_url($v['thumbnail']);
-
-    ?>
-    <article class="video-card fade-in" onclick="location.href='<?= $url ?>'">
-      <div class="video-thumb" style="position:relative">
-        <img src="<?= $thumb ?>" alt="<?= e($v['title']) ?>" loading="lazy" width="320" height="180" class="thumb-main">
-        <?php $durSec = (int)$v['duration']; ?>
-        <?php if ($durSec > 0): ?>
-        <span class="video-duration"><?= format_duration($durSec) ?></span>
-        <?php else: ?>
-        <span class="video-duration video-duration--pending" data-video-id="<?= (int)$v['id'] ?>">…</span>
-        <?php endif; ?>
-      </div>
-      <div class="video-info">
-        <div class="video-title"><?= e($v['title']) ?></div>
-        <div class="video-card-meta-row">
-          <?php if ($is_owner): ?>
-            <span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>"><?= $v['status'] ?></span>
-            <?php if ($v['visibility']!=='public'): ?>
-              <span class="badge badge-gray"><?= $v['visibility'] ?></span>
-            <?php endif; ?>
-          <?php endif; ?>
-          <span class="meta-item-views" style="display:inline-flex;align-items:center;gap:3px">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            <?= format_number((int)$v['views']) ?>
-          </span>
-          <span>·</span>
-          <span><?= time_ago($v['published_at']??$v['created_at']) ?></span>
-          <?php if ($is_owner && is_creator()): ?>
-            <span>·</span>
-            <span class="video-earnings-inline" title="Watch-time earnings on this video">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:2px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              <?= e(fh_format_money($earningsMap[(int)$v['id']] ?? 0.0, fh_user_currency())) ?>
-            </span>
-          <?php endif; ?>
-        </div>
-      </div>
-    </article>
-    <?php endforeach; ?>
+      echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
+    endforeach; ?>
   </div>
 
   <?php if ($pg['pages']>1): ?>
@@ -194,6 +162,77 @@ require_once __DIR__ . '/includes/header.php';
   <div style="text-align:center;padding:60px;color:var(--text2)">
     <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;opacity:.4"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
     <p>No videos yet</p>
+  </div>
+  <?php endif; ?>
+  <?php endif; ?>
+
+  <!-- Playlists tab -->
+  <?php if ($tab==='playlists'): ?>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <h3 style="font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+      Playlists
+    </h3>
+    <?php if ($is_owner): ?>
+    <button class="btn btn-primary btn-sm" id="create-playlist-btn">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><path d="M12 5v14M5 12h14"/></svg>
+      New Playlist
+    </button>
+    <?php endif; ?>
+  </div>
+  
+  <?php
+    $playlists = db_fetchAll(
+        "SELECT p.*, COUNT(pi.id) as item_count
+         FROM playlists p
+         LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
+         WHERE p.user_id = ?
+         GROUP BY p.id
+         ORDER BY p.updated_at DESC",
+        [$channel_id]
+    );
+  ?>
+  
+  <?php if ($playlists): ?>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+    <?php foreach ($playlists as $pl): ?>
+    <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;transition:all 0.2s" onclick="location.href='<?= BASE_URL ?>/playlists.php?id=<?= $pl['id'] ?>'">
+      <div style="width:100%;padding-top:56.25%;position:relative;background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(236,72,153,.1))">
+        <?php if ($pl['thumbnail']): ?>
+        <img src="<?= thumb_url($pl['thumbnail']) ?>" alt="<?= e($pl['name']) ?>" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">
+        <?php else: ?>
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center">
+          <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.3"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+        </div>
+        <?php endif; ?>
+        <span style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.7);color:#fff;font-size:.75rem;font-weight:600;padding:4px 8px;border-radius:4px"><?= (int)$pl['item_count'] ?> videos</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;padding:12px">
+        <div style="font-weight:700;font-size:.9rem;margin-bottom:4px;color:var(--text);word-break:break-word"><?= e($pl['name']) ?></div>
+        <?php if ($pl['description']): ?>
+        <div style="font-size:.8rem;color:var(--text2);margin-bottom:8px;line-height:1.3;word-break:break-word"><?= e(truncate($pl['description'], 80)) ?></div>
+        <?php endif; ?>
+        <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span style="font-size:.75rem;color:var(--text2)"><?= date('M j, Y', strtotime($pl['created_at'])) ?></span>
+          <?php if ($is_owner): ?>
+          <button class="playlist-delete-btn" data-playlist-id="<?= $pl['id'] ?>" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:1rem;padding:0;display:flex;align-items:center" title="Delete playlist" onclick="event.stopPropagation()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php else: ?>
+  <div style="text-align:center;padding:60px 24px;color:var(--text2)">
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;opacity:.4"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+    <p style="font-size:.95rem;margin-bottom:4px">No playlists yet</p>
+    <?php if ($is_owner): ?>
+    <p class="text-muted text-sm">Create your first playlist to organize videos.</p>
+    <?php else: ?>
+    <p class="text-muted text-sm">This creator hasn't made any playlists.</p>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
   <?php endif; ?>
@@ -219,8 +258,21 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <script>
+const IS_LOGGED_IN = <?= is_logged_in() ? 'true' : 'false' ?>;
+function requireLogin() {
+  if (!IS_LOGGED_IN) {
+    if (confirm("You need to login to perform this action. Do you want to login now?")) {
+      window.location.href = '<?= BASE_URL ?>/auth/login.php';
+    }
+    return false;
+  }
+  return true;
+}
+
 document.querySelectorAll('.sub-trigger-btn').forEach(btn => {
-  btn.addEventListener('click', async function() {
+  btn.addEventListener('click', async function(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (!requireLogin()) return;
     const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=subscribe', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({channel_id: <?= $channel_id ?>})
@@ -228,7 +280,53 @@ document.querySelectorAll('.sub-trigger-btn').forEach(btn => {
     const d = await res.json();
     document.querySelectorAll('.sub-trigger-btn').forEach(b => {
       b.textContent = d.subscribed ? 'Subscribed ✓' : 'Subscribe';
+      if (d.subscribed) {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-subscribed');
+      } else {
+        b.classList.remove('btn-subscribed');
+        b.classList.add('btn-primary');
+      }
     });
+  });
+});
+
+// Playlist management
+const createPlaylistBtn = document.getElementById('create-playlist-btn');
+if (createPlaylistBtn) {
+  createPlaylistBtn.addEventListener('click', async function(e) {
+    e.preventDefault();
+    const name = prompt('Playlist name:');
+    if (!name) return;
+    const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=create_playlist', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name: name, description: ''})
+    });
+    const d = await res.json();
+    if (d.success) {
+      location.reload();
+    } else {
+      alert('Error: ' + (d.message || 'Failed to create playlist'));
+    }
+  });
+}
+
+document.querySelectorAll('.playlist-delete-btn').forEach(btn => {
+  btn.addEventListener('click', async function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm('Delete this playlist?')) return;
+    const playlistId = this.getAttribute('data-playlist-id');
+    const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=delete_playlist', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({playlist_id: playlistId})
+    });
+    const d = await res.json();
+    if (d.success) {
+      location.reload();
+    } else {
+      alert('Error: ' + (d.message || 'Failed to delete playlist'));
+    }
   });
 });
 </script>

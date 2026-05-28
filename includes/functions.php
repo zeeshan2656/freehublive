@@ -587,49 +587,74 @@ function fh_video_card_opts(array $v, array $earningsMap = [], string $ref = '')
 
 function render_video_card(array $v, array $opts = []): string {
     $ref       = $opts['ref'] ?? '';
+    $format    = $opts['format'] ?? 'grid';
+    if (!in_array($format, ['grid', 'side', 'full'], true)) {
+        $format = 'grid';
+    }
     $earnings  = isset($opts['earnings_usd']) ? (float)$opts['earnings_usd'] : null;
     $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
-    $url       = BASE_URL . '/watch.php?v=' . $v['id'] . $ref_param;
+    $url       = BASE_URL . '/watch.php?v=' . (int)$v['id'] . $ref_param;
     $thumb     = thumb_url($v['thumbnail'] ?? null);
     $durSec    = (int)($v['duration'] ?? 0);
     $dur       = $durSec > 0 ? format_duration($durSec) : '';
-    $views     = format_number((int)($v['views'] ?? 0));
-    $ago       = time_ago($v['published_at'] ?? $v['created_at'] ?? 'now');
     $title     = e($v['title'] ?? '');
+    $creator   = e($v['channel_name'] ?? $v['username'] ?? 'Unknown Creator');
+    $avatar    = avatar_url($v['avatar'] ?? null);
+    $views     = format_number((int)($v['views'] ?? 0));
+    $likes     = format_number((int)($v['likes'] ?? 0));
+    $comments  = format_number((int)($v['comments_count'] ?? $v['comments'] ?? 0));
+    $ago       = time_ago($v['published_at'] ?? $v['created_at'] ?? 'now');
 
     $srcAttr  = !empty($v['video_url']) ? ' data-video-src="' . e(video_url($v['video_url'])) . '"' : '';
     $durBadge = $dur !== ''
         ? '<span class="video-duration">' . $dur . '</span>'
         : '<span class="video-duration video-duration--pending" data-video-id="' . (int)$v['id'] . '"' . $srcAttr . '>…</span>';
 
+    $formatClass = $format === 'full' ? ' video-card--full-width' : ($format === 'side' ? ' video-card--side' : '');
+
     $earningsHtml = '';
     if ($earnings !== null && is_logged_in() && is_creator()) {
         $currency = fh_user_currency();
         $label    = e(fh_format_money($earnings, $currency));
-        $earningsHtml = '<div class="video-earnings" title="Watch-time earnings on this video" style="margin-top:4px;">'
-            . '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'
+        $earningsHtml = '<div class="video-card-earnings-box" title="Watch-time earnings on this video">'
+            . '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'
             . '<span>' . $label . ' earned</span></div>';
     }
 
     return <<<HTML
-<article class="video-card fade-in" onclick="location.href='{$url}'">
+<article class="video-card fade-in{$formatClass}" onclick="location.href='{$url}'">
   <div class="video-thumb" style="position:relative">
     <img src="{$thumb}" alt="{$title}" loading="lazy" decoding="async" width="320" height="180" class="thumb-main">
     {$durBadge}
   </div>
-  <div class="video-info">
-    <div style="min-width:0; width: 100%;">
-      <div class="video-title">{$title}</div>
-      <div class="video-meta">
-        <span style="display:inline-flex;align-items:center;gap:3px">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          {$views}
-        </span>
-        <span>·</span>
-        <span>{$ago}</span>
+  <div class="video-card-body">
+    <div style="display:flex;gap:10px;margin-bottom:8px">
+      <img src="{$avatar}" alt="{$creator}" class="video-card-avatar" loading="lazy" width="40" height="40" style="flex-shrink:0;border-radius:50%;object-fit:cover">
+      <div style="min-width:0;flex:1">
+        <div class="video-title" style="margin:0;line-height:1.3">{$title}</div>
       </div>
-      {$earningsHtml}
     </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.75rem;color:var(--text2)">
+      <div style="font-weight:600;font-size:.85rem;color:var(--accent)">{$creator}</div>
+      <span>·</span>
+      <span style="display:inline-flex;align-items:center;gap:2px">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        {$views}
+      </span>
+      <span>·</span>
+      <span style="display:inline-flex;align-items:center;gap:2px">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        {$likes}
+      </span>
+      <span>·</span>
+      <span style="display:inline-flex;align-items:center;gap:2px">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h4"/></svg>
+        {$comments}
+      </span>
+      <span>·</span>
+      <span>{$ago}</span>
+    </div>
+    {$earningsHtml}
   </div>
 </article>
 HTML;
@@ -756,17 +781,10 @@ function render_ad_placeholder(string $placement_key): string {
         $w = $ad['placement_width'] ?: $ad['ad_width'];
         $h = $ad['placement_height'] ?: $ad['ad_height'];
 
-        $sponsored_label = '';
-        if ($placement_key !== 'home_mobile_top' && $placement_key !== 'watch_below_player') {
-            $sponsored_label = '<div style="font-size:.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>Sponsored</div>';
-        }
+        $sponsored_overlay = '<span style="position:absolute; left:8px; top:8px; background:rgba(0,0,0,0.65); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); color:#fff; font-size:0.62rem; font-weight:800; padding:3px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; z-index:10; border:1px solid rgba(255,255,255,0.15); box-shadow: 0 2px 6px rgba(0,0,0,0.4);">Sponsored</span>';
 
-        $size_style = '';
-        if ($placement_key === 'home_mobile_top') {
-            $size_style .= 'width:100% !important;';
-        } else {
-            if ($w) $size_style .= 'width:100%;max-width:' . (int)$w . 'px;';
-        }
+        $size_style = 'width:100%;';
+        if ($w) $size_style .= 'max-width:' . (int)$w . 'px;';
         if ($h) $size_style .= 'height:100%;max-height:' . (int)$h . 'px;';
 
         $device_class = '';
@@ -776,32 +794,16 @@ function render_ad_placeholder(string $placement_key): string {
             $device_class = ' ad-desktop-only';
         }
 
-        $extra_class = '';
-        if ($placement_key === 'home_mobile_top') {
-            $extra_class = ' ad-full-width-mobile';
-            $container_style = 'box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;';
-            if ($h) {
-                $container_style .= 'height:' . (int)$h . 'px;';
-            }
-        } elseif ($placement_key === 'watch_below_player') {
-            $extra_class = ' ad-watch-below-player';
-            $container_style = 'box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;';
-            if ($w) {
-                $container_style .= 'width:100%;max-width:' . (int)$w . 'px;';
-            }
-            if ($h) {
-                $container_style .= 'height:' . (int)$h . 'px;';
-            }
+        $extra_class = ' ad-global-mobile-full';
+
+        $container_style = 'margin:16px auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;';
+        if ($w) {
+            $container_style .= 'max-width:' . (int)$w . 'px;';
+        }
+        if ($h) {
+            $container_style .= 'height:' . (int)$h . 'px;';
         } else {
-            $container_style = 'margin:24px auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;';
-            if ($w) {
-                $container_style .= 'width:100%;max-width:' . (int)$w . 'px;';
-            }
-            if ($h) {
-                $container_style .= 'height:' . (int)$h . 'px;padding:0 16px;display:flex;flex-direction:column;justify-content:center;';
-            } else {
-                $container_style .= 'padding:16px;';
-            }
+            $container_style .= 'padding:0;';
         }
 
         $inner = '';
@@ -822,8 +824,8 @@ function render_ad_placeholder(string $placement_key): string {
         }
 
         $output .= '<div class="ad-sponsored-container' . $device_class . $extra_class . '" data-placement="' . e($placement_key) . '" data-device-target="' . e($ad['placement_device']) . '" data-reload-interval="' . (int)$ad['reload_interval'] . '" data-ad-id="' . (int)$ad['id'] . '"' . $vid_attr . ' style="' . $container_style . '">'
-             . $sponsored_label
-             . '<div class="ad-creative-wrapper" style="margin:0 auto;display:block;width:100%;max-width:100%;' . $size_style . '">' . $inner . '</div>'
+             . $sponsored_overlay
+             . '<div class="ad-creative-wrapper" style="margin:0 auto;display:flex;justify-content:center;align-items:center;width:100%;max-width:100%;' . $size_style . '">' . $inner . '</div>'
              . '</div>';
     }
 

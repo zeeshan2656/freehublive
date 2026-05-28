@@ -95,23 +95,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $type = in_array($body['type']??'', ['like','dislike']) ? $body['type'] : 'like';
         if (!$vid) json_error('Invalid video');
 
+        $new_reaction = $type;
         $existing = db_fetch("SELECT id,type FROM video_reactions WHERE video_id=? AND user_id=?", [$vid,$uid]);
         if ($existing) {
             if ($existing['type'] === $type) {
                 db_query("DELETE FROM video_reactions WHERE id=?", [$existing['id']]);
-                $delta = -1;
+                $new_reaction = 'none';
             } else {
                 db_update('video_reactions', ['type'=>$type], 'id=?', [$existing['id']]);
-                $delta = 0;
             }
         } else {
             db_insert('video_reactions', ['video_id'=>$vid,'user_id'=>$uid,'type'=>$type]);
-            $delta = 1;
         }
         $video = db_fetch("SELECT likes,dislikes FROM videos WHERE id=?", [$vid]);
         $likes = db_count('video_reactions', "video_id=? AND type='like'", [$vid]);
         db_update('videos', ['likes'=>$likes], 'id=?', [$vid]);
-        json_success(['likes' => format_number($likes)]);
+        json_success(['likes' => format_number($likes), 'reaction' => $new_reaction]);
     }
 
     // Initialize an upload: create placeholder video record and return upload token
@@ -253,6 +252,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db_query("UPDATE users SET subscribers=subscribers+1 WHERE id=?", [$channel_id]);
             json_success(['subscribed'=>true]);
         }
+    }
+
+    // Create playlist
+    if ($action === 'create_playlist') {
+        if (!is_creator()) json_error('Unauthorized', 403);
+        $name = trim($body['name'] ?? '');
+        $desc = trim($body['description'] ?? '');
+        if (empty($name)) json_error('Playlist name required');
+        db_insert('playlists', [
+            'user_id' => $uid,
+            'name' => $name,
+            'description' => $desc,
+            'visibility' => 'private'
+        ]);
+        json_success(['message' => 'Playlist created']);
+    }
+
+    // Delete playlist
+    if ($action === 'delete_playlist') {
+        $playlist_id = (int)($body['playlist_id'] ?? 0);
+        if (!$playlist_id) json_error('Invalid playlist');
+        $playlist = db_fetch("SELECT user_id FROM playlists WHERE id=?", [$playlist_id]);
+        if (!$playlist) json_error('Playlist not found', 404);
+        if ($playlist['user_id'] != $uid) json_error('Unauthorized', 403);
+        db_query("DELETE FROM playlists WHERE id=?", [$playlist_id]);
+        json_success(['message' => 'Playlist deleted']);
     }
 
     json_error('Unknown action', 404);

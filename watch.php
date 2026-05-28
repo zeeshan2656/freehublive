@@ -205,8 +205,9 @@ require_once __DIR__ . '/includes/header.php';
               <span id="like-count"><?= format_number((int)$video['likes']) ?></span>
             </button>
             <!-- Dislike -->
-            <button class="btn btn-outline btn-sm" id="dislike-btn" data-id="<?= $vid ?>">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3z"/><path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+            <button class="btn btn-outline btn-sm" id="dislike-btn" data-id="<?= $vid ?>"
+                    style="<?= $user_reaction==='dislike'?'background:rgba(99,102,241,.15);color:var(--accent)':'' ?>">
+              <svg width="16" height="16" fill="<?= $user_reaction==='dislike'?'var(--accent)':'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3z"/><path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
             </button>
             <!-- Share -->
             <button class="btn btn-outline btn-sm" id="share-btn">
@@ -214,9 +215,11 @@ require_once __DIR__ . '/includes/header.php';
               Share
             </button>
             <!-- Watch Later -->
-            <button class="btn btn-outline btn-sm" id="wl-btn" data-id="<?= $vid ?>">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-              Save
+            <?php $is_saved = is_logged_in() ? (bool)db_fetch("SELECT id FROM watch_later WHERE user_id=? AND video_id=?", [auth_user()['id'], $vid]) : false; ?>
+            <button class="btn btn-outline btn-sm" id="wl-btn" data-id="<?= $vid ?>"
+                    style="<?= $is_saved?'background:rgba(99,102,241,.15);color:var(--accent)':'' ?>">
+              <svg width="16" height="16" fill="<?= $is_saved?'var(--accent)':'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              <span><?= $is_saved ? 'Saved ✓' : 'Save' ?></span>
             </button>
             <?php if (is_logged_in() && (auth_user()['id'] == $video['user_id'] || auth_user()['role'] === 'admin')): ?>
             <a href="<?= BASE_URL ?>/creator/edit.php?id=<?= $vid ?>" class="btn btn-outline btn-sm" style="color:var(--accent);border-color:var(--accent)">
@@ -237,8 +240,9 @@ require_once __DIR__ . '/includes/header.php';
             <div class="text-muted text-sm"><?= format_number((int)$video['subscribers']) ?> subscribers</div>
           </div>
         </a>
-        <?php if (is_logged_in() && auth_user()['id'] != $video['user_id']): ?>
-        <button class="btn btn-primary" id="sub-btn" data-channel="<?= $video['user_id'] ?>">Subscribe</button>
+        <?php if (!is_logged_in() || auth_user()['id'] != $video['user_id']): ?>
+        <?php $is_subbed = is_logged_in() ? (bool)db_fetch("SELECT id FROM subscriptions WHERE subscriber_id=? AND channel_id=?", [auth_user()['id'], $video['user_id']]) : false; ?>
+        <button class="btn <?= $is_subbed ? 'btn-subscribed' : 'btn-primary' ?>" id="sub-btn" data-channel="<?= $video['user_id'] ?>"><?= $is_subbed ? 'Subscribed ✓' : 'Subscribe' ?></button>
         <?php endif; ?>
       </div>
 
@@ -259,18 +263,17 @@ require_once __DIR__ . '/includes/header.php';
       <!-- Comments -->
       <div class="watch-comments" style="margin-top:24px">
         <h2 style="font-size:1rem;font-weight:700;margin-bottom:16px"><?= format_number((int)$video['comments_count']) ?> Comments</h2>
-        <?php if (is_logged_in()): ?>
         <form id="comment-form" class="comment-form-row">
-          <img src="<?= avatar_url(auth_user()['avatar']) ?>" class="avatar avatar-sm" width="32" height="32">
+          <img src="<?= is_logged_in() ? avatar_url(auth_user()['avatar']) : avatar_url(null) ?>" class="avatar avatar-sm" width="32" height="32">
           <div style="flex:1">
             <input type="text" class="form-input" placeholder="Add a comment…" id="comment-input" style="border-radius:20px" maxlength="500">
           </div>
-          <button type="submit" class="btn btn-primary btn-sm">Post</button>
+          <button type="submit" class="btn btn-primary" style="border-radius:20px; padding: 10px 24px;">Post</button>
           <input type="hidden" name="video_id" value="<?= $vid ?>">
         </form>
-        <?php endif; ?>
         <div id="comments-list"></div>
         <button class="btn btn-outline" id="load-comments" style="margin-top:12px">Load Comments</button>
+        <button class="btn btn-outline" id="close-comments" style="margin-top:12px; display:none;">Close Comments</button>
       </div>
     </div>
 
@@ -281,6 +284,10 @@ require_once __DIR__ . '/includes/header.php';
         <?= render_ad_placeholder('watch_sidebar') ?>
       </div>
       <h2 style="font-size:.95rem;font-weight:700;margin-bottom:12px;padding:0 16px">Up Next</h2>
+      <!-- Ad Placeholder: Watch Page Up Next -->
+      <div style="margin-bottom: 20px; padding: 0 16px;">
+        <?= render_ad_placeholder('watch_up_next') ?>
+      </div>
       <?php foreach ($related as $r): ?>
       <a href="<?= BASE_URL ?>/watch.php?v=<?= $r['id'] ?>" class="related-video-item">
         <div class="related-thumb">
@@ -329,6 +336,17 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <script>
+const IS_LOGGED_IN = <?= is_logged_in() ? 'true' : 'false' ?>;
+function requireLogin() {
+  if (!IS_LOGGED_IN) {
+    if (confirm("You need to login to perform this action. Do you want to login now?")) {
+      window.location.href = '<?= BASE_URL ?>/auth/login.php';
+    }
+    return false;
+  }
+  return true;
+}
+
 const player = document.getElementById('fh-player');
 const progressFill = document.getElementById('progress-fill');
 const progressThumb = document.getElementById('progress-thumb');
@@ -625,47 +643,82 @@ if (player) {
   });
 }
 
-// Like
-document.getElementById('like-btn')?.addEventListener('click',async function(){
+// Reactions (Like/Dislike)
+async function handleReact(e, type) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  if (!requireLogin()) return;
   const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=react',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({video_id:<?= $vid ?>,type:'like'})
+    body:JSON.stringify({video_id:<?= $vid ?>,type:type})
   });
   const d=await res.json();
-  if(d.success) document.getElementById('like-count').textContent=d.likes;
-});
+  if(d.success) {
+    document.getElementById('like-count').textContent=d.data.likes;
+    const lBtn = document.getElementById('like-btn');
+    const dBtn = document.getElementById('dislike-btn');
+    if (lBtn) {
+      lBtn.style.cssText = d.data.reaction === 'like' ? 'background:rgba(99,102,241,.15);color:var(--accent)' : '';
+      lBtn.querySelector('svg').setAttribute('fill', d.data.reaction === 'like' ? 'var(--accent)' : 'none');
+    }
+    if (dBtn) {
+      dBtn.style.cssText = d.data.reaction === 'dislike' ? 'background:rgba(99,102,241,.15);color:var(--accent)' : '';
+      dBtn.querySelector('svg').setAttribute('fill', d.data.reaction === 'dislike' ? 'var(--accent)' : 'none');
+    }
+  }
+}
+document.getElementById('like-btn')?.addEventListener('click', (e) => handleReact(e, 'like'));
+document.getElementById('dislike-btn')?.addEventListener('click', (e) => handleReact(e, 'dislike'));
 
 // Share modal
-document.getElementById('share-btn').addEventListener('click',()=>document.getElementById('share-modal').classList.add('open'));
-document.getElementById('share-modal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('share-btn')?.addEventListener('click',(e)=>{ if (e) { e.preventDefault(); e.stopPropagation(); } document.getElementById('share-modal').classList.add('open')});
+document.getElementById('share-modal')?.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 
 // Watch Later
-document.getElementById('wl-btn')?.addEventListener('click',async function(){
+document.getElementById('wl-btn')?.addEventListener('click',async function(e){
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  if (!requireLogin()) return;
   const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=watch_later',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({video_id:<?= $vid ?>})
   });
   const d=await res.json();
-  this.textContent=d.saved?'Saved ✓':'Save';
+  if (d.success) {
+    this.style.cssText = d.data.saved ? 'background:rgba(99,102,241,.15);color:var(--accent)' : '';
+    this.querySelector('svg').setAttribute('fill', d.data.saved ? 'var(--accent)' : 'none');
+    this.querySelector('span').textContent = d.data.saved ? 'Saved ✓' : 'Save';
+  }
 });
 
 // Subscribe
-document.getElementById('sub-btn')?.addEventListener('click',async function(){
+document.getElementById('sub-btn')?.addEventListener('click',async function(e){
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  if (!requireLogin()) return;
   const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=subscribe',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({channel_id:<?= $video['user_id'] ?>})
   });
   const d=await res.json();
-  this.textContent=d.subscribed?'Subscribed ✓':'Subscribe';
+  if (d.success) {
+    this.textContent = d.data.subscribed ? 'Subscribed ✓' : 'Subscribe';
+    if (d.data.subscribed) {
+      this.classList.remove('btn-primary');
+      this.classList.add('btn-subscribed');
+    } else {
+      this.classList.remove('btn-subscribed');
+      this.classList.add('btn-primary');
+    }
+  }
 });
 
 // Load Comments
-document.getElementById('load-comments')?.addEventListener('click',async function(){
+document.getElementById('load-comments')?.addEventListener('click',async function(e){
+  if (e) { e.preventDefault(); e.stopPropagation(); }
   this.style.display='none';
   const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=comments&video_id=<?= $vid ?>');
   const d=await res.json();
   const list=document.getElementById('comments-list');
-  (d.comments||[]).forEach(c=>{
+  list.innerHTML = '';
+  (d.data||[]).forEach(c=>{
     const div=document.createElement('div');
     div.style.cssText='display:flex;gap:12px;margin-bottom:16px';
     div.innerHTML=`<img src="${c.avatar}" class="avatar avatar-sm" width="32" height="32" loading="lazy">
@@ -674,11 +727,21 @@ document.getElementById('load-comments')?.addEventListener('click',async functio
       <div style="font-size:.75rem;color:var(--text3);margin-top:4px">${c.ago}</div></div>`;
     list.appendChild(div);
   });
+  document.getElementById('close-comments').style.display='inline-flex';
+});
+
+// Close Comments
+document.getElementById('close-comments')?.addEventListener('click',function(e){
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  this.style.display='none';
+  document.getElementById('comments-list').innerHTML = '';
+  document.getElementById('load-comments').style.display='inline-flex';
 });
 
 // Post Comment
 document.getElementById('comment-form')?.addEventListener('submit',async function(e){
   e.preventDefault();
+  if (!requireLogin()) return;
   const input=document.getElementById('comment-input');
   if(!input.value.trim()) return;
   const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=comment',{
@@ -686,7 +749,12 @@ document.getElementById('comment-form')?.addEventListener('submit',async functio
     body:JSON.stringify({video_id:<?= $vid ?>,content:input.value.trim()})
   });
   const d=await res.json();
-  if(d.success){ input.value=''; }
+  if(d.success){ 
+    input.value='';
+    document.getElementById('close-comments').style.display = 'none';
+    document.getElementById('load-comments').style.display = 'inline-flex';
+    document.getElementById('load-comments').click();
+  }
 });
 
 // HLS support
