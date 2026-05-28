@@ -114,6 +114,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         json_success(['likes' => format_number($likes)]);
     }
 
+    // Initialize an upload: create placeholder video record and return upload token
+    if ($action === 'init_upload') {
+        $meta = $body['meta'] ?? [];
+        $title = trim($meta['title'] ?? 'Untitled');
+        $description = trim($meta['description'] ?? '');
+        $tags = trim($meta['tags'] ?? '');
+        $category_ids = $meta['category_ids'] ?? [];
+        $visibility = in_array($meta['visibility'] ?? '', ['public','unlisted','private']) ? $meta['visibility'] : 'public';
+
+        if (strlen($title) < 1) $title = 'Untitled';
+        $slug = slugify($title);
+        $base = $slug; $i = 1;
+        while (db_fetch("SELECT id FROM videos WHERE slug=?", [$slug])) {
+            $slug = $base . '-' . $i++;
+        }
+
+        $upload_token = bin2hex(random_bytes(16));
+        $approvalMode  = setting('video_approval_mode', 'manual');
+        $initialStatus = ($approvalMode === 'auto') ? 'published' : 'pending';
+        $publishedAt   = ($approvalMode === 'auto') ? date('Y-m-d H:i:s') : null;
+
+        $new_id = db_insert('videos', [
+            'user_id' => $uid,
+            'category_id' => !empty($category_ids) ? (int)$category_ids[0] : null,
+            'title' => $title,
+            'slug'  => $slug,
+            'description' => $description,
+            'tags' => $tags,
+            'video_url' => '',
+            'thumbnail' => null,
+            'file_size' => 0,
+            'duration' => 0,
+            'visibility' => $visibility,
+            'status' => $initialStatus,
+            'published_at' => $publishedAt
+        ]);
+
+        if ($new_id && !empty($category_ids)) {
+            foreach ($category_ids as $cid) {
+                db_insert('video_categories', ['video_id' => $new_id, 'category_id' => (int)$cid]);
+            }
+        }
+
+        // ensure upload_sessions table exists (best-effort)
+        db_query("CREATE TABLE IF NOT EXISTS upload_sessions (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            video_id INT UNSIGNED NOT NULL,
+            user_id INT UNSIGNED NOT NULL,
+            token VARCHAR(64) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_video (video_id)
+        ) ENGINE=InnoDB;");
+        db_insert('upload_sessions', ['video_id'=>$new_id, 'user_id'=>$uid, 'token'=>$upload_token]);
+
+        json_success(['video_id' => $new_id, 'upload_token' => $upload_token]);
+    }
+
+    // Save/update metadata for an existing video (can be called before upload completes)
+    if ($action === 'save_metadata') {
+        $meta = $body['meta'] ?? [];
+        $video_id = (int)($meta['video_id'] ?? 0);
+        if (!$video_id) json_error('Missing video_id');
+        $video = db_fetch('SELECT id,user_id FROM videos WHERE id=?', [$video_id]);
+        if (!$video) json_error('Not found', 404);
+        if ((int)$video['user_id'] !== $uid && !is_admin()) json_error('Forbidden', 403);
+
+        $fields = [];
+        if (isset($meta['title'])) $fields['title'] = trim($meta['title']);
+        if (isset($meta['description'])) $fields['description'] = trim($meta['description']);
+        if (isset($meta['tags'])) $fields['tags'] = trim($meta['tags']);
+        if (isset($meta['visibility']) && in_array($meta['visibility'], ['public','unlisted','private'])) $fields['visibility'] = $meta['visibility'];
+        if (isset($meta['category_ids']) && is_array($meta['category_ids'])) {
+            $first = (int)($meta['category_ids'][0] ?? 0);
+            if ($first > 0) $fields['category_id'] = $first;
+        }
+
+        if ($fields) db_update('videos', $fields, 'id=?', [$video_id]);
+        json_success(['updated' => true, 'video_id' => $video_id]);
+    }
+
     // Comments
     if ($action === 'comment') {
         $vid     = (int)($body['video_id'] ?? 0);

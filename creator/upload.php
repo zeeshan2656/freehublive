@@ -12,6 +12,16 @@ $error   = '';
 $success = '';
 $new_vid_id = null;
 
+// If returning to thumbnail step via client-side flow
+if (!empty($_GET['thumb_for'])) {
+  $possible = (int)$_GET['thumb_for'];
+  $rec = db_fetch('SELECT id,user_id FROM videos WHERE id=?', [$possible]);
+  if ($rec && ((int)$rec['user_id'] === (int)$uid || is_admin())) {
+    $new_vid_id = $possible;
+    $success = 'Video saved earlier — continue to thumbnails';
+  }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf($_POST['csrf'] ?? '')) { 
         $error = 'Invalid request.'; 
@@ -656,6 +666,24 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
         <!-- Video Approval Info -->
+        <div id="upload-progress" style="margin:12px 0 14px; padding:12px; background:var(--bg2); border:1px solid var(--border); border-radius:12px; display:none">
+          <div style="display:flex; align-items:center; gap:12px">
+            <div style="flex:1">
+              <div style="height:10px; background:var(--bg3); border-radius:6px; overflow:hidden">
+                <div id="upload-progress-bar" style="height:100%; width:0%; background:var(--accent)"></div>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:0.78rem; margin-top:6px">
+                <span id="upload-percent">0%</span>
+                <span id="upload-status">Idle</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:12px; margin-top:8px; font-size:0.82rem; color:var(--text2)">
+            <div>Speed: <span id="upload-speed">—</span></div>
+            <div>ETA: <span id="upload-eta">—</span></div>
+          </div>
+        </div>
+
         <div style="background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:20px; box-shadow:0 6px 20px rgba(0,0,0,0.12)">
           <?php if (setting('video_approval_mode','manual') === 'auto'): ?>
           <div style="font-size:0.85rem; font-weight:700; color:var(--green); margin-bottom:6px; display:flex; align-items:center; gap:8px">
@@ -1096,6 +1124,127 @@ require_once __DIR__ . '/../includes/header.php';
         zt.textContent += ' — length ' + formattedTime;
       }
     }, {once: true});
+
+    // Start background upload automatically (non-blocking)
+    (async function() {
+      try {
+        const progressBox = document.getElementById('upload-progress');
+        const percentEl = document.getElementById('upload-percent');
+        const barEl = document.getElementById('upload-progress-bar');
+        const statusEl = document.getElementById('upload-status');
+        const speedEl = document.getElementById('upload-speed');
+        const etaEl = document.getElementById('upload-eta');
+
+        progressBox.style.display = 'block';
+        statusEl.textContent = 'Preparing...';
+
+        // Initialize upload placeholder on server
+        const meta = {
+          title: titleField?.value || '',
+          description: document.getElementById('desc-field')?.value || '',
+          tags: document.getElementById('tags-field')?.value || '',
+          category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value),
+          visibility: document.querySelector('select[name="visibility"]')?.value || 'public'
+        };
+
+        const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({meta})
+        });
+        const initData = await initRes.json();
+        if (!initData.success) {
+          statusEl.textContent = 'Init failed';
+          return;
+        }
+        const VID = initData.data.video_id;
+        const TOKEN = initData.data.upload_token;
+
+        // Start resumable chunk upload
+        const CHUNK = 5 * 1024 * 1024; // 5MB
+        const total = f.size;
+        let uploaded = 0;
+
+        // Query server for already uploaded bytes
+        try {
+          const st = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&video_id=${VID}&token=${TOKEN}`);
+          const sd = await st.json();
+          if (sd.success && sd.data.uploaded) uploaded = sd.data.uploaded;
+        } catch(e){}
+
+        let lastTime = Date.now();
+        let lastBytes = uploaded;
+
+        statusEl.textContent = 'Uploading';
+
+        for (let start = uploaded; start < total; start += CHUNK) {
+          const end = Math.min(start + CHUNK, total);
+          const blob = f.slice(start, end);
+
+          const form = new FormData();
+          form.append('chunk', blob, f.name);
+
+          const resp = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${VID}&token=${TOKEN}`, {
+            method: 'POST', body: form
+          });
+          const j = await resp.json();
+          if (!j.success) {
+            statusEl.textContent = 'Upload error';
+            break;
+          }
+
+          uploaded = j.data.uploaded || Math.min(end, total);
+
+          const now = Date.now();
+          const delta = (now - lastTime) / 1000;
+          const deltaBytes = uploaded - lastBytes;
+          const speed = delta > 0 ? Math.round(deltaBytes / delta) : 0;
+          lastTime = now; lastBytes = uploaded;
+
+          const pct = Math.floor((uploaded / total) * 100);
+          percentEl.textContent = pct + '%';
+          barEl.style.width = pct + '%';
+          speedEl.textContent = speed ? formatBytes(speed) + '/s' : '—';
+          const remain = speed ? Math.max(0, Math.round((total - uploaded) / speed)) : null;
+          etaEl.textContent = remain !== null ? formatETA(remain) : '—';
+        }
+
+        if (uploaded >= total) {
+          statusEl.textContent = 'Finalizing';
+          // Finalize and move to permanent file
+          const finalizeResp = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${VID}&token=${TOKEN}&finalize=1&filename=${encodeURIComponent(f.name)}`, { method: 'POST', body: '' });
+          const fj = await finalizeResp.json();
+          if (fj.success) {
+            percentEl.textContent = '100%'; barEl.style.width='100%';
+            statusEl.textContent = 'Completed';
+            // update local hidden duration if known
+            const durInput = document.getElementById('duration-seconds');
+            if (durInput && parseInt(durInput.value) > 0) {
+              await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_duration', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({video_id:VID,duration:parseInt(durInput.value)}) });
+            }
+          } else {
+            statusEl.textContent = 'Finalize failed';
+          }
+        }
+
+        // store vid id on form for metadata saves
+        document.getElementById('upload-form').dataset.videoId = VID;
+      } catch(e) {
+        console.error(e);
+      }
+    })();
+
+    function formatBytes(n) {
+      if (n >= 1073741824) return (n/1073741824).toFixed(2) + ' GB';
+      if (n >= 1048576) return (n/1048576).toFixed(2) + ' MB';
+      if (n >= 1024) return (n/1024).toFixed(2) + ' KB';
+      return n + ' B';
+    }
+
+    function formatETA(s) {
+      if (s < 60) return s + 's';
+      const m = Math.floor(s/60); const sec = s%60;
+      return m + 'm ' + sec + 's';
+    }
   }
 
   function getYoutubeId(url) {
@@ -1155,6 +1304,42 @@ require_once __DIR__ . '/../includes/header.php';
     }
   };
 })();
+</script>
+<?php endif; ?>
+
+<?php if (!$success): ?>
+<script data-page-script="true">
+document.getElementById('upload-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const form = e.target;
+  const vid = form.dataset.videoId ? parseInt(form.dataset.videoId) : 0;
+  const meta = {
+    video_id: vid,
+    title: document.getElementById('title-field')?.value || '',
+    description: document.getElementById('desc-field')?.value || '',
+    tags: document.getElementById('tags-field')?.value || '',
+    visibility: document.querySelector('select[name="visibility"]')?.value || 'public',
+    category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value)
+  };
+
+  try {
+    const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({meta})
+    });
+    const j = await res.json();
+    if (j.success) {
+      // Redirect to thumbnail step which will render via GET param
+      const targetId = vid || j.data.video_id || 0;
+      if (targetId) {
+        window.location.href = '<?= BASE_URL ?>/creator/upload.php?thumb_for=' + targetId;
+      } else {
+        alert('Saved');
+      }
+    } else {
+      alert('Could not save metadata');
+    }
+  } catch(e) { console.error(e); alert('Error saving'); }
+});
 </script>
 <?php endif; ?>
 
