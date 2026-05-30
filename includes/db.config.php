@@ -1,9 +1,10 @@
 
 
+
 <?php
 /**
  * Hostinger database credentials (this file stays on the server only).
- * Do not commit real passwords to public git repos. ok
+ * Do not commit real passwords to public git repos. 
  */
 return [
     'host'    => 'localhost',
@@ -13,3 +14,10 @@ return [
     'name'    => 'u434697879_yt',
     'charset' => 'utf8mb4',
 ];
+
+
+
+
+
+
+
