@@ -257,16 +257,18 @@ input,select,textarea{font-family:inherit;outline:none}
 .video-card-channel-link {
   font-weight: 600;
   font-size: 0.74rem;
-  background: linear-gradient(135deg, var(--accent), #ff007f, #7000ff);
+  color: var(--accent); /* Fallback for browsers that do not support text-gradient */
+  background: linear-gradient(90deg, var(--accent), #ff007f, #7000ff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   text-decoration: none;
   display: inline-block;
-  transition: filter var(--trans);
+  transition: opacity var(--trans), filter var(--trans);
 }
 .video-card-channel-link:hover {
   filter: brightness(1.2);
+  opacity: 0.9;
 }
 @media (max-width: 768px) {
   .video-card-channel-link {
