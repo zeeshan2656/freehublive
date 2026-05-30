@@ -91,7 +91,7 @@ require_once __DIR__ . '/../includes/header.php';
             <form method="POST" class="flex gap-1">
               <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
               <input type="hidden" name="video_id" value="<?= $v['id'] ?>">
-              <a href="<?= BASE_URL ?>/creator/edit.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline">&#9998; Edit</a>
+              <a href="<?= BASE_URL ?>/creator/<?= $v['is_reel'] ? 'edit_reel.php' : 'edit.php' ?>?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline">&#9998; Edit</a>
               <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" class="btn btn-sm btn-outline" target="_blank">&#128065;</a>
               <button name="action" value="delete" class="btn btn-sm btn-outline" style="color:var(--red)" onclick="return confirm('Delete this video?')">&#128465;</button>
             </form>

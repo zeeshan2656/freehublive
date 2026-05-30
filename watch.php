@@ -271,8 +271,8 @@ require_once __DIR__ . '/includes/header.php';
               <span><?= $is_saved ? 'Saved ✓' : 'Save' ?></span>
             </button>
             <?php if (is_logged_in() && (auth_user()['id'] == $video['user_id'] || auth_user()['role'] === 'admin')): ?>
-            <a href="<?= BASE_URL ?>/creator/edit.php?id=<?= $vid ?>" class="btn btn-outline btn-sm" style="color:var(--accent);border-color:var(--accent)">
-              &#9998; Edit Video
+            <a href="<?= BASE_URL ?>/creator/<?= $video['is_reel'] ? 'edit_reel.php' : 'edit.php' ?>?id=<?= $vid ?>" class="btn btn-outline btn-sm" style="color:var(--accent);border-color:var(--accent)">
+              &#9998; <?= $video['is_reel'] ? 'Edit Reel' : 'Edit Video' ?>
             </a>
             <?php endif; ?>
           </div>

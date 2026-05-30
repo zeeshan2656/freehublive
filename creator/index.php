@@ -117,7 +117,7 @@ require_once __DIR__ . '/../includes/header.php';
               </td>
               <td style="padding: 10px 8px; text-align: right; vertical-align: middle;">
                 <div class="flex gap-1" style="justify-content: flex-end; align-items: center;">
-                  <a href="<?= BASE_URL ?>/creator/edit.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline" style="padding: 3px 6px; font-size: 0.72rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px;" title="Edit Video">
+                  <a href="<?= BASE_URL ?>/creator/<?= $v['is_reel'] ? 'edit_reel.php' : 'edit.php' ?>?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline" style="padding: 3px 6px; font-size: 0.72rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px;" title="Edit Video">
                     <span>&#9998;</span> Edit
                   </a>
                   <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" class="btn btn-sm btn-outline" style="padding: 3px 5px; font-size: 0.72rem; border-radius: 4px; display: inline-flex; align-items: center;" target="_blank" title="View Video">

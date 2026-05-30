@@ -24,6 +24,7 @@ $channel = db_fetch("SELECT * FROM users WHERE id=? AND status='active'", [$chan
 $is_self = is_logged_in() && auth_user()['id'] == $channel_id;
 
 $total_videos = db_count('videos', "user_id=? AND is_reel=0" . ($is_self ? "" : " AND status='published' AND visibility='public'"), [$channel_id]);
+$total_reels  = db_count('videos', "user_id=? AND is_reel=1" . ($is_self ? "" : " AND status='published' AND visibility='public'"), [$channel_id]);
 $has_videos = $total_videos > 0;
 
 if (!$channel || $channel['role'] === 'viewer' || (!$is_self && !$has_videos && !in_array($channel['role'],['creator','admin']))) {
@@ -124,11 +125,10 @@ require_once __DIR__ . '/includes/header.php';
     <div class="channel-header-info">
       <div class="channel-title-row">
         <h1 class="channel-name-title"><?= e($channel['channel_name'] ?: $channel['username']) ?></h1>
-        <div class="channel-meta-stats text-muted text-sm">
-          <span class="stat-subscribers"><?= format_number((int)$channel['subscribers']) ?> subscribers</span>
-          <span class="meta-separator">·</span>
-          <span class="stat-videos"><?= $total ?> videos</span>
-          <span class="meta-separator joined-sep">·</span>
+        <div class="channel-meta-stats text-muted text-sm" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <span class="stat-subscribers">Subscriber <?= format_number((int)$channel['subscribers']) ?>.</span>
+          <span class="stat-videos">Videos <?= $total_videos ?>.</span>
+          <span class="stat-reels">Reels <?= $total_reels ?>.</span>
           <span class="joined-date">Joined <?= date('M Y', strtotime($channel['created_at'])) ?></span>
         </div>
       </div>
@@ -210,6 +210,14 @@ require_once __DIR__ . '/includes/header.php';
 
   <!-- Reels tab -->
   <?php if ($tab==='reels'): ?>
+  <style>
+  @media (max-width: 768px) {
+    .grid-reels {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 10px !important;
+    }
+  }
+  </style>
   <?php if ($videos): ?>
   <div class="grid grid-reels" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:16px;">
     <?php foreach ($videos as $v):
@@ -231,7 +239,7 @@ require_once __DIR__ . '/includes/header.php';
         <div style="font-weight:700; font-size:0.9rem; line-height:1.2; text-shadow:0 1px 3px rgba(0,0,0,0.8); overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">
           <?= $title ?>
         </div>
-        <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; opacity:0.9; text-shadow:0 1px 2px rgba(0,0,0,0.8);">
+        <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; opacity:0.9; text-shadow:0 1px 2px rgba(0,0,0,0.8); flex-wrap:wrap;">
           <span style="display:inline-flex; align-items:center; gap:2px;">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             <?= $views ?>
@@ -240,13 +248,17 @@ require_once __DIR__ . '/includes/header.php';
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             <?= $likes ?>
           </span>
+          <span style="display:inline-flex; align-items:center; gap:2px;">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <?= format_number((int)($v['comments_count'] ?? 0)) ?>
+          </span>
         </div>
       </div>
 
       <!-- Owner Actions overlay -->
       <?php if ($is_reel_owner): ?>
       <div class="reel-owner-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:6px;" onclick="event.stopPropagation();">
-        <a href="<?= BASE_URL ?>/creator/edit.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.6); color:#fff; border:none; width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0;" title="Edit Reel">
+        <a href="<?= BASE_URL ?>/creator/edit_reel.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.6); color:#fff; border:none; width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0;" title="Edit Reel">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </a>
         <form method="POST" style="margin:0;" onsubmit="return confirm('Delete this Reel?');">
@@ -358,7 +370,9 @@ require_once __DIR__ . '/includes/header.php';
       <div class="flex gap-3 text-sm text-muted">
         <span>&#128337; Joined <?= date('F Y', strtotime($channel['created_at'])) ?></span>
         <span>·</span>
-        <span>&#128250; <?= $total ?> videos</span>
+        <span>&#128250; <?= $total_videos ?> videos</span>
+        <span>·</span>
+        <span>&#128249; <?= $total_reels ?> reels</span>
         <span>·</span>
         <span>&#128065; <?= format_number((int)$channel['total_views']) ?> total views</span>
       </div>
