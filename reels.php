@@ -891,6 +891,15 @@ body {
 
             <!-- Mobile actions overlay -->
             <div class="reel-mobile-actions">
+              <!-- Sound Toggle -->
+              <button class="action-btn sound-toggle-btn" onclick="event.stopPropagation();" title="Toggle sound">
+                <div class="icon-wrap">
+                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" class="sound-mute-icon" viewBox="0 0 24 24" style="display: block;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" class="sound-unmute-icon" viewBox="0 0 24 24" style="display: none;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                </div>
+                <span class="count-label sound-label">Muted</span>
+              </button>
+
               <!-- Like -->
               <button class="action-btn like-btn <?= $is_liked ? 'liked' : '' ?>" data-id="<?= $r['id'] ?>">
                 <div class="icon-wrap">
@@ -1213,6 +1222,7 @@ document.addEventListener('DOMContentLoaded', function() {
           const v = s.querySelector('.reel-video');
           if (v) v.muted = false;
         });
+        syncSoundButtonsState();
         
         // Show volume feedback icon
         const volBtn = slide.querySelector('.video-overlay-volume-btn');
@@ -1225,6 +1235,46 @@ document.addEventListener('DOMContentLoaded', function() {
         // Subsequent click toggles play/pause
         togglePlayPause(video);
       }
+    });
+  });
+
+  // Sound Buttons Sync function
+  function syncSoundButtonsState() {
+    slides.forEach(slide => {
+      const sBtn = slide.querySelector('.sound-toggle-btn');
+      if (sBtn) {
+        const muteIcon = sBtn.querySelector('.sound-mute-icon');
+        const unmuteIcon = sBtn.querySelector('.sound-unmute-icon');
+        const label = sBtn.querySelector('.sound-label');
+        
+        if (mutedGlobal) {
+          if (muteIcon) muteIcon.style.display = 'block';
+          if (unmuteIcon) unmuteIcon.style.display = 'none';
+          if (label) label.textContent = 'Muted';
+        } else {
+          if (muteIcon) muteIcon.style.display = 'none';
+          if (unmuteIcon) unmuteIcon.style.display = 'block';
+          if (label) label.textContent = 'Sound';
+        }
+      }
+    });
+  }
+
+  // Sound Toggle Click Handler
+  document.querySelectorAll('.sound-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      mutedGlobal = !mutedGlobal;
+      
+      // Update all video mute states
+      slides.forEach(slide => {
+        const video = slide.querySelector('.reel-video');
+        if (video) video.muted = mutedGlobal;
+      });
+      
+      syncSoundButtonsState();
     });
   });
 
@@ -1476,6 +1526,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initialize first video play
   updateNavArrows();
+  syncSoundButtonsState();
   setTimeout(() => {
     playVideo(activeIndex);
   }, 100);
