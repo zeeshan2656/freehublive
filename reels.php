@@ -90,7 +90,7 @@ body {
 /* Mobile overlay header - Removed home/reel buttons and replaced with ad and marquee title */
 .reel-mobile-top-overlay {
   position: absolute;
-  top: 16px;
+  top: 8px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 95;
@@ -98,7 +98,7 @@ body {
   max-width: <?= $mobile_top_w ?>px;
   display: none;
   flex-direction: column;
-  gap: 8px;
+  gap: 0px;
   pointer-events: none;
 }
 
@@ -110,13 +110,12 @@ body {
 
 .reel-mobile-top-title-wrapper {
   width: 100%;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-  border-radius: 20px;
-  padding: 8px 16px;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  padding: 4px 0;
   overflow: hidden;
   pointer-events: auto;
   box-sizing: border-box;
@@ -242,6 +241,7 @@ body {
 
 .reel-mobile-top-overlay .ad-sponsored-container {
   margin: 0 !important;
+  padding: 0.3rem !important;
   width: 100% !important;
   max-width: 100% !important;
   background: rgba(0, 0, 0, 0.45) !important;
@@ -914,6 +914,14 @@ body {
                 </div>
                 <span class="count-label">Share</span>
               </button>
+
+              <!-- Views -->
+              <div class="action-btn" style="cursor: default;">
+                <div class="icon-wrap">
+                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </div>
+                <span class="count-label"><?= format_number($views) ?></span>
+              </div>
             </div>
           </div>
           
