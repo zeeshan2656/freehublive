@@ -14,7 +14,7 @@ require_once __DIR__ . '/includes/functions.php';
 $meta_title = ($q ? '"' . $q . '" — Search' : 'Search') . ' — ' . setting('site_name','FreeHub');
 $meta_desc  = $q ? "Search results for \"$q\" on " . setting('site_name','FreeHub') : 'Search videos';
 
-$where  = "v.status='published' AND v.visibility='public'";
+$where  = "v.status='published' AND v.visibility='public' AND v.is_reel=0";
 $where_params = [];
 if ($q) {
     $where .= " AND MATCH(v.title,v.description,v.tags) AGAINST(? IN BOOLEAN MODE)";

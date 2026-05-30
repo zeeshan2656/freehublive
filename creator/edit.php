@@ -32,6 +32,13 @@ if (empty($selected_categories) && $video['category_id']) {
     $selected_categories = [(int)$video['category_id']];
 }
 
+$video_owner_id = (int)$video['user_id'];
+$user_playlists = db_fetchAll("SELECT id, title FROM playlists WHERE user_id = ? ORDER BY title ASC", [$video_owner_id]);
+$selected_playlists = array_column(
+    db_fetchAll("SELECT playlist_id FROM playlist_videos WHERE video_id = ?", [$vid]),
+    'playlist_id'
+);
+
 $error   = '';
 $success = '';
 
@@ -45,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $category_id  = !empty($category_ids) ? $category_ids[0] : 0;
         $visibility  = in_array($_POST['visibility'] ?? '', ['public','unlisted','private']) ? $_POST['visibility'] : 'public';
         $allow_comments = isset($_POST['allow_comments']) ? 1 : 0;
+        $playlist_ids = array_map('intval', $_POST['playlist_ids'] ?? []);
 
         if (strlen($title) < 3) {
             $error = 'Title must be at least 3 characters.';
@@ -91,8 +99,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ]);
                     }
                 }
+
+                // Sync playlists
+                $current_pids = array_column(
+                    db_fetchAll("SELECT playlist_id FROM playlist_videos WHERE video_id = ?", [$vid]),
+                    'playlist_id'
+                );
+
+                $to_remove = array_diff($current_pids, $playlist_ids);
+                foreach ($to_remove as $pid) {
+                    db_query("DELETE FROM playlist_videos WHERE playlist_id = ? AND video_id = ?", [$pid, $vid]);
+                    db_query("DELETE FROM playlist_items WHERE playlist_id = ? AND video_id = ?", [$pid, $vid]);
+                    db_query("UPDATE playlists SET video_count = GREATEST(0, CAST(video_count AS SIGNED) - 1) WHERE id = ?", [$pid]);
+                }
+
+                $to_add = array_diff($playlist_ids, $current_pids);
+                foreach ($to_add as $pid) {
+                    $playlist = db_fetch("SELECT id FROM playlists WHERE id = ? AND (user_id = ? OR ? IN (SELECT id FROM users WHERE role='admin' AND id=?))", [$pid, $video_owner_id, $uid, $uid]);
+                    if ($playlist) {
+                        $max_sort = (int)db_fetch("SELECT MAX(sort_order) as m FROM playlist_videos WHERE playlist_id = ?", [$pid])['m'];
+                        db_insert('playlist_videos', [
+                            'playlist_id' => $pid,
+                            'video_id'    => $vid,
+                            'sort_order'  => $max_sort + 1
+                        ]);
+                        $max_pos = (int)db_fetch("SELECT MAX(position) as m FROM playlist_items WHERE playlist_id = ?", [$pid])['m'];
+                        db_insert('playlist_items', [
+                            'playlist_id' => $pid,
+                            'video_id'    => $vid,
+                            'position'    => $max_pos + 1
+                        ]);
+                        db_query("UPDATE playlists SET video_count = video_count + 1 WHERE id = ?", [$pid]);
+                    }
+                }
                 
-                // Refresh video data and selected categories
+                // Refresh video data and selected categories/playlists
                 $video = db_fetch("SELECT * FROM videos WHERE id=?", [$vid]);
                 $selected_categories = array_column(
                     db_fetchAll("SELECT category_id FROM video_categories WHERE video_id=?", [$vid]),
@@ -101,6 +142,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (empty($selected_categories) && $video['category_id']) {
                     $selected_categories = [(int)$video['category_id']];
                 }
+
+                $selected_playlists = array_column(
+                    db_fetchAll("SELECT playlist_id FROM playlist_videos WHERE video_id = ?", [$vid]),
+                    'playlist_id'
+                );
                 
                 $success = 'Video updated successfully!';
             }
@@ -156,8 +202,8 @@ require_once __DIR__ . '/../includes/header.php';
               <input class="form-input" type="text" name="tags" maxlength="500"
                      value="<?= e($video['tags'] ?? '') ?>" placeholder="gaming, tutorial, funny">
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
-              <div class="form-group" style="grid-column: span 2">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin-top:12px">
+              <div class="form-group">
                 <label class="form-label">Categories (Select one or more)</label>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));gap:10px;background:var(--bg3);padding:12px;border-radius:var(--radius);border:1px solid var(--border);max-height:150px;overflow-y:auto">
                   <?php foreach ($categories as $c): ?>
@@ -168,7 +214,24 @@ require_once __DIR__ . '/../includes/header.php';
                   <?php endforeach; ?>
                 </div>
               </div>
-              <div class="form-group" style="grid-column: span 2">
+
+              <div class="form-group">
+                <label class="form-label">Playlists (Assign to one or more)</label>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));gap:10px;background:var(--bg3);padding:12px;border-radius:var(--radius);border:1px solid var(--border);max-height:150px;overflow-y:auto">
+                  <?php if (!empty($user_playlists)): ?>
+                    <?php foreach ($user_playlists as $pl): ?>
+                    <label class="flex gap-2" style="font-size:.85rem;cursor:pointer;user-select:none;align-items:center">
+                      <input type="checkbox" name="playlist_ids[]" value="<?= $pl['id'] ?>" <?= in_array($pl['id'], $selected_playlists) ? 'checked' : '' ?>>
+                      <span><?= e($pl['title']) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                  <?php else: ?>
+                    <span class="text-muted text-xs" style="padding:4px">No playlists created yet.</span>
+                  <?php endif; ?>
+                </div>
+              </div>
+              
+              <div class="form-group" style="grid-column: 1 / -1">
                 <label class="form-label">Visibility</label>
                 <select class="form-input form-select" name="visibility">
                   <?php foreach (['public','unlisted','private'] as $vis): ?>

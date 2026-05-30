@@ -37,6 +37,7 @@ $header_actions = '
   .header-upload-btn { padding: 8px !important; width: 34px; height: 34px; justify-content: center; border-radius: 50% !important; }
 }
 </style>
+<div class="flex gap-2">
 <a href="' . BASE_URL . '/creator/upload.php" class="btn btn-primary btn-sm flex gap-1 header-upload-btn" style="border-radius: 18px; padding: 6px 12px;" title="Upload Video">
   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="flex-shrink:0;">
     <polyline points="17 8 12 3 7 8"></polyline>
@@ -45,6 +46,18 @@ $header_actions = '
   </svg>
   <span>Upload Video</span>
 </a>';
+
+if (setting('reels_enabled', '1') === '1') {
+    $header_actions .= '
+<a href="' . BASE_URL . '/creator/upload_reel.php" class="btn btn-outline btn-sm flex gap-1 header-upload-btn" style="border-radius: 18px; padding: 6px 12px;" title="Upload Reel">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="flex-shrink:0;">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/>
+  </svg>
+  <span>Upload Reel</span>
+</a>';
+}
+
+$header_actions .= '</div>';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
@@ -69,7 +82,7 @@ require_once __DIR__ . '/../includes/header.php';
               <div class="text-xs text-muted" style="margin-top:3px"><?= e($v['visibility']) ?></div></div>
             </div>
           </td>
-          <td><span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>"><?= $v['status'] ?></span></td>
+          <td><span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>"><?= $v['status']==='processing'?'Pending':ucfirst($v['status']) ?></span></td>
           <td class="text-sm"><?= format_number((int)$v['views']) ?></td>
           <td class="text-sm"><?= format_number((int)$v['likes']) ?></td>
           <td class="text-sm"><?= format_duration((int)$v['duration']) ?></td>

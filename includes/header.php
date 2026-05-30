@@ -23,6 +23,7 @@ $is_home = ($current_page === 'index.php' && !isset($_GET['cat']));
 $is_trending = ($current_page === 'search.php' && ($current_q === 'trending' || $current_sort === 'views')) || ($current_page === 'index.php' && isset($_GET['sort']) && $_GET['sort'] === 'views');
 $is_latest = ($current_page === 'search.php' && $current_sort === 'latest') || ($current_page === 'index.php' && isset($_GET['sort']) && $_GET['sort'] === 'latest');
 $is_categories = ($current_page === 'categories.php');
+$is_reels = ($current_page === 'reels.php');
 $nav_cats = db_fetchAll(
     "SELECT id, name, slug, image, color FROM categories WHERE is_active=1 ORDER BY sort_order LIMIT ?",
     [$nav_cat_limit]
@@ -52,6 +53,27 @@ function get_sidebar_path(): string {
 $meta_title  = $meta_title  ?? $site_name;
 $meta_desc   = $meta_desc   ?? 'Watch, share and earn — ' . $site_name;
 $meta_image  = $meta_image  ?? BASE_URL . '/assets/img/og-default.jpg';
+
+$is_dashboard_page = (
+    str_contains($_SERVER['PHP_SELF'], '/admin/') ||
+    str_contains($_SERVER['PHP_SELF'], '/creator/') ||
+    basename($_SERVER['PHP_SELF']) === 'dashboard.php' ||
+    basename($_SERVER['PHP_SELF']) === 'withdrawal.php' ||
+    basename($_SERVER['PHP_SELF']) === 'settings.php' ||
+    basename($_SERVER['PHP_SELF']) === 'profile.php'
+);
+
+// Global Access Guard for Dashboard Pages
+if ($is_dashboard_page && is_logged_in() && !is_admin()) {
+    $status = auth_user()['status'] ?? 'pending';
+    if ($status !== 'active') {
+        $currPage = basename($_SERVER['PHP_SELF']);
+        if ($currPage !== 'status.php' && $currPage !== 'logout.php') {
+            header('Location: ' . BASE_URL . '/auth/status.php');
+            exit;
+        }
+    }
+}
 ?>
 
 <?php /* Note: currency vars kept for earnings display but dropdown removed */ ?>
@@ -91,6 +113,9 @@ $currency_symbol  = $currencies_list[$active_currency]['symbol'] ?? $active_curr
 
 <!-- ── Critical CSS (inline for instant first paint) ── -->
 <style>
+@media (min-width: 769px) {
+  .reels-mobile-btn { display: none !important; }
+}
 /* Reset + Variables — inlined to eliminate render-blocking CSS */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
@@ -478,29 +503,15 @@ body.age-unverified { overflow: hidden; }
 }
 </style>
 <?php endif; ?>
+<?php
+$is_admin_page = str_contains($_SERVER['PHP_SELF'] ?? '', '/admin/');
+if (!$is_admin_page && setting('ad_code_header_enabled', '0') === '1' && !empty($ad_code_h = setting('ad_code_header'))):
+    echo $ad_code_h . "\n";
+endif;
+?>
 </head>
 
 <?php
-$is_dashboard_page = (
-    str_contains($_SERVER['PHP_SELF'], '/admin/') ||
-    str_contains($_SERVER['PHP_SELF'], '/creator/') ||
-    basename($_SERVER['PHP_SELF']) === 'dashboard.php' ||
-    basename($_SERVER['PHP_SELF']) === 'withdrawal.php' ||
-    basename($_SERVER['PHP_SELF']) === 'settings.php' ||
-    basename($_SERVER['PHP_SELF']) === 'profile.php'
-);
-
-// Global Access Guard for Dashboard Pages
-if ($is_dashboard_page && is_logged_in() && !is_admin()) {
-    $status = auth_user()['status'] ?? 'pending';
-    if ($status !== 'active') {
-        $currPage = basename($_SERVER['PHP_SELF']);
-        if ($currPage !== 'status.php' && $currPage !== 'logout.php') {
-            header('Location: ' . BASE_URL . '/auth/status.php');
-            exit;
-        }
-    }
-}
 
 $header_ad_html = '';
 $header_ad_height = 55; // Default fallback
@@ -509,7 +520,7 @@ $is_dashboard = str_contains($script_name, '/admin/') ||
                 str_contains($script_name, '/creator/') || 
                 str_contains($script_name, '/affiliate/');
 
-if (!$is_dashboard && function_exists('render_ad_placeholder')) {
+if (!$is_dashboard && !$is_reels && function_exists('render_ad_placeholder')) {
     $header_ad_html = render_ad_placeholder('home_mobile_top');
     if (!empty($header_ad_html)) {
         $now = date('Y-m-d');
@@ -533,6 +544,12 @@ $sidebar_path = get_sidebar_path();
 ?>
 
 <body class="<?= $is_dashboard_page ? 'dashboard-page' : 'public-page' ?><?= $_fh_show_age_gate ? ' age-unverified' : '' ?><?= isset($is_watch) && $is_watch ? ' watch-page' : '' ?><?= !empty($header_ad_html) ? ' has-header-ad' : '' ?>" style="--ad-h: <?= (int)$header_ad_height ?>px;">
+<?php
+if (!$is_admin_page && setting('ad_code_body_enabled', '0') === '1' && setting('ad_code_body_placement', 'bottom') === 'top' && !empty($ad_code_b = setting('ad_code_body'))):
+    echo $ad_code_b . "\n";
+endif;
+?>
+<div id="monetization-warning-banner" style="display:none; margin: 16px 20px 0; text-align: center; border-radius: 8px; font-weight: 600; z-index: 9999; position: relative; padding: 12px 24px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #fca5a5; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1); font-family: var(--font2, inherit); animation: fadeIn 0.3s ease;"></div>
 
 <?php if ($_fh_show_age_gate): ?>
 <!-- Age Verification Gate — renders BEFORE any site content -->
@@ -709,8 +726,11 @@ $sidebar_path = get_sidebar_path();
         <a href="<?= BASE_URL ?>/admin/seo.php" class="studio-nav-item <?= $current_page === 'seo.php' ? 'active' : '' ?>">
           <span>🔍 SEO</span>
         </a>
-        <a href="<?= BASE_URL ?>/admin/settings.php" class="studio-nav-item <?= $current_page === 'settings.php' && str_contains($_SERVER['PHP_SELF'], '/admin/') ? 'active' : '' ?>">
+        <a href="<?= BASE_URL ?>/admin/settings.php" class="studio-nav-item <?= $current_page === 'settings.php' && str_contains($_SERVER['PHP_SELF'], '/admin/') && ($_GET['tab'] ?? '') !== 'adcode' ? 'active' : '' ?>">
           <span>⚙️ Settings</span>
+        </a>
+        <a href="<?= BASE_URL ?>/admin/settings.php?tab=adcode" class="studio-nav-item <?= $current_page === 'settings.php' && ($_GET['tab'] ?? '') === 'adcode' ? 'active' : '' ?>">
+          <span>📢 Ad Code</span>
         </a>
         <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
           <span>📥 Saved Videos</span>
@@ -924,14 +944,24 @@ $sidebar_path = get_sidebar_path();
     <!-- DESKTOP: Nav Links -->
     <div class="header-nav-links desktop-only" style="display:flex; align-items:center; gap:8px; margin-left:16px">
       <a href="<?= BASE_URL ?>/" class="btn <?= $is_home ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Home</a>
-      <a href="<?= BASE_URL ?>/search.php?q=trending" class="btn <?= $is_trending ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Trending</a>
-      <a href="<?= BASE_URL ?>/search.php?sort=latest" class="btn <?= $is_latest ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Latest</a>
-      <a href="<?= BASE_URL ?>/categories.php" class="btn <?= $is_categories ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Categories</a>
+      <?php if (setting('reels_enabled', '1') === '1'): ?>
+      <a href="<?= BASE_URL ?>/reels.php" class="btn <?= $is_reels ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Reels</a>
+      <?php endif; ?>
     </div>
 
     <!-- RIGHT: mobile user/login icon -->
     <!-- RIGHT: mobile user/login icon and dropdown (like desktop mode) -->
     <div class="navbar-end">
+      <!-- Mobile Reels Shortcut -->
+      <?php if (setting('reels_enabled', '1') === '1'): ?>
+      <a href="<?= BASE_URL ?>/reels.php" class="btn btn-outline btn-sm btn-icon reels-mobile-btn" aria-label="Watch Reels" title="Watch Reels" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3);text-decoration:none;margin-right:8px">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <rect x="5" y="2" width="14" height="20" rx="3" />
+          <polygon points="10 9 15 12 10 15 10 9" fill="currentColor"/>
+        </svg>
+      </a>
+      <?php endif; ?>
+
       <!-- Mobile search toggle -->
       <button class="btn btn-outline btn-sm btn-icon" id="search-toggle-mobile" aria-label="Toggle Search" title="Toggle Search" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3)">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>

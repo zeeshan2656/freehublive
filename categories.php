@@ -8,7 +8,7 @@ $meta_desc  = 'Browse videos by category';
 require_once __DIR__ . '/includes/header.php';
 
 $categories = db_fetchAll(
-    "SELECT c.*, (SELECT COUNT(*) FROM videos v WHERE (v.category_id=c.id OR EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = c.id)) AND v.status='published') as video_count
+    "SELECT c.*, (SELECT COUNT(*) FROM videos v WHERE (v.category_id=c.id OR EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = c.id)) AND v.status='published' AND v.is_reel=0) as video_count
      FROM categories c WHERE c.is_active=1 ORDER BY c.sort_order"
 );
 ?>

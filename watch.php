@@ -12,6 +12,55 @@ $video = db_fetch(
      WHERE v.id=? AND v.status='published' AND v.visibility='public'", [$vid]
 );
 if (!$video) { http_response_code(404); die('Video not found'); }
+if ((int)($video['is_reel'] ?? 0) === 1) {
+    redirect(BASE_URL . '/reels.php?v=' . $video['id']);
+}
+
+$playlist_id = (int)($_GET['list'] ?? 0);
+$playlist = null;
+$playlist_videos = [];
+$next_video_id = null;
+$prev_video_id = null;
+$current_video_index = -1;
+
+if ($playlist_id > 0) {
+    $playlist = db_fetch("SELECT p.*, u.username, u.channel_name FROM playlists p JOIN users u ON u.id = p.user_id WHERE p.id = ?", [$playlist_id]);
+    if ($playlist) {
+        $is_playlist_owner = is_logged_in() && (auth_user()['id'] == $playlist['user_id'] || auth_user()['role'] === 'admin');
+        $uid = is_logged_in() ? auth_user()['id'] : 0;
+        
+        if ($playlist['visibility'] !== 'private' || $is_playlist_owner) {
+            $playlist_videos = db_fetchAll(
+                "SELECT pv.video_id, v.title, v.thumbnail, v.duration, u.username, u.channel_name
+                 FROM playlist_videos pv
+                 JOIN videos v ON v.id = pv.video_id
+                 JOIN users u ON u.id = v.user_id
+                 WHERE pv.playlist_id = ? AND (v.visibility = 'public' OR v.user_id = ? OR ? = 1)
+                 ORDER BY pv.sort_order ASC",
+                [$playlist_id, $uid, is_logged_in() && auth_user()['role'] === 'admin' ? 1 : 0]
+            );
+            
+            foreach ($playlist_videos as $idx => $pv) {
+                if ((int)$pv['video_id'] === $vid) {
+                    $current_video_index = $idx;
+                    break;
+                }
+            }
+            
+            if ($current_video_index !== -1) {
+                if (isset($playlist_videos[$current_video_index + 1])) {
+                    $next_video_id = (int)$playlist_videos[$current_video_index + 1]['video_id'];
+                }
+                if (isset($playlist_videos[$current_video_index - 1])) {
+                    $prev_video_id = (int)$playlist_videos[$current_video_index - 1]['video_id'];
+                }
+            }
+        } else {
+            $playlist = null;
+        }
+    }
+}
+
 
 // Track view
 $ip   = hash_ip(get_ip());
@@ -44,18 +93,18 @@ if (!$viewRow) {
 $related = db_fetchAll(
     "(SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
       JOIN users u ON u.id=v.user_id
-      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.category_id=?
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0 AND v.category_id=?
       ORDER BY v.views DESC LIMIT 12)
      UNION
      (SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
       JOIN users u ON u.id=v.user_id
-      WHERE v.id!=? AND v.status='published' AND v.visibility='public'
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0
       AND EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = ?)
       ORDER BY v.views DESC LIMIT 12)
      UNION
      (SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
       JOIN users u ON u.id=v.user_id
-      WHERE v.id!=? AND v.status='published' AND v.visibility='public'
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0
       ORDER BY v.views DESC LIMIT 12)
      LIMIT 12",
     [$vid, $video['category_id'], $vid, $video['category_id'], $vid]
@@ -283,6 +332,61 @@ require_once __DIR__ . '/includes/header.php';
       <div style="margin-bottom: 20px; padding: 0 16px;">
         <?= render_ad_placeholder('watch_sidebar') ?>
       </div>
+      <?php if ($playlist): ?>
+      <div class="playlist-watch-panel" style="margin: 0 16px 20px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg2); box-shadow: 0 4px 15px rgba(0,0,0,0.15)">
+        <div style="padding: 16px; background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.06)); border-bottom: 1px solid var(--border)">
+          <div style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em; margin-bottom: 4px">Playing from Playlist</div>
+          <a href="<?= BASE_URL ?>/playlists.php?id=<?= $playlist['id'] ?>" style="display: block; font-weight: 700; font-size: 0.95rem; color: var(--text); line-height: 1.3; margin-bottom: 6px; transition: color 0.2s">
+            <?= e($playlist['title']) ?>
+          </a>
+          <div style="font-size: 0.8rem; color: var(--text2)">
+            <span><?= e($playlist['channel_name'] ?? $playlist['username'] ?? 'Creator') ?> · <?= ($current_video_index + 1) ?> / <?= count($playlist_videos) ?></span>
+          </div>
+        </div>
+        <div class="playlist-watch-items" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column">
+          <?php foreach ($playlist_videos as $idx => $pv):
+            $is_current = ((int)$pv['video_id'] === $vid);
+            $pv_thumb = thumb_url($pv['thumbnail']);
+          ?>
+            <a href="<?= BASE_URL ?>/watch.php?v=<?= $pv['video_id'] ?>&list=<?= $playlist['id'] ?>" 
+               class="playlist-watch-item"
+               style="display: flex; gap: 10px; padding: 10px 16px; align-items: center; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.15s; background: <?= $is_current ? 'rgba(99,102,241,0.1)' : 'transparent' ?>">
+              
+              <div style="font-size: 0.75rem; font-weight: 700; color: <?= $is_current ? 'var(--accent)' : 'var(--text3)' ?>; width: 18px; text-align: center; flex-shrink: 0">
+                <?php if ($is_current): ?>
+                  ▶
+                <?php else: ?>
+                  <?= $idx + 1 ?>
+                <?php endif; ?>
+              </div>
+
+              <div style="width: 80px; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden; position: relative; flex-shrink: 0; background: var(--bg3)">
+                <img src="<?= $pv_thumb ?>" alt="<?= e($pv['title']) ?>" style="width:100%; height:100%; object-fit: cover">
+                <span style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.8); color: #fff; font-size: 0.6rem; font-weight: 600; padding: 0.5px 3px; border-radius: 2px">
+                  <?= format_duration((int)$pv['duration']) ?>
+                </span>
+              </div>
+
+              <div style="min-width: 0; flex: 1">
+                <div style="font-size: 0.8rem; font-weight: 600; color: <?= $is_current ? 'var(--accent)' : 'var(--text)' ?>; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 2px">
+                  <?= e($pv['title']) ?>
+                </div>
+                <div style="font-size: 0.72rem; color: var(--text2)">
+                  <?= e($pv['channel_name'] ?? $pv['username']) ?>
+                </div>
+              </div>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <style>
+        .playlist-watch-items::-webkit-scrollbar { width: 4px; }
+        .playlist-watch-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .playlist-watch-item:hover { background: rgba(255, 255, 255, 0.03) !important; }
+        .playlist-watch-item.active:hover { background: rgba(99, 102, 241, 0.12) !important; }
+      </style>
+      <?php endif; ?>
+
       <h2 style="font-size:.95rem;font-weight:700;margin-bottom:12px;padding:0 16px">Up Next</h2>
       <!-- Ad Placeholder: Watch Page Up Next -->
       <div style="margin-bottom: 20px; padding: 0 16px;">
@@ -777,7 +881,7 @@ window.FH_VIDEO_DURATION = <?= (int)$video['duration'] ?>;
 window.addEventListener('load', () => {
   if (document.getElementById('player-wrapper')) {
     setTimeout(() => {
-      new FHVideoAdManager({
+      window.fhAdManager = new FHVideoAdManager({
         playerId: 'fh-player',
         ytPlayerId: 'fh-youtube-player',
         videoId: <?= (int)$vid ?>,
@@ -787,6 +891,38 @@ window.addEventListener('load', () => {
     }, 50);
   }
 });
+
+// Playlist Autoplay Support
+<?php if ($playlist && $next_video_id): ?>
+window.addEventListener('DOMContentLoaded', () => {
+  const player = document.getElementById('fh-player');
+  const nextVideoUrl = '<?= BASE_URL ?>/watch.php?v=<?= $next_video_id ?>&list=<?= $playlist['id'] ?>';
+  
+  // HTML5 Video ended event
+  if (player) {
+    player.addEventListener('ended', () => {
+      window.location.href = nextVideoUrl;
+    });
+  }
+  
+  // YouTube API ended polling
+  let ytEndedTriggered = false;
+  let checkYTEnd = setInterval(() => {
+    if (window.fhAdManager && window.fhAdManager.ytPlayerObj && typeof window.fhAdManager.ytPlayerObj.getPlayerState === 'function') {
+      try {
+        const state = window.fhAdManager.ytPlayerObj.getPlayerState();
+        if (state === 0 && !ytEndedTriggered) { // 0 is YT.PlayerState.ENDED
+          ytEndedTriggered = true;
+          clearInterval(checkYTEnd);
+          window.location.href = nextVideoUrl;
+        }
+      } catch (e) {
+        // Ignore iframe api errors
+      }
+    }
+  }, 500);
+});
+<?php endif; ?>
 </script>
 <script src="<?= fh_asset_url('assets/js/watchtime.js') ?>" defer></script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

@@ -5,6 +5,19 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_role('admin');
 
+$status_labels = [
+    'active'    => 'Approved',
+    'pending'   => 'Pending',
+    'rejected'  => 'Rejected',
+    'suspended' => 'Disabled'
+];
+$status_badges = [
+    'active'    => 'green',
+    'pending'   => 'yellow',
+    'rejected'  => 'red',
+    'suspended' => 'red'
+];
+
 // ── POST Actions ───────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) {
     $uid    = (int)($_POST['user_id'] ?? 0);
@@ -117,7 +130,7 @@ if ($view_uid) {
                 <div class="text-muted text-sm"><?= e($view_user['email']) ?></div>
                 <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
                   <span class="badge badge-<?= ['admin'=>'blue','creator'=>'green','viewer'=>'gray','affiliate'=>'yellow'][$view_user['role']]??'gray' ?>"><?= e($view_user['role'] === 'creator' ? 'Creator' : ($view_user['role'] === 'viewer' ? 'Watch & Earn' : ucfirst($view_user['role']))) ?></span>
-                  <span class="badge badge-<?= $view_user['status']==='active'?'green':($view_user['status']==='pending'?'yellow':'red') ?>"><?= e($view_user['status']) ?></span>
+                  <span class="badge badge-<?= $status_badges[$view_user['status']] ?? 'gray' ?>"><?= e($status_labels[$view_user['status']] ?? $view_user['status']) ?></span>
                 </div>
               </div>
             </div>
@@ -172,7 +185,7 @@ if ($view_uid) {
                 <?php foreach ($user_videos as $v): ?>
                 <tr>
                   <td style="max-width:160px;font-size:.83rem;font-weight:500"><?= e(truncate($v['title'],40)) ?></td>
-                  <td><span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>"><?= e($v['status']) ?></span></td>
+                  <td><span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>"><?= e($v['status']==='processing'?'Pending':ucfirst($v['status'])) ?></span></td>
                   <td class="text-sm"><?= format_number((int)$v['views']) ?></td>
                   <td class="text-xs text-muted"><?= date('M j, Y', strtotime($v['created_at'])) ?></td>
                   <td>
@@ -351,7 +364,7 @@ require_once __DIR__ . '/partials/admin_head.php';
     <select name="status" class="form-input form-select" style="width:auto" onchange="this.form.submit()">
       <option value="all">All Status</option>
       <?php foreach (['active','suspended','pending','rejected'] as $s): ?>
-      <option value="<?= $s ?>" <?= $status===$s?'selected':'' ?>><?= ucfirst($s) ?></option>
+      <option value="<?= $s ?>" <?= $status===$s?'selected':'' ?>><?= e($status_labels[$s] ?? ucfirst($s)) ?></option>
       <?php endforeach; ?>
     </select>
     <button type="submit" class="btn btn-primary btn-sm">Filter</button>
@@ -383,8 +396,8 @@ require_once __DIR__ . '/partials/admin_head.php';
           </span>
         </td>
         <td>
-          <span class="badge badge-<?= $u['status']==='active'?'green':($u['status']==='pending'?'yellow':'red') ?>">
-            <?= $u['status'] ?>
+          <span class="badge badge-<?= $status_badges[$u['status']] ?? 'gray' ?>">
+            <?= e($status_labels[$u['status']] ?? $u['status']) ?>
           </span>
         </td>
         <td class="text-sm" style="color:var(--green);font-weight:600">$<?= number_format((float)$u['balance'],2) ?></td>

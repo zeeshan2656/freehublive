@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $sort    = $_GET['sort'] ?? 'latest';
     $ref     = $_GET['ref'] ?? '';
 
-    $where = "v.status='published' AND v.visibility='public'";
+    $where = "v.status='published' AND v.visibility='public' AND v.is_reel=0";
     if ($cat) {
         $where .= " AND (v.category_id=$cat OR EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = $cat))";
     }
@@ -262,7 +262,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($name)) json_error('Playlist name required');
         db_insert('playlists', [
             'user_id' => $uid,
-            'name' => $name,
+            'title' => $name,
             'description' => $desc,
             'visibility' => 'private'
         ]);

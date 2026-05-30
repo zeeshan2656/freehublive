@@ -20,7 +20,7 @@ $hero = db_fetch(
     "SELECT v.*,u.username,u.channel_name,u.avatar
      FROM videos v
      JOIN users u ON u.id=v.user_id
-     WHERE v.status='published' AND v.featured=1 AND v.visibility='public' {$cat_filter}
+     WHERE v.status='published' AND v.featured=1 AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
      ORDER BY v.published_at DESC LIMIT 1",
     $params
 );
@@ -30,7 +30,7 @@ $trending = db_fetchAll(
     "SELECT v.*,u.username,u.channel_name,u.avatar
      FROM videos v
      JOIN users u ON u.id=v.user_id
-     WHERE v.status='published' AND v.visibility='public' {$cat_filter}
+     WHERE v.status='published' AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
      ORDER BY v.views DESC LIMIT 10",
     $params
 );
@@ -40,14 +40,14 @@ $latest = db_fetchAll(
     "SELECT v.*,u.username,u.channel_name,u.avatar
      FROM videos v
      JOIN users u ON u.id=v.user_id
-     WHERE v.status='published' AND v.visibility='public' {$cat_filter}
+     WHERE v.status='published' AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
      ORDER BY v.published_at DESC LIMIT 12",
     $params
 );
 
 // ── Categories ───────────────────────────────────────────────
 $categories = db_fetchAll(
-    "SELECT c.*,(SELECT COUNT(*) FROM videos WHERE category_id=c.id AND status='published') as video_count
+    "SELECT c.*,(SELECT COUNT(*) FROM videos WHERE category_id=c.id AND status='published' AND is_reel=0) as video_count
      FROM categories c WHERE c.is_active=1 ORDER BY c.sort_order LIMIT 10"
 );
 
@@ -57,7 +57,7 @@ if ($sel_cat) {
     $cat_videos = db_fetchAll(
         "SELECT v.*,u.username,u.channel_name,u.avatar
          FROM videos v JOIN users u ON u.id=v.user_id
-         WHERE v.status='published' AND v.visibility='public' {$cat_filter}
+         WHERE v.status='published' AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
          ORDER BY v.views DESC LIMIT 16",
         $params
     );

@@ -135,6 +135,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
+                $playlist_ids = array_map('intval', $_POST['playlist_ids'] ?? []);
+                if ($new_vid_id && !empty($playlist_ids)) {
+                    foreach ($playlist_ids as $pid) {
+                        $playlist = db_fetch("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [$pid, $uid]);
+                        if ($playlist) {
+                            $max_sort = (int)db_fetch("SELECT MAX(sort_order) as m FROM playlist_videos WHERE playlist_id = ?", [$pid])['m'];
+                            db_insert('playlist_videos', [
+                                'playlist_id' => $pid,
+                                'video_id'    => $new_vid_id,
+                                'sort_order'  => $max_sort + 1
+                            ]);
+                            $max_pos = (int)db_fetch("SELECT MAX(position) as m FROM playlist_items WHERE playlist_id = ?", [$pid])['m'];
+                            db_insert('playlist_items', [
+                                'playlist_id' => $pid,
+                                'video_id'    => $new_vid_id,
+                                'position'    => $max_pos + 1
+                            ]);
+                            db_query("UPDATE playlists SET video_count = video_count + 1 WHERE id = ?", [$pid]);
+                        }
+                    }
+                }
+
                 $success = $initialStatus === 'published'
                     ? 'Video saved and published! Now select a thumbnail below.'
                     : 'Video saved successfully! Now select a thumbnail below.';
@@ -143,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $categories = db_fetchAll("SELECT * FROM categories WHERE is_active=1 ORDER BY sort_order");
+$user_playlists = db_fetchAll("SELECT id, title FROM playlists WHERE user_id = ? ORDER BY title ASC", [$uid]);
 $meta_title = 'Upload Video';
 require_once __DIR__ . '/../includes/header.php';
 ?>
@@ -574,6 +597,12 @@ require_once __DIR__ . '/../includes/header.php';
             <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             Embed Link (YouTube / URL)
           </button>
+          <?php if (setting('reels_enabled', '1') === '1'): ?>
+          <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="upload-tab-btn" style="text-decoration:none">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            Upload Reel
+          </a>
+          <?php endif; ?>
         </div>
 
         <div class="wizard-main-scrollable">
@@ -617,7 +646,7 @@ require_once __DIR__ . '/../includes/header.php';
               <input class="form-input" type="text" name="tags" id="tags-field" maxlength="500" placeholder="gaming, music, vlog" value="<?= e($_POST['tags'] ?? '') ?>" style="border-radius: 8px">
             </div>
 
-            <div class="stat-grid-2" style="margin-top:20px">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-top:20px">
               <div class="form-group">
                 <label class="form-label">Categories (Select one or more)</label>
                 <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
@@ -627,6 +656,22 @@ require_once __DIR__ . '/../includes/header.php';
                     <span><?= e($c['name']) ?></span>
                   </label>
                   <?php endforeach; ?>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Playlists (Assign to one or more)</label>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
+                  <?php if (!empty($user_playlists)): ?>
+                    <?php foreach ($user_playlists as $pl): ?>
+                    <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
+                      <input type="checkbox" name="playlist_ids[]" value="<?= $pl['id'] ?>" <?= in_array($pl['id'], $_POST['playlist_ids'] ?? []) ? 'checked' : '' ?>>
+                      <span><?= e($pl['title']) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                  <?php else: ?>
+                    <span class="text-muted text-xs" style="padding:4px">No playlists created yet.</span>
+                  <?php endif; ?>
                 </div>
               </div>
               
@@ -697,7 +742,7 @@ require_once __DIR__ . '/../includes/header.php';
             <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green)"></span>
             Auto-Publish Enabled
           </div>
-          <p class="text-xs text-muted" style="line-height:1.45; margin:0">Your video will go live immediately and count towards your creator earnings stats once the upload processes successfully.</p>
+          <p class="text-xs text-muted" style="line-height:1.45; margin:0">Your video will go live immediately and count towards your creator earnings stats once the upload completes successfully.</p>
           <?php else: ?>
           <div style="font-size:0.85rem; font-weight:700; color:var(--yellow); margin-bottom:6px; display:flex; align-items:center; gap:8px">
             <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--yellow)"></span>
@@ -1250,7 +1295,7 @@ require_once __DIR__ . '/../includes/header.php';
           if (fj.success) {
             percentEl.textContent = '100%'; barEl.style.width='100%';
             statusEl.textContent = 'Complete';
-            mainStatusEl.textContent = '✅ Upload complete! Video processing started...';
+            mainStatusEl.textContent = '✅ Upload complete! Video submitted successfully...';
             // update local hidden duration if known
             const durInput = document.getElementById('duration-seconds');
             if (durInput && parseInt(durInput.value) > 0) {

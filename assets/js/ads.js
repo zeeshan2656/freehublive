@@ -90,12 +90,16 @@
         container.style.display = '';
 
         // Update device targeting classes dynamically
-        container.classList.remove('ad-mobile-only', 'ad-desktop-only');
+        container.classList.remove('ad-mobile-only', 'ad-desktop-only', 'ad-has-dimensions');
         const placementDevice = container.dataset.deviceTarget || 'all';
         if (ad.device_target === 'mobile' || placementDevice === 'mobile') {
           container.classList.add('ad-mobile-only');
         } else if (ad.device_target === 'desktop' || placementDevice === 'desktop') {
           container.classList.add('ad-desktop-only');
+        }
+
+        if (ad.ad_width || ad.ad_height) {
+          container.classList.add('ad-has-dimensions');
         }
         
         if (placement === 'home_mobile_top') {
@@ -116,7 +120,7 @@
           }
           if (ad.ad_height) {
             container.style.height = ad.ad_height + 'px';
-            container.style.padding = '0 16px';
+            container.style.padding = '0';
             container.style.display = 'flex';
             container.style.flexDirection = 'column';
             container.style.justifyContent = 'center';
@@ -185,7 +189,7 @@
           }
         }
         
-        trackImpression(ad.id, videoId);
+        trackImpression(ad.id, videoId, placement);
         setupAdReload(container, reloadSeconds);
       } else {
         container.style.display = 'none';
@@ -199,17 +203,105 @@
     }
   }
 
-  async function trackImpression(adId, videoId) {
-    const vid = videoId || '';
+  let adBlockDetected = false;
+  let vpnDetected = false;
+
+  function showMonetizationWarning(message) {
+    const banner = document.getElementById('monetization-warning-banner');
+    if (banner) {
+      banner.textContent = message;
+      banner.style.display = 'block';
+    }
+  }
+
+  async function checkAdBlock() {
+    return new Promise((resolve) => {
+      // 1. Create a dummy ad element
+      const testAd = document.createElement('div');
+      testAd.innerHTML = '&nbsp;';
+      testAd.className = 'adsbox adframe banner-ad doubleclick-ad';
+      testAd.style.cssText = 'position:absolute; top:-1000px; left:-1000px; width:1px; height:1px;';
+      document.body.appendChild(testAd);
+
+      window.setTimeout(async () => {
+        const isBlocked = (testAd.offsetHeight === 0 || testAd.style.display === 'none' || window.getComputedStyle(testAd).display === 'none');
+        testAd.remove();
+        
+        if (isBlocked) {
+          resolve(true);
+        } else {
+          // 2. Fetch test ad request
+          try {
+            await fetch(`${BASE_URL}/api/ads.php?action=get_ad&placement=test_ad_block`, { method: 'HEAD', cache: 'no-store' });
+            resolve(false);
+          } catch (e) {
+            resolve(true);
+          }
+        }
+      }, 100);
+    });
+  }
+
+  async function checkVpn() {
     try {
-      await fetch(`${BASE_URL}/api/ads.php?action=track_impression&id=${adId}&video_id=${vid}`, { method: 'POST' });
+      const res = await fetch('https://ipapi.co/json/');
+      const data = await res.json();
+      const org = (data.org || '').toLowerCase();
+      const asn = (data.asn || '').toLowerCase();
+      
+      const vpnKeywords = [
+        'vpn', 'proxy', 'hosting', 'server', 'cloud', 'digitalocean', 'linode', 'hetzner', 'ovh', 'amazon', 'google', 
+        'microsoft', 'mullvad', 'nord', 'expressvpn', 'tor', 'exit', 'datacenter', 'choopa', 'leaseweb', 'vultr', 'm247'
+      ];
+      
+      for (let keyword of vpnKeywords) {
+        if (org.includes(keyword) || asn.includes(keyword)) {
+          return true;
+        }
+      }
+    } catch (e) {
+      // Catch fetch failure or block
+    }
+    return false;
+  }
+
+  async function runDetections() {
+    adBlockDetected = await checkAdBlock();
+    if (adBlockDetected) {
+      showMonetizationWarning("Ad Blocker detected. Earnings are disabled while Ad Blocker is active. Please disable it to continue earning.");
+      return;
+    }
+
+    vpnDetected = await checkVpn();
+    if (vpnDetected) {
+      showMonetizationWarning("VPN detected. Earnings are disabled while VPN is active. Please disable VPN to continue earning.");
+      try {
+        await fetch(`${BASE_URL}/api/ads.php?action=set_vpn_session`, { method: 'POST' });
+      } catch(e) {}
+    }
+  }
+
+  async function trackImpression(adId, videoId, placement) {
+    if (adBlockDetected || vpnDetected) {
+      console.warn('Impression tracking skipped: AdBlock or VPN active.');
+      return;
+    }
+    const vid = videoId || '';
+    const plc = placement || '';
+    try {
+      await fetch(`${BASE_URL}/api/ads.php?action=track_impression&id=${adId}&video_id=${vid}&placement=${encodeURIComponent(plc)}`, { method: 'POST' });
     } catch(e) {}
   }
 
-  async function trackClick(adId, videoId) {
+  async function trackClick(adId, videoId, placement) {
+    if (adBlockDetected || vpnDetected) {
+      console.warn('Click tracking skipped: AdBlock or VPN active.');
+      return;
+    }
     const vid = videoId || '';
+    const plc = placement || '';
     try {
-      await fetch(`${BASE_URL}/api/ads.php?action=track_click&id=${adId}&video_id=${vid}`, { method: 'POST' });
+      await fetch(`${BASE_URL}/api/ads.php?action=track_click&id=${adId}&video_id=${vid}&placement=${encodeURIComponent(plc)}`, { method: 'POST' });
     } catch(e) {}
   }
 
@@ -219,45 +311,59 @@
     if (link && link.dataset.adId) {
       const adId = link.dataset.adId;
       const videoId = link.dataset.videoId || window.FH_WATCH?.videoId || '';
-      trackClick(adId, videoId);
+      const container = link.closest('.ad-sponsored-container');
+      const placement = container ? (container.dataset.placement || '') : '';
+      trackClick(adId, videoId, placement);
     }
   });
 
-  function initAds() {
+  function processAdContainer(container) {
+    const template = container.querySelector('.ad-html-template');
+    const htmlContentEl = container.querySelector('.ad-html-content');
+    
+    if (template && htmlContentEl) {
+      // Render it inside safe iframe
+      const content = template.innerHTML;
+      renderHtmlAdInIframe(htmlContentEl, content);
+      
+      const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
+      if (reloadSeconds > 0) {
+        setupAdReload(container, reloadSeconds);
+      }
+      const adId = container.dataset.adId;
+      const videoId = container.dataset.videoId || window.FH_WATCH?.videoId || '';
+      const placement = container.dataset.placement || '';
+      if (adId) {
+        trackImpression(adId, videoId, placement);
+      }
+    } else if (container.querySelector('.ad-click-link, .ad-html-content')) {
+      const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
+      if (reloadSeconds > 0) {
+        setupAdReload(container, reloadSeconds);
+      }
+      // Track ad impression asynchronously
+      const adId = container.dataset.adId;
+      const videoId = container.dataset.videoId || window.FH_WATCH?.videoId || '';
+      const placement = container.dataset.placement || '';
+      if (adId) {
+        trackImpression(adId, videoId, placement);
+      }
+    } else {
+      // Empty placeholder, load it
+      loadAd(container);
+    }
+  }
+
+  async function initAds() {
+    await runDetections();
+
     const containers = document.querySelectorAll('.ad-sponsored-container');
     containers.forEach(container => {
-      const template = container.querySelector('.ad-html-template');
-      const htmlContentEl = container.querySelector('.ad-html-content');
-      
-      if (template && htmlContentEl) {
-        // Render it inside safe iframe
-        const content = template.innerHTML;
-        renderHtmlAdInIframe(htmlContentEl, content);
-        
-        const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
-        if (reloadSeconds > 0) {
-          setupAdReload(container, reloadSeconds);
-        }
-        const adId = container.dataset.adId;
-        const videoId = container.dataset.videoId || window.FH_WATCH?.videoId || '';
-        if (adId) {
-          trackImpression(adId, videoId);
-        }
-      } else if (container.querySelector('.ad-click-link, .ad-html-content')) {
-        const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
-        if (reloadSeconds > 0) {
-          setupAdReload(container, reloadSeconds);
-        }
-        // Track ad impression asynchronously
-        const adId = container.dataset.adId;
-        const videoId = container.dataset.videoId || window.FH_WATCH?.videoId || '';
-        if (adId) {
-          trackImpression(adId, videoId);
-        }
-      } else {
-        // Empty placeholder, load it
-        loadAd(container);
+      // Skip if lazy-loaded dynamically
+      if (container.dataset.lazy === "true") {
+        return;
       }
+      processAdContainer(container);
     });
   }
 
@@ -268,4 +374,10 @@
   }
 
   window.initAds = initAds;
+  window.loadLazyAd = function(container) {
+    if (container && container.classList.contains('ad-sponsored-container')) {
+      delete container.dataset.lazy;
+      processAdContainer(container);
+    }
+  };
 })();

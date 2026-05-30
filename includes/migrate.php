@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.05.28.7';
+    $migration_version = '2026.05.30.3';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -152,6 +152,10 @@ function fh_run_migrations(): void {
     if (!fh_column_exists('videos', 'approval_note')) {
         db_query("ALTER TABLE videos ADD COLUMN approval_note TEXT DEFAULT NULL AFTER status");
     }
+    
+    // ── Migrate legacy 'processing' video status to 'pending'
+    db_query("UPDATE videos SET status = 'pending' WHERE status = 'processing'");
+
 
     // ── Extend earnings.type enum ──────────────────────────
     try {
@@ -572,6 +576,84 @@ function fh_run_migrations(): void {
             FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
             FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
         ) ENGINE=InnoDB");
+    }
+
+    // ── CPM and Placement Assignment Refactor (2026.05.30.1) ────
+    if (fh_table_exists('ad_logs')) {
+        if (!fh_column_exists('ad_logs', 'placement')) {
+            db_query("ALTER TABLE ad_logs ADD COLUMN placement VARCHAR(80) DEFAULT NULL AFTER type");
+        }
+        if (!fh_index_exists('ad_logs', 'idx_ad_logs_placement')) {
+            db_query("ALTER TABLE ad_logs ADD INDEX idx_ad_logs_placement (placement)");
+        }
+    }
+
+    if (fh_table_exists('earnings')) {
+        if (!fh_column_exists('earnings', 'placement')) {
+            db_query("ALTER TABLE earnings ADD COLUMN placement VARCHAR(80) DEFAULT NULL AFTER reference_id");
+        }
+        if (!fh_index_exists('earnings', 'idx_earnings_placement')) {
+            db_query("ALTER TABLE earnings ADD INDEX idx_earnings_placement (placement)");
+        }
+    }
+
+    // Set correct defaults for thousand-based CPM/CPC settings
+    $new_defaults = [
+        'viewer_cpm'   => '0.50',
+        'viewer_cpc'   => '2.00',
+        'creator_cpm'  => '1.00',
+        'creator_cpc'  => '5.00',
+    ];
+    foreach ($new_defaults as $k => $v) {
+        db_query(
+            "INSERT INTO settings (`key`, `value`, `group`) VALUES (?, ?, 'earnings')
+             ON DUPLICATE KEY UPDATE `value` = ?",
+            [$k, $v, $v]
+        );
+    }
+
+    // ── Reels Short-Video System (2026.05.30.2) ────
+    if (fh_table_exists('videos')) {
+        if (!fh_column_exists('videos', 'is_reel')) {
+            db_query("ALTER TABLE videos ADD COLUMN is_reel TINYINT(1) NOT NULL DEFAULT 0 AFTER category_id");
+        }
+        if (!fh_index_exists('videos', 'idx_videos_is_reel')) {
+            db_query("ALTER TABLE videos ADD INDEX idx_videos_is_reel (is_reel)");
+        }
+    }
+
+    $reels_defaults = [
+        'reels_enabled' => '1',
+    ];
+    foreach ($reels_defaults as $k => $v) {
+        db_query(
+            "INSERT INTO settings (`key`, `value`, `group`) VALUES (?, ?, 'general')
+             ON DUPLICATE KEY UPDATE `key`=`key`",
+            [$k, $v]
+        );
+    }
+
+    if (fh_table_exists('ad_placements')) {
+        $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = 'reels_top_overlay'");
+        if ((int)$check['c'] === 0) {
+            db_query("INSERT INTO ad_placements (key_name, name, device_target) VALUES ('reels_top_overlay', 'Reels Top Overlay Ad', 'all')");
+        }
+    }
+
+    // ── Reels-Specific Ad Placement System (2026.05.30.3) ────
+    if (fh_table_exists('ad_placements')) {
+        $reels_placements = [
+            ['reels_mobile_top', 'Reels Mobile Top Ad', 'mobile'],
+            ['reels_left', 'Reels Left Ad', 'desktop'],
+            ['reels_right', 'Reels Right Ad', 'desktop'],
+            ['reels_bottom', 'Reels Bottom Ad', 'desktop']
+        ];
+        foreach ($reels_placements as $rp) {
+            $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = ?", [$rp[0]]);
+            if ((int)$check['c'] === 0) {
+                db_query("INSERT INTO ad_placements (key_name, name, device_target) VALUES (?, ?, ?)", [$rp[0], $rp[1], $rp[2]]);
+            }
+        }
     }
 
     // ── All migrations passed — write flag to skip on next request ──

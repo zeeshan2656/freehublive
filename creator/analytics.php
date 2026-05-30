@@ -12,7 +12,36 @@ $videos = db_fetchAll("SELECT id,title,views,likes,comments_count,watch_time,ad_
 $video_ids = array_column($videos, 'id');
 $earnings_map = fh_creator_video_earnings_map((int)$uid, $video_ids);
 $creator_cpm = (float)setting('creator_cpm', '1.00');
-$creator_cpc = (float)setting('creator_cpc', '50.00');
+$creator_cpc = (float)setting('creator_cpc', '5.00');
+
+$creator_placements = array_filter(array_map('trim', explode(',', setting('creator_eligible_placements', ''))), 'strlen');
+$ad_stats_map = [];
+foreach ($videos as $v) {
+    $ad_stats_map[(int)$v['id']] = ['impressions' => 0, 'clicks' => 0];
+}
+
+if (!empty($video_ids) && !empty($creator_placements)) {
+    $placeholders_vid = implode(',', array_fill(0, count($video_ids), '?'));
+    $placeholders_plc = implode(',', array_fill(0, count($creator_placements), '?'));
+    $params = array_merge($video_ids, $creator_placements);
+    
+    $rows = db_fetchAll(
+        "SELECT video_id, 
+                SUM(CASE WHEN type = 'impression' THEN 1 ELSE 0 END) AS imps,
+                SUM(CASE WHEN type = 'click' THEN 1 ELSE 0 END) AS clks
+         FROM ad_logs
+         WHERE video_id IN ($placeholders_vid) AND placement IN ($placeholders_plc)
+         GROUP BY video_id",
+        $params
+    );
+    
+    foreach ($rows as $r) {
+        $ad_stats_map[(int)$r['video_id']] = [
+            'impressions' => (int)($r['imps'] ?? 0),
+            'clicks' => (int)($r['clks'] ?? 0)
+        ];
+    }
+}
 
 // Chart data
 $chart = [];
@@ -79,13 +108,14 @@ require_once __DIR__ . '/../includes/header.php';
           <?php foreach ($videos as $v):
             $vid = (int)$v['id'];
             $earned = $earnings_map[$vid] ?? 0.0;
+            $v_stats = $ad_stats_map[$vid] ?? ['impressions' => 0, 'clicks' => 0];
           ?>
           <tr>
             <td style="font-size:.83rem;font-weight:500;max-width:200px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis" title="<?= e($v['title']) ?>">
               <?= e($v['title']) ?>
             </td>
-            <td class="text-sm" style="text-align:right"><?= format_number((int)$v['ad_impressions']) ?></td>
-            <td class="text-sm" style="text-align:right"><?= format_number((int)$v['ad_clicks']) ?></td>
+            <td class="text-sm" style="text-align:right"><?= format_number($v_stats['impressions']) ?></td>
+            <td class="text-sm" style="text-align:right"><?= format_number($v_stats['clicks']) ?></td>
             <td class="text-xs text-muted" style="text-align:right">$<?= number_format($creator_cpm, 2) ?></td>
             <td class="text-xs text-muted" style="text-align:right">$<?= number_format($creator_cpc, 2) ?></td>
             <td class="text-sm font-semibold" style="text-align:right;color:var(--green)">$<?= number_format($earned, 4) ?></td>

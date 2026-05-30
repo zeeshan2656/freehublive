@@ -326,7 +326,7 @@ function fh_process_watch_time(int $viewId, int $videoId, int $seconds, bool $is
 }
 
 /** Credit USD balance and log approved ad earning (impression or click). */
-function fh_credit_ad_earnings(int $userId, float $amount, string $userRole, string $eventType, int $adId, ?int $videoId = null): void {
+function fh_credit_ad_earnings(int $userId, float $amount, string $userRole, string $eventType, int $adId, ?int $videoId = null, string $placement = ''): void {
     if ($amount <= 0 || $userId < 1) return;
     $userRow = db_fetch("SELECT role, status FROM users WHERE id=?", [$userId]);
     if (!$userRow) return;
@@ -342,6 +342,7 @@ function fh_credit_ad_earnings(int $userId, float $amount, string $userRole, str
         'type'         => $type,
         'amount'       => $amount,
         'reference_id' => $adId,
+        'placement'    => $placement,
         'description'  => $desc,
         'status'       => 'approved',
     ]);
@@ -359,13 +360,30 @@ function fh_credit_ad_earnings(int $userId, float $amount, string $userRole, str
 /**
  * Track an ad impression or click with duplicate/fake protection and award payouts.
  */
-function fh_track_ad_event(int $adId, string $eventType, ?int $videoId = null): bool {
+function fh_track_ad_event(int $adId, string $eventType, ?int $videoId = null, string $placement = ''): bool {
+    // VPN protection - do not count or log anything if VPN is active
+    if (fh_is_vpn_active()) {
+        return false;
+    }
+
     $adId = (int)$adId;
     if (!$adId) return false;
     $eventType = ($eventType === 'click') ? 'click' : 'impression';
     
     $ad = db_fetch("SELECT id FROM ads WHERE id=?", [$adId]);
     if (!$ad) return false;
+
+    // Eligibility Checks
+    $viewer_placements = array_filter(array_map('trim', explode(',', setting('viewer_eligible_placements', ''))), 'strlen');
+    $creator_placements = array_filter(array_map('trim', explode(',', setting('creator_eligible_placements', ''))), 'strlen');
+
+    $viewer_eligible = in_array((string)$placement, $viewer_placements);
+    $creator_eligible = in_array((string)$placement, $creator_placements);
+
+    // Skip credit / logs entirely if placement is not eligible for both
+    if (!$viewer_eligible && !$creator_eligible) {
+        return false;
+    }
     
     $ipHash = hash_ip(get_ip());
     $viewerId = is_logged_in() ? (int)auth_user()['id'] : null;
@@ -390,14 +408,8 @@ function fh_track_ad_event(int $adId, string $eventType, ?int $videoId = null): 
         // Prevent duplicate earning/payouts and fake counts
         return false;
     }
-    
-    // 1. Get Earning Rates from Settings
-    $cpmCreator = max(0.0, (float)setting('creator_cpm', '1.00'));
-    $cpcCreator = max(0.0, (float)setting('creator_cpc', '50.00'));
-    $cpmViewer  = max(0.0, (float)setting('viewer_cpm', '0.50'));
-    $cpcViewer  = max(0.0, (float)setting('viewer_cpc', '20.00'));
-    
-    // Calculate Payouts per single event
+
+    // Calculate Payouts per single event using thousand-based CPM/CPC-1000 logic
     $creatorEarning = 0.0;
     $viewerEarning  = 0.0;
     
@@ -412,12 +424,15 @@ function fh_track_ad_event(int $adId, string $eventType, ?int $videoId = null): 
     
     // Only pay if event is on a single video page ($videoId exists)
     if ($videoId > 0) {
-        if ($eventType === 'impression') {
-            $creatorEarning = $cpmCreator / 1000.0;
-            $viewerEarning  = $cpmViewer / 1000.0;
-        } else {
-            $creatorEarning = $cpcCreator / 1000.0;
-            $viewerEarning  = $cpcViewer / 1000.0;
+        if ($creator_eligible) {
+            $cpm = (float)setting('creator_cpm', '1.00');
+            $cpc = (float)setting('creator_cpc', '5.00');
+            $creatorEarning = ($eventType === 'impression') ? ($cpm / 1000.0) : ($cpc / 1000.0);
+        }
+        if ($viewer_eligible) {
+            $cpm = (float)setting('viewer_cpm', '0.50');
+            $cpc = (float)setting('viewer_cpc', '2.00');
+            $viewerEarning = ($eventType === 'impression') ? ($cpm / 1000.0) : ($cpc / 1000.0);
         }
     }
     
@@ -456,10 +471,10 @@ function fh_track_ad_event(int $adId, string $eventType, ?int $videoId = null): 
     
     // Distribute payouts (only if active & not admin)
     if ($creatorId > 0 && $creatorEarning > 0) {
-        fh_credit_ad_earnings($creatorId, $creatorEarning, 'creator', $eventType, $adId, $videoId);
+        fh_credit_ad_earnings($creatorId, $creatorEarning, 'creator', $eventType, $adId, $videoId, $placement);
     }
     if ($viewerId > 0 && $viewerEarning > 0) {
-        fh_credit_ad_earnings($viewerId, $viewerEarning, 'viewer', $eventType, $adId, $videoId);
+        fh_credit_ad_earnings($viewerId, $viewerEarning, 'viewer', $eventType, $adId, $videoId, $placement);
     }
     
     // Write to ad_logs
@@ -469,12 +484,12 @@ function fh_track_ad_event(int $adId, string $eventType, ?int $videoId = null): 
         'viewer_id'        => $viewerId ?: null,
         'creator_id'       => $creatorId ?: null,
         'type'             => $eventType,
+        'placement'        => $placement,
         'ip_hash'          => $ipHash,
         'user_agent'       => $userAgent,
         'earnings_viewer'  => $viewerEarning,
         'earnings_creator' => $creatorEarning,
     ]);
-    
     return true;
 }
 
@@ -493,8 +508,18 @@ function fh_creator_video_earnings_map(int $creatorId, array $videoIds): array {
         return [];
     }
 
-    $placeholders = implode(',', array_fill(0, count($videoIds), '?'));
-    $params       = array_merge([$creatorId], $videoIds);
+    $c_placements = array_filter(array_map('trim', explode(',', setting('creator_eligible_placements', ''))), 'strlen');
+    if (empty($c_placements)) {
+        $map = [];
+        foreach ($videoIds as $vid) {
+            $map[(int)$vid] = 0.0;
+        }
+        return $map;
+    }
+
+    $place_placeholders = implode(',', array_fill(0, count($c_placements), '?'));
+    $video_placeholders = implode(',', array_fill(0, count($videoIds), '?'));
+    $params = array_merge([$creatorId], $c_placements, [$creatorId], $videoIds);
 
     $rows = db_fetchAll(
         "SELECT v.id AS video_id,
@@ -503,10 +528,11 @@ function fh_creator_video_earnings_map(int $creatorId, array $videoIds): array {
                     FROM ad_logs al
                     WHERE al.video_id = v.id
                       AND al.creator_id = ?
+                      AND al.placement IN ($place_placeholders)
                 ), 0) AS earned
          FROM videos v
-         WHERE v.user_id = ? AND v.id IN ($placeholders)",
-        array_merge([$creatorId, $creatorId], $videoIds)
+         WHERE v.user_id = ? AND v.id IN ($video_placeholders)",
+        $params
     );
 
     $map = [];

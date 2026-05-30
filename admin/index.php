@@ -122,6 +122,10 @@ require_once __DIR__ . '/partials/admin_head.php';
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
         <span>Settings</span>
       </a>
+      <a href="<?= BASE_URL ?>/admin/settings.php?tab=adcode" class="qa-btn">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M10 8l-2 2 2 2M14 8l2 2-2 2"/></svg>
+        <span>Ad Code</span>
+      </a>
     </div>
 
     <div class="stat-grid-2">
@@ -138,7 +142,7 @@ require_once __DIR__ . '/partials/admin_head.php';
             <div style="font-size:.83rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"><?= e($v['title']) ?></div>
             <div class="text-muted text-xs"><?= e($v['channel_name']??$v['username']) ?> · <?= format_number((int)$v['views']) ?> views</div>
           </div>
-          <span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>"><?= $v['status'] ?></span>
+          <span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>"><?= e($v['status']==='processing'?'Pending':ucfirst($v['status'])) ?></span>
         </div>
         <?php endforeach; ?>
       </div>

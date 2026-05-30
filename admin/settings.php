@@ -6,29 +6,61 @@ require_once __DIR__ . '/../includes/functions.php';
 require_role('admin');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) {
+    // AJAX Save handler for Ad Code settings
+    if (!empty($_POST['ajax_save_adcode'])) {
+        $ad_fields = [
+            'ad_code_header', 'ad_code_header_enabled',
+            'ad_code_body', 'ad_code_body_enabled', 'ad_code_body_placement',
+            'ad_code_footer', 'ad_code_footer_enabled'
+        ];
+        foreach ($ad_fields as $key) {
+            $val = $_POST[$key] ?? '';
+            if (str_ends_with($key, '_enabled') && empty($val)) $val = '0';
+            db_query("INSERT INTO settings (`key`,`value`,`group`) VALUES (?,?,'content') ON DUPLICATE KEY UPDATE `value`=?", [$key, $val, $val]);
+        }
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'message' => 'Ad Code settings saved instantly!']);
+        exit;
+    }
+
     $fields = [
         'site_name','site_tagline','active_theme','primary_color',
-        'creator_cpm','creator_cpc','viewer_cpm','viewer_cpc',
+        'reels_enabled',
+        'creator_cpm','creator_cpc',
+        'viewer_cpm','viewer_cpc',
+        'min_withdrawal_creator','min_withdrawal_viewer',
         'min_withdrawal','min_payout',
+        'withdrawal_days','withdrawal_approval_mode',
+        'referral_bonus_usd',
         'ad_revenue_per_click','currency_rates_json',
         'allow_register','maintenance',
         'video_approval_mode',
         'user_approval_mode',
         'creator_approval_mode',
-        'referral_bonus_usd',
         'smtp_host','smtp_port','smtp_user','smtp_from_email','smtp_from_name','smtp_encryption',
         'site_logo',
         'adult_mode',
+        'ad_code_header', 'ad_code_header_enabled',
+        'ad_code_body', 'ad_code_body_enabled', 'ad_code_body_placement',
+        'ad_code_footer', 'ad_code_footer_enabled',
+        'viewer_eligible_placements',
+        'creator_eligible_placements'
     ];
-    $_POST['min_payout'] = $_POST['min_withdrawal'] ?? $_POST['min_payout'] ?? '25.00';
+    $_POST['min_withdrawal'] = $_POST['min_withdrawal_viewer'] ?? '25.00';
+    $_POST['min_payout'] = $_POST['min_withdrawal_viewer'] ?? '25.00';
 
     // Handle SMTP password separately (only update if not blank)
     foreach ($fields as $key) {
-        $val = trim($_POST[$key] ?? '');
+        $val = $_POST[$key] ?? '';
+        if (is_array($val)) {
+            $val = implode(',', $val);
+        } else {
+            $val = str_contains($key, 'ad_code') ? $val : trim($val);
+        }
         $group = 'general';
-        if (str_contains($key, 'rate') || str_contains($key, 'withdrawal') || str_contains($key, 'payout') || str_contains($key, 'revenue') || str_contains($key, 'bonus')) $group = 'earnings';
+        if (str_contains($key, 'rate') || str_contains($key, 'withdrawal') || str_contains($key, 'payout') || str_contains($key, 'revenue') || str_contains($key, 'bonus') || str_contains($key, 'earn') || str_contains($key, 'eligible')) $group = 'earnings';
         if (str_contains($key, 'smtp')) $group = 'email';
-        if ($key === 'video_approval_mode' || $key === 'user_approval_mode' || $key === 'creator_approval_mode') $group = 'content';
+        if ($key === 'video_approval_mode' || $key === 'user_approval_mode' || $key === 'creator_approval_mode' || str_contains($key, 'ad_code')) $group = 'content';
         if ($key === 'adult_mode') $group = 'popup';
         db_query("INSERT INTO settings (`key`,`value`,`group`) VALUES (?,?,?) ON DUPLICATE KEY UPDATE `value`=?", [$key, $val, $group, $val]);
     }
@@ -67,6 +99,7 @@ $themes = [
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-appearance', this)">🎨 Appearance</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-monetization', this)">💰 Monetization</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-approval', this)">🛡️ Approval Settings</button>
+      <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-adcode', this)">📢 Ad Code</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-popup', this)">🔞 First Popup</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-email', this)">✉️ Email / SMTP</button>
     </div>
@@ -103,6 +136,13 @@ $themes = [
             <option value="1" <?= setting('maintenance','0')==='1'?'selected':'' ?>>On</option>
           </select>
         </div>
+        <div class="form-group">
+          <label class="form-label">Enable Reels Feature</label>
+          <select class="form-input form-select" name="reels_enabled">
+            <option value="1" <?= setting('reels_enabled','1')==='1'?'selected':'' ?>>Yes (Enabled)</option>
+            <option value="0" <?= setting('reels_enabled','1')==='0'?'selected':'' ?>>No (Disabled)</option>
+          </select>
+        </div>
       </div>
       </div>
 
@@ -127,77 +167,261 @@ $themes = [
 
       <!-- Monetization Slice -->
       <div id="slice-monetization" class="slice-section" style="display:none">
+      
+      <?php
+      $all_placements = db_fetchAll("SELECT id, key_name, name FROM ad_placements ORDER BY name ASC");
+
+      $v_selected_placements = array_filter(array_map('trim', explode(',', setting('viewer_eligible_placements', ''))), 'strlen');
+      $c_selected_placements = array_filter(array_map('trim', explode(',', setting('creator_eligible_placements', ''))), 'strlen');
+      ?>
+
+      <style>
+      .monetization-grid-container {
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+      .monetization-section-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--accent);
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .monetization-section {
+        background: rgba(255, 255, 255, 0.01);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        transition: all 0.2s ease;
+      }
+      .monetization-section:hover {
+        border-color: rgba(99, 102, 241, 0.2);
+      }
+      .checkbox-tiles-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+      }
+      .checkbox-tile-label {
+        display: block;
+        position: relative;
+        cursor: pointer;
+        user-select: none;
+      }
+      .checkbox-tile-label input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+        height: 0;
+        width: 0;
+      }
+      .checkbox-tile-inner {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      }
+      .checkbox-tile-label:hover .checkbox-tile-inner {
+        border-color: var(--accent);
+        background: rgba(99, 102, 241, 0.04);
+      }
+      .checkbox-tile-label input:checked + .checkbox-tile-inner {
+        background: rgba(99, 102, 241, 0.08);
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .checkbox-tile-custom {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--text3);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+        background: var(--bg2);
+      }
+      .checkbox-tile-label input:checked + .checkbox-tile-inner .checkbox-tile-custom {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .checkbox-tile-custom::after {
+        content: '';
+        width: 4px;
+        height: 8px;
+        border: solid white;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+        display: none;
+        margin-bottom: 2px;
+      }
+      .checkbox-tile-label input:checked + .checkbox-tile-inner .checkbox-tile-custom::after {
+        display: block;
+      }
+      .checkbox-tile-text {
+        font-size: 0.82rem;
+        color: var(--text);
+        line-height: 1.4;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      </style>
+
       <div class="card">
-        <h3 style="font-weight:700;margin-bottom:6px">Ad Earnings & Payouts</h3>
-        <p class="text-sm text-muted" style="margin-bottom:16px">
-          Configure CPM (earnings per 1,000 ad impressions) and CPC (earnings per 1,000 ad clicks) for viewers and creators.
-          <strong>Admin cannot earn</strong> — earnings are only for viewers and creators.
+        <h3 style="font-weight:700;margin-bottom:6px">💰 Monetization System Settings</h3>
+        <p class="text-sm text-muted" style="margin-bottom:20px">
+          Configure independent earning rates and select qualifying ads and placements for both Viewers and Creators.
         </p>
-        <div class="stat-grid-2">
-          <div class="form-group">
-            <label class="form-label">👁️ Viewer CPM Rate (USD per 1,000 impressions)</label>
-            <input class="form-input" type="number" name="viewer_cpm" step="0.001" min="0"
-                   value="<?= e(setting('viewer_cpm', '0.50')) ?>">
-            <small class="text-muted text-xs">Viewer earnings per 1,000 impressions on video page ads</small>
+
+        <div class="monetization-grid-container">
+
+          <!-- Section: Viewer Ad Revenue Settings -->
+          <div class="monetization-section">
+            <div class="monetization-section-title">
+              <span>👁️ Viewer Ad Revenue Settings</span>
+            </div>
+            <div class="stat-grid-3" style="margin-bottom: 20px;">
+              <div class="form-group">
+                <label class="form-label">Viewer CPM (USD per 1000 Impressions)</label>
+                <input class="form-input" type="number" name="viewer_cpm" step="0.01" min="0"
+                       value="<?= e(setting('viewer_cpm', '0.50')) ?>" required>
+                <small class="text-muted text-xs">Earnings for every 1000 valid impressions.</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Viewer CPC-1000 (USD per 1000 Clicks)</label>
+                <input class="form-input" type="number" name="viewer_cpc" step="0.01" min="0"
+                       value="<?= e(setting('viewer_cpc', '2.00')) ?>" required>
+                <small class="text-muted text-xs">Earnings for every 1000 valid clicks.</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Viewer Minimum Withdrawal (USD)</label>
+                <input class="form-input" type="number" name="min_withdrawal_viewer" step="0.01" min="0"
+                       value="<?= e(setting('min_withdrawal_viewer', '25.00')) ?>" required>
+                <small class="text-muted text-xs">Threshold at which viewers can request payouts.</small>
+              </div>
+            </div>
+
+            <!-- Viewer Revenue Eligible Placements Section -->
+            <div style="border-top: 1px dashed var(--border); padding-top: 16px;">
+              <label class="form-label" style="font-weight: 700; margin-bottom: 4px;">Viewer Revenue Eligible Placements</label>
+              <p class="text-xs text-muted" style="margin-bottom: 12px;">Select which website placements qualify to generate viewer earnings.</p>
+              <?php if (empty($all_placements)): ?>
+                <p class="text-xs text-muted">No placements available.</p>
+              <?php else: ?>
+                <div class="checkbox-tiles-grid">
+                  <?php foreach ($all_placements as $place): ?>
+                    <label class="checkbox-tile-label">
+                      <input type="checkbox" name="viewer_eligible_placements[]" value="<?= e($place['key_name']) ?>"
+                             <?= in_array((string)$place['key_name'], $v_selected_placements) ? 'checked' : '' ?>>
+                      <div class="checkbox-tile-inner">
+                        <div class="checkbox-tile-custom"></div>
+                        <span class="checkbox-tile-text" title="<?= e($place['name']) ?>"><?= e($place['name']) ?></span>
+                      </div>
+                    </label>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">👁️ Viewer CPC Rate (USD per 1,000 clicks)</label>
-            <input class="form-input" type="number" name="viewer_cpc" step="0.001" min="0"
-                   value="<?= e(setting('viewer_cpc', '20.00')) ?>">
-            <small class="text-muted text-xs">Viewer earnings per 1,000 clicks on video page ads</small>
+
+          <!-- Section: Creator Ad Revenue Settings -->
+          <div class="monetization-section">
+            <div class="monetization-section-title">
+              <span>🎬 Creator Ad Revenue Settings</span>
+            </div>
+            <div class="stat-grid-3" style="margin-bottom: 20px;">
+              <div class="form-group">
+                <label class="form-label">Creator CPM (USD per 1000 Impressions)</label>
+                <input class="form-input" type="number" name="creator_cpm" step="0.01" min="0"
+                       value="<?= e(setting('creator_cpm', '1.00')) ?>" required>
+                <small class="text-muted text-xs">Earnings for every 1000 valid impressions generated on their videos.</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Creator CPC-1000 (USD per 1000 Clicks)</label>
+                <input class="form-input" type="number" name="creator_cpc" step="0.01" min="0"
+                       value="<?= e(setting('creator_cpc', '5.00')) ?>" required>
+                <small class="text-muted text-xs">Earnings for every 1000 valid clicks generated on their videos.</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Creator Minimum Withdrawal (USD)</label>
+                <input class="form-input" type="number" name="min_withdrawal_creator" step="0.01" min="0"
+                       value="<?= e(setting('min_withdrawal_creator', '25.00')) ?>" required>
+                <small class="text-muted text-xs">Threshold at which creators can request payouts.</small>
+              </div>
+            </div>
+
+            <!-- Creator Revenue Eligible Placements Section -->
+            <div style="border-top: 1px dashed var(--border); padding-top: 16px;">
+              <label class="form-label" style="font-weight: 700; margin-bottom: 4px;">Creator Revenue Eligible Placements</label>
+              <p class="text-xs text-muted" style="margin-bottom: 12px;">Select which website placements qualify to contribute toward creator earnings.</p>
+              <?php if (empty($all_placements)): ?>
+                <p class="text-xs text-muted">No placements available.</p>
+              <?php else: ?>
+                <div class="checkbox-tiles-grid">
+                  <?php foreach ($all_placements as $place): ?>
+                    <label class="checkbox-tile-label">
+                      <input type="checkbox" name="creator_eligible_placements[]" value="<?= e($place['key_name']) ?>"
+                             <?= in_array((string)$place['key_name'], $c_selected_placements) ? 'checked' : '' ?>>
+                      <div class="checkbox-tile-inner">
+                        <div class="checkbox-tile-custom"></div>
+                        <span class="checkbox-tile-text" title="<?= e($place['name']) ?>"><?= e($place['name']) ?></span>
+                      </div>
+                    </label>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">🎬 Creator CPM Rate (USD per 1,000 impressions)</label>
-            <input class="form-input" type="number" name="creator_cpm" step="0.001" min="0"
-                   value="<?= e(setting('creator_cpm', '1.00')) ?>">
-            <small class="text-muted text-xs">Creator earnings per 1,000 impressions on their video page ads</small>
+
+
+          <!-- Section: Other Global Rules -->
+          <div class="monetization-section">
+            <div class="monetization-section-title">
+              <span>⚙️ Payout & Affiliate Rules</span>
+            </div>
+            <div class="stat-grid-2">
+              <div class="form-group">
+                <label class="form-label">Withdrawal Processing Days</label>
+                <input class="form-input" type="number" name="withdrawal_days" step="1" min="0"
+                       value="<?= e(setting('withdrawal_days','7')) ?>">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Withdrawal Approval Mode</label>
+                <select class="form-input form-select" name="withdrawal_approval_mode">
+                  <option value="manual" <?= setting('withdrawal_approval_mode','manual')==='manual'?'selected':'' ?>>Manual — Review requests manually</option>
+                  <option value="auto"   <?= setting('withdrawal_approval_mode','manual')==='auto'?'selected':'' ?>>Auto — Instant processing</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Referral Bonus per Signup (USD, 0 = disabled)</label>
+                <input class="form-input" type="number" name="referral_bonus_usd" step="0.01" min="0"
+                       value="<?= e(setting('referral_bonus_usd','0.00')) ?>">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Admin Ad Revenue per Click (USD)</label>
+                <input class="form-input" type="number" name="ad_revenue_per_click" step="0.001" min="0"
+                       value="<?= e(setting('ad_revenue_per_click','0.05')) ?>">
+              </div>
+              <div class="form-group" style="grid-column: span 2;">
+                <label class="form-label">Currency Rates JSON (vs USD)</label>
+                <textarea class="form-input" name="currency_rates_json" rows="3" style="font-family:monospace;font-size:.8rem"><?= e(setting('currency_rates_json','')) ?></textarea>
+              </div>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">🎬 Creator CPC Rate (USD per 1,000 clicks)</label>
-            <input class="form-input" type="number" name="creator_cpc" step="0.001" min="0"
-                   value="<?= e(setting('creator_cpc', '50.00')) ?>">
-            <small class="text-muted text-xs">Creator earnings per 1,000 clicks on their video page ads</small>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Minimum Withdrawal for Creators (USD)</label>
-            <input class="form-input" type="number" name="min_withdrawal_creator" step="0.01" min="0"
-                   value="<?= e(setting('min_withdrawal_creator', setting('min_withdrawal','25.00'))) ?>">
-            <small class="text-muted text-xs">Set 0 for instant/no minimum</small>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Minimum Withdrawal for Viewers (USD)</label>
-            <input class="form-input" type="number" name="min_withdrawal_viewer" step="0.01" min="0"
-                   value="<?= e(setting('min_withdrawal_viewer', setting('min_withdrawal','25.00'))) ?>">
-            <small class="text-muted text-xs">Set 0 for instant/no minimum</small>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Withdrawal Processing Days</label>
-            <input class="form-input" type="number" name="withdrawal_days" step="1" min="0"
-                   value="<?= e(setting('withdrawal_days','7')) ?>">
-            <small class="text-muted text-xs">Number of days users must wait for withdrawal processing (0 for instant)</small>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Withdrawal Approval Mode</label>
-            <select class="form-input form-select" name="withdrawal_approval_mode">
-              <option value="manual" <?= setting('withdrawal_approval_mode','manual')==='manual'?'selected':'' ?>>🔍 Manual — Admin approves each request</option>
-              <option value="auto"   <?= setting('withdrawal_approval_mode','manual')==='auto'?'selected':'' ?>>⚡ Auto — Requests process automatically</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Referral Bonus per Signup (USD, 0 = disabled)</label>
-            <input class="form-input" type="number" name="referral_bonus_usd" step="0.01" min="0"
-                   value="<?= e(setting('referral_bonus_usd','0.00')) ?>">
-            <small class="text-muted text-xs">Bonus paid to referrer when a new user signs up via their link</small>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Admin Ad Revenue per Click (USD)</label>
-            <input class="form-input" type="number" name="ad_revenue_per_click" step="0.001" min="0"
-                   value="<?= e(setting('ad_revenue_per_click','0.05')) ?>">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Currency Rates JSON (vs USD)</label>
-            <textarea class="form-input" name="currency_rates_json" rows="3" style="font-family:monospace;font-size:.8rem"><?= e(setting('currency_rates_json','')) ?></textarea>
-          </div>
+
         </div>
       </div>
       </div>
@@ -315,6 +539,81 @@ $themes = [
 
       </div>
 
+      </div>
+
+      <!-- Ad Code Slice -->
+      <div id="slice-adcode" class="slice-section" style="display:none">
+      <div class="card">
+        <h3 style="font-weight:700;margin-bottom:6px">📢 Ad Code Management</h3>
+        <p class="text-sm text-muted" style="margin-bottom:20px;line-height:1.6">
+          Insert custom HTML, CSS, JavaScript, tracking codes, or advertisement pixels into different areas of the website.
+        </p>
+
+        <!-- Header Code Area -->
+        <div style="margin-top:20px; padding:16px; border-radius:8px; background:var(--bg3); border:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div style="font-weight:700;font-size:.9rem;color:var(--text)">1. Header Code Area (&lt;head&gt;)</div>
+            <select class="form-input form-select" name="ad_code_header_enabled" style="width:140px; height:34px; padding:4px 8px; font-size:.8rem;">
+              <option value="1" <?= setting('ad_code_header_enabled','0')==='1'?'selected':'' ?>>✅ Enabled</option>
+              <option value="0" <?= setting('ad_code_header_enabled','0')==='0'?'selected':'' ?>>🚫 Disabled</option>
+            </select>
+          </div>
+          <p class="text-xs text-muted" style="margin-bottom:10px; line-height:1.4">Loads directly inside the HTML <code>&lt;head&gt;</code> section. Ideal for Google Analytics, verification meta tags, and pixel trackers.</p>
+          <div class="form-group" style="margin-bottom:0">
+            <textarea class="form-input adcode-editor-textarea" name="ad_code_header" id="ad-code-header-ta" rows="8" style="font-family:monospace; font-size:.8rem; resize:vertical; background:#121212; color:#32ff32; border-color:#2a2a2a; line-height:1.5; width:100%;" placeholder="<!-- Paste your head scripts here -->"><?= e(setting('ad_code_header','')) ?></textarea>
+            <div id="ad-code-header-ace" class="adcode-ace-editor" style="display:none; height:200px; border:1px solid var(--border); border-radius:4px; font-size:12px;"></div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-top:8px">
+            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('header')">⚡ Save Header Code</button>
+          </div>
+        </div>
+
+        <!-- Body Code Area -->
+        <div style="margin-top:20px; padding:16px; border-radius:8px; background:var(--bg3); border:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div style="font-weight:700;font-size:.9rem;color:var(--text)">2. Body Code Area</div>
+            <div class="flex gap-2" style="flex-wrap:wrap;">
+              <select class="form-input form-select" name="ad_code_body_placement" style="width:140px; height:34px; padding:4px 8px; font-size:.8rem;" title="Placement location inside body">
+                <option value="top" <?= setting('ad_code_body_placement','bottom')==='top'?'selected':'' ?>>Top (Start of Body)</option>
+                <option value="bottom" <?= setting('ad_code_body_placement','bottom')==='bottom'?'selected':'' ?>>Bottom (End of Body)</option>
+              </select>
+              <select class="form-input form-select" name="ad_code_body_enabled" style="width:140px; height:34px; padding:4px 8px; font-size:.8rem;">
+                <option value="1" <?= setting('ad_code_body_enabled','0')==='1'?'selected':'' ?>>✅ Enabled</option>
+                <option value="0" <?= setting('ad_code_body_enabled','0')==='0'?'selected':'' ?>>🚫 Disabled</option>
+              </select>
+            </div>
+          </div>
+          <p class="text-xs text-muted" style="margin-bottom:10px; line-height:1.4">Loads inside the main body container, either immediately after the opening <code>&lt;body&gt;</code> tag or right before the closing <code>&lt;/body&gt;</code> tag.</p>
+          <div class="form-group" style="margin-bottom:0">
+            <textarea class="form-input adcode-editor-textarea" name="ad_code_body" id="ad-code-body-ta" rows="8" style="font-family:monospace; font-size:.8rem; resize:vertical; background:#121212; color:#32ff32; border-color:#2a2a2a; line-height:1.5; width:100%;" placeholder="<!-- Paste your body scripts here -->"><?= e(setting('ad_code_body','')) ?></textarea>
+            <div id="ad-code-body-ace" class="adcode-ace-editor" style="display:none; height:200px; border:1px solid var(--border); border-radius:4px; font-size:12px;"></div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-top:8px">
+            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('body')">⚡ Save Body Code</button>
+          </div>
+        </div>
+
+        <!-- Footer Code Area -->
+        <div style="margin-top:20px; padding:16px; border-radius:8px; background:var(--bg3); border:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div style="font-weight:700;font-size:.9rem;color:var(--text)">3. Footer Code Area</div>
+            <select class="form-input form-select" name="ad_code_footer_enabled" style="width:140px; height:34px; padding:4px 8px; font-size:.8rem;">
+              <option value="1" <?= setting('ad_code_footer_enabled','0')==='1'?'selected':'' ?>>✅ Enabled</option>
+              <option value="0" <?= setting('ad_code_footer_enabled','0')==='0'?'selected':'' ?>>🚫 Disabled</option>
+            </select>
+          </div>
+          <p class="text-xs text-muted" style="margin-bottom:10px; line-height:1.4">Loads inside the website footer wrapper, perfect for embedding copyright scripts, bottom widgets, or ad unit codes.</p>
+          <div class="form-group" style="margin-bottom:0">
+            <textarea class="form-input adcode-editor-textarea" name="ad_code_footer" id="ad-code-footer-ta" rows="8" style="font-family:monospace; font-size:.8rem; resize:vertical; background:#121212; color:#32ff32; border-color:#2a2a2a; line-height:1.5; width:100%;" placeholder="<!-- Paste your footer scripts here -->"><?= e(setting('ad_code_footer','')) ?></textarea>
+            <div id="ad-code-footer-ace" class="adcode-ace-editor" style="display:none; height:200px; border:1px solid var(--border); border-radius:4px; font-size:12px;"></div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-top:8px">
+            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('footer')">⚡ Save Footer Code</button>
+          </div>
+        </div>
+      </div>
+      </div>
+
       <!-- Global Save Button -->
       <div class="card" style="margin-top:24px;display:flex;justify-content:flex-end;gap:12px;background:var(--bg2)">
         <a href="<?= BASE_URL ?>/admin/" class="btn btn-outline">Cancel</a>
@@ -325,6 +624,7 @@ $themes = [
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/ace.js"></script>
 <script>
 function showSlice(id, btn) {
   // Hide all slices
@@ -339,6 +639,97 @@ function showSlice(id, btn) {
   // Highlight active button
   btn.style.background = 'rgba(99,102,241,.1)';
   btn.style.color = 'var(--accent)';
+  
+  // Resize Ace editors on tab switch
+  if (id === 'slice-adcode' && typeof ace !== 'undefined') {
+    Object.values(aceInstances).forEach(editor => editor.resize());
+  }
 }
+
+const aceInstances = {};
+
+function initAceEditor(textareaId, editorDivId) {
+  const ta = document.getElementById(textareaId);
+  const div = document.getElementById(editorDivId);
+  if (!ta || !div) return;
+
+  // Hide textarea, show div
+  ta.style.display = 'none';
+  div.style.display = 'block';
+
+  // Initialize Ace
+  const editor = ace.edit(editorDivId);
+  editor.setTheme("ace/theme/tomorrow_night");
+  editor.session.setMode("ace/mode/html");
+  editor.setValue(ta.value, -1);
+
+  // Sync Ace changes to textarea
+  editor.session.on('change', function() {
+    ta.value = editor.getValue();
+  });
+
+  // Save reference
+  aceInstances[textareaId] = editor;
+}
+
+function instantSaveAdcode(area) {
+  const csrf = document.querySelector('input[name="csrf"]').value;
+  const formData = new FormData();
+  formData.append('csrf', csrf);
+  formData.append('ajax_save_adcode', '1');
+
+  // Append values
+  formData.append('ad_code_header', document.getElementById('ad-code-header-ta').value);
+  formData.append('ad_code_header_enabled', document.querySelector('select[name="ad_code_header_enabled"]').value);
+  formData.append('ad_code_body', document.getElementById('ad-code-body-ta').value);
+  formData.append('ad_code_body_enabled', document.querySelector('select[name="ad_code_body_enabled"]').value);
+  formData.append('ad_code_body_placement', document.querySelector('select[name="ad_code_body_placement"]').value);
+  formData.append('ad_code_footer', document.getElementById('ad-code-footer-ta').value);
+  formData.append('ad_code_footer_enabled', document.querySelector('select[name="ad_code_footer_enabled"]').value);
+
+  // Show status inside button
+  const btn = event.currentTarget;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Saving...';
+
+  fetch('', {
+    method: 'POST',
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    btn.textContent = '✅ Saved!';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }, 2000);
+  })
+  .catch(err => {
+    console.error(err);
+    btn.textContent = '✗ Error';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }, 2000);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  // Check if Ace Editor loaded successfully
+  if (typeof ace !== 'undefined') {
+    initAceEditor('ad-code-header-ta', 'ad-code-header-ace');
+    initAceEditor('ad-code-body-ta', 'ad-code-body-ace');
+    initAceEditor('ad-code-footer-ta', 'ad-code-footer-ace');
+  }
+
+  // Router check for tab=adcode
+  const urlParams = new URLSearchParams(window.location.search);
+  const tab = urlParams.get('tab');
+  if (tab === 'adcode') {
+    const btn = document.querySelector('[onclick*="slice-adcode"]');
+    if (btn) btn.click();
+  }
+});
 </script>
 <?php require_once __DIR__ . '/partials/admin_foot.php'; ?>

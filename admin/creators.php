@@ -32,7 +32,7 @@ require_once __DIR__.'/partials/admin_head.php';
   <?php foreach(get_flash() as $f): ?><div class="alert alert-<?= $f['type'] ?>"><?= e($f['msg']) ?></div><?php endforeach; ?>
 
   <div class="flex gap-2" style="margin-bottom:16px">
-    <?php foreach(['pending'=>'Pending','active'=>'Active','suspended'=>'Suspended','all'=>'All'] as $f=>$l): ?>
+    <?php foreach(['pending'=>'Pending','active'=>'Approved','suspended'=>'Disabled','all'=>'All'] as $f=>$l): ?>
     <a href="?filter=<?= $f ?>" class="btn btn-sm <?= $filter===$f?'btn-primary':'btn-outline' ?>"><?= $l ?></a>
     <?php endforeach; ?>
   </div>
@@ -56,7 +56,13 @@ require_once __DIR__.'/partials/admin_head.php';
         <td class="text-sm"><?= $p['vcount'] ?></td>
         <td class="text-sm"><?= format_number((int)($p['total_views']??0)) ?></td>
         <td class="text-sm">$<?= number_format((float)$p['balance'],2) ?></td>
-        <td><span class="badge badge-<?= $p['status']==='active'?'green':($p['status']==='pending'?'yellow':'red') ?>"><?= $p['status'] ?></span></td>
+        <td>
+          <?php
+          $c_labels = ['active' => 'Approved', 'pending' => 'Pending', 'suspended' => 'Disabled', 'rejected' => 'Rejected'];
+          $c_badges = ['active' => 'green', 'pending' => 'yellow', 'suspended' => 'red', 'rejected' => 'red'];
+          ?>
+          <span class="badge badge-<?= $c_badges[$p['status']] ?? 'gray' ?>"><?= e($c_labels[$p['status']] ?? $p['status']) ?></span>
+        </td>
         <td class="text-xs text-muted"><?= date('M j, Y',strtotime($p['created_at'])) ?></td>
         <td>
           <form method="POST" class="flex gap-1">

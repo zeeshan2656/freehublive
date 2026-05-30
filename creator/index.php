@@ -30,25 +30,7 @@ require_once __DIR__ . '/../includes/header.php';
 
     <?php $watch_stats_user_id = (int)$uid; $creator_context = true; require __DIR__ . '/../includes/partials/watch_earnings_stats.php'; ?>
 
-    <!-- Channel stats -->
-    <div class="stat-grid-4" style="margin-bottom:28px">
-      <div class="stat-card">
-        <div class="stat-value"><?= $stats['videos'] ?></div>
-        <div class="stat-label">Videos</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value"><?= format_number($stats['ad_impressions']) ?></div>
-        <div class="stat-label">Ad Impressions</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value"><?= format_number($stats['ad_clicks']) ?></div>
-        <div class="stat-label">Ad Clicks</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value"><?= format_number($stats['subscribers']) ?></div>
-        <div class="stat-label">Subscribers</div>
-      </div>
-    </div>
+    <!-- My Videos list is displayed below -->
 
     <!-- Upload CTA if no videos -->
     <?php if (!$my_videos): ?>
@@ -56,7 +38,12 @@ require_once __DIR__ . '/../includes/header.php';
       <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;color:var(--accent)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:6px">Upload Your First Video</h2>
       <p class="text-muted text-sm" style="margin-bottom:16px">Share your content with the world and start earning</p>
-      <a href="<?= BASE_URL ?>/creator/upload.php" class="btn btn-primary">Upload Now</a>
+      <div class="flex gap-2" style="justify-content:center">
+        <a href="<?= BASE_URL ?>/creator/upload.php" class="btn btn-primary">Upload Video</a>
+        <?php if (setting('reels_enabled', '1') === '1'): ?>
+        <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="btn btn-outline">Upload Reel</a>
+        <?php endif; ?>
+      </div>
     </div>
     <?php else: ?>
     <!-- My Videos -->
@@ -112,8 +99,8 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
               </td>
               <td style="padding: 10px 8px; vertical-align: middle;">
-                <span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':'gray') ?>" style="font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase;">
-                  <?= e($v['status']) ?>
+                <span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>" style="font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase;">
+                  <?= e($v['status']==='processing'?'Pending':ucfirst($v['status'])) ?>
                 </span>
               </td>
               <td style="padding: 10px 8px; font-size: 0.8rem; color: var(--text); font-weight: 500; vertical-align: middle;">

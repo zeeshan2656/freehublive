@@ -60,10 +60,17 @@ $min_watch = trim($_GET['min_watch'] ?? '');
 $max_watch = trim($_GET['max_watch'] ?? '');
 $min_earn = trim($_GET['min_earn'] ?? '');
 $max_earn = trim($_GET['max_earn'] ?? '');
+$type = $_GET['type'] ?? 'all';
 $page = max(1, (int)($_GET['page'] ?? 1));
 
 $where = "1";
 $params = [];
+
+if ($type === 'reel') {
+    $where .= " AND v.is_reel = 1";
+} elseif ($type === 'video') {
+    $where .= " AND v.is_reel = 0";
+}
 
 if ($filter !== 'all' && in_array($filter, ['published', 'pending', 'rejected', 'draft'])) {
     $where .= " AND v.status = ?";
@@ -191,6 +198,16 @@ require_once __DIR__ . '/partials/admin_head.php';
         </select>
       </div>
 
+      <!-- Type Filter -->
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Type</label>
+        <select class="form-input form-select" name="type">
+          <option value="all" <?= $type==='all'?'selected':'' ?>>All Types</option>
+          <option value="video" <?= $type==='video'?'selected':'' ?>>Videos Only</option>
+          <option value="reel" <?= $type==='reel'?'selected':'' ?>>Reels Only</option>
+        </select>
+      </div>
+
       <!-- Date Range with Global Smart Filter -->
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Upload Date</label>
@@ -255,6 +272,11 @@ require_once __DIR__ . '/partials/admin_head.php';
           <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" target="_blank" style="color:var(--accent); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<?= e($v['title']) ?>">
             <?= e(truncate($v['title'], 50)) ?>
           </a>
+          <?php if ((int)($v['is_reel'] ?? 0) === 1): ?>
+            <span class="badge" style="background:rgba(139,92,246,0.15); color:#c084fc; font-size:.65rem; border:1px solid rgba(139,92,246,0.3); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block">Reel</span>
+          <?php else: ?>
+            <span class="badge" style="background:rgba(99,102,241,0.15); color:#818cf8; font-size:.65rem; border:1px solid rgba(99,102,241,0.3); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block">Video</span>
+          <?php endif; ?>
           <?php if (!empty($v['approval_note'])): ?>
           <div style="font-size:.72rem;color:var(--yellow);margin-top:2px">Note: <?= e($v['approval_note']) ?></div>
           <?php endif; ?>
@@ -265,8 +287,8 @@ require_once __DIR__ . '/partials/admin_head.php';
           </a>
         </td>
         <td>
-          <span class="badge badge-<?= $v['status']==='published'?'green':($v['status']==='pending'?'yellow':($v['status']==='rejected'?'red':'gray')) ?>">
-            <?= ucfirst($v['status']) ?>
+          <span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>">
+            <?= $v['status']==='processing'?'Pending':ucfirst($v['status']) ?>
           </span>
         </td>
         <td class="text-sm">👁️ <?= number_format((int)$v['views']) ?> views</td>

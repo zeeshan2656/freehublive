@@ -1201,6 +1201,9 @@ tbody tr:hover{background:var(--bg3)}
   transition: all var(--trans);
   min-height: 50px;
 }
+.ad-sponsored-container.ad-has-dimensions {
+  padding: 0;
+}
 .ad-sponsored-container::before {
   content: 'AD';
   position: absolute;
@@ -1748,10 +1751,13 @@ tbody tr:hover{background:var(--bg3)}
 @media (max-width: 900px) {
   .ad-sponsored-container {
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: 100%;
     height: auto;
     padding: 12px 16px !important;
     box-sizing: border-box !important;
+  }
+  .ad-sponsored-container.ad-has-dimensions {
+    padding: 0 !important;
   }
   .ad-sponsored-container * {
     max-width: 100% !important;

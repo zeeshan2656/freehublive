@@ -185,6 +185,26 @@ function get_ip(): string {
     return '0.0.0.0';
 }
 
+function fh_is_vpn_active(): bool {
+    // 1. Check common proxy/VPN headers
+    $proxy_headers = [
+        'HTTP_VIA', 'HTTP_FORWARDED', 'HTTP_USER_AGENT_VIA', 'HTTP_PROXY_CONNECTION',
+        'HTTP_XPROXY', 'HTTP_X_FORWARDED_SCHEME', 'HTTP_X_BLUECOAT_VIA', 'HTTP_FORWARDED_FOR'
+    ];
+    foreach ($proxy_headers as $h) {
+        if (!empty($_SERVER[$h])) return true;
+    }
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        if (count($ips) > 1) return true;
+    }
+    // 2. Check if session has client-side detected VPN flag
+    if (!empty($_SESSION['vpn_active']) && $_SESSION['vpn_active'] === true) {
+        return true;
+    }
+    return false;
+}
+
 function hash_ip(string $ip): string {
     return hash('sha256', $ip . 'fh_salt_2025');
 }
@@ -664,7 +684,7 @@ function render_ad_card(string $placement_key): string {
     global $vid;
     $now = date('Y-m-d');
     $placements = db_fetchAll(
-        "SELECT ap.device_target as placement_device, a.*
+        "SELECT ap.device_target as placement_device, ap.ad_width as placement_width, ap.ad_height as placement_height, a.*
          FROM ads a
          JOIN ad_placements ap ON ap.assigned_ad_id = a.id
          WHERE ap.key_name = ?
@@ -706,7 +726,11 @@ HTML;
             $device_class = ' ad-desktop-only';
         }
 
-        $aspect_ratio = ($ad['ad_width'] && $ad['ad_height']) ? ((int)$ad['ad_width'] . '/' . (int)$ad['ad_height']) : '16/9';
+        // Resolve width and height
+        $w = $ad['placement_width'] ?: $ad['ad_width'];
+        $h = $ad['placement_height'] ?: $ad['ad_height'];
+
+        $aspect_ratio = ($w && $h) ? ((int)$w . '/' . (int)$h) : '16/9';
 
         $inner_html = '';
         if ($ad['content_type'] === 'image' && $ad['image_url']) {
@@ -723,9 +747,9 @@ HTML;
         } elseif ($ad['content_type'] === 'html') {
             $html_content = $ad['content'];
             
-            $aspect_ratio_val = ($ad['ad_width'] && $ad['ad_height']) ? ((int)$ad['ad_width'] . '/' . (int)$ad['ad_height']) : '';
+            $aspect_ratio_val = ($w && $h) ? ((int)$w . '/' . (int)$h) : '';
             $card_style = $aspect_ratio_val ? "min-height:auto; aspect-ratio:{$aspect_ratio_val};" : "min-height:200px;";
-            $inner_style = $ad['ad_height'] ? "height:" . (int)$ad['ad_height'] . "px;" : "min-height:160px;";
+            $inner_style = $h ? "height:" . (int)$h . "px;" : "min-height:160px;";
             
             $inner_html = <<<HTML
 <article class="video-card ad-card fade-in{$device_class}" data-device-target="{$ad['placement_device']}"{$vid_attr} style="{$card_style} display:flex; flex-direction:column; overflow:hidden; border-radius:12px; position:relative;">
@@ -796,14 +820,12 @@ function render_ad_placeholder(string $placement_key): string {
 
         $extra_class = ' ad-global-mobile-full';
 
-        $container_style = 'margin:16px auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;';
+        $container_style = 'margin:16px auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0;';
         if ($w) {
             $container_style .= 'max-width:' . (int)$w . 'px;';
         }
         if ($h) {
             $container_style .= 'height:' . (int)$h . 'px;';
-        } else {
-            $container_style .= 'padding:0;';
         }
 
         $inner = '';
@@ -823,7 +845,9 @@ function render_ad_placeholder(string $placement_key): string {
                    . e($ad['content'] ?: $ad['title']) . '</a>';
         }
 
-        $output .= '<div class="ad-sponsored-container' . $device_class . $extra_class . '" data-placement="' . e($placement_key) . '" data-device-target="' . e($ad['placement_device']) . '" data-reload-interval="' . (int)$ad['reload_interval'] . '" data-ad-id="' . (int)$ad['id'] . '"' . $vid_attr . ' style="' . $container_style . '">'
+        $placement_class = ' ad-' . str_replace('_', '-', $placement_key);
+        $dimension_class = ($w || $h) ? ' ad-has-dimensions' : '';
+        $output .= '<div class="ad-sponsored-container' . $placement_class . $dimension_class . $device_class . $extra_class . '" data-placement="' . e($placement_key) . '" data-device-target="' . e($ad['placement_device']) . '" data-reload-interval="' . (int)$ad['reload_interval'] . '" data-ad-id="' . (int)$ad['id'] . '"' . $vid_attr . ' style="' . $container_style . '">'
              . $sponsored_overlay
              . '<div class="ad-creative-wrapper" style="margin:0 auto;display:flex;justify-content:center;align-items:center;width:100%;max-width:100%;' . $size_style . '">' . $inner . '</div>'
              . '</div>';

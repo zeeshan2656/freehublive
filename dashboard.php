@@ -8,9 +8,14 @@ require_once __DIR__ . '/includes/functions.php';
 require_login();
 
 $preview_uid = (int)($_GET['uid'] ?? 0);
-$auth_uid = (int)auth_user()['id'];
+$current_auth = auth_user();
+if (!$current_auth) {
+    logout_user();
+    redirect(BASE_URL . '/auth/login.php');
+}
+$auth_uid = (int)$current_auth['id'];
 $display_uid = $auth_uid;
-$display_role = auth_user()['role'] ?? 'viewer';
+$display_role = $current_auth['role'] ?? 'viewer';
 
 if ($preview_uid > 0 && is_admin()) {
     $preview_user = db_fetch("SELECT id, role, preferred_currency FROM users WHERE id=?", [$preview_uid]);
@@ -23,6 +28,10 @@ if ($preview_uid > 0 && is_admin()) {
 $sidebar_role = $display_role;
 $uid  = $display_uid;
 $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
+if (!$user) {
+    http_response_code(404);
+    die('User not found');
+}
 $stats = fh_user_watch_stats($uid);
 $currency = $user['preferred_currency'] ?? fh_user_currency();
 $minUsd = fh_min_withdrawal_usd($uid);
@@ -56,9 +65,23 @@ if ($from && $to) {
 
 $qParams = array_merge([$uid], $dateParams);
 
-$total_ad_impressions = db_count('ad_logs', "viewer_id=? AND type='impression' AND $dateWhere", $qParams);
-$total_ad_clicks = db_count('ad_logs', "viewer_id=? AND type='click' AND $dateWhere", $qParams);
-$total_viewing_earnings = db_fetch("SELECT SUM(amount) as t FROM earnings WHERE user_id=? AND type IN ('ad_impression', 'ad_click') AND $dateWhere", $qParams)['t'] ?? 0;
+$viewer_placements = array_filter(array_map('trim', explode(',', setting('viewer_eligible_placements', ''))), 'strlen');
+
+$total_ad_impressions = 0;
+$total_ad_clicks = 0;
+$total_viewing_earnings = 0.0;
+
+if (!empty($viewer_placements)) {
+    $placeholders = implode(',', array_fill(0, count($viewer_placements), '?'));
+    $adLogsParams = array_merge([$uid], $viewer_placements, $dateParams);
+    
+    $total_ad_impressions = db_count('ad_logs', "viewer_id=? AND placement IN ($placeholders) AND type='impression' AND $dateWhere", $adLogsParams);
+    $total_ad_clicks = db_count('ad_logs', "viewer_id=? AND placement IN ($placeholders) AND type='click' AND $dateWhere", $adLogsParams);
+    $total_viewing_earnings = db_fetch(
+        "SELECT SUM(amount) as t FROM earnings WHERE user_id=? AND placement IN ($placeholders) AND type IN ('ad_impression', 'ad_click') AND $dateWhere",
+        $adLogsParams
+    )['t'] ?? 0;
+}
 
 $total_clicks = fh_table_exists('affiliate_clicks') ? db_count('affiliate_clicks', "affiliate_id=? AND $dateWhere", $qParams) : 0;
 $total_referrals = fh_table_exists('referral_conversions') ? db_count('referral_conversions', "referrer_id=? AND $dateWhere", $qParams) : 0;
@@ -72,7 +95,12 @@ $referral_earnings = db_fetch("SELECT SUM(amount) as t FROM earnings WHERE user_
 $chart = [];
 for ($i = min($days, 30) - 1; $i >= 0; $i--) {
     $d = date('Y-m-d', strtotime("-$i days"));
-    $vw = db_fetch("SELECT COUNT(id) as c FROM ad_logs WHERE viewer_id=? AND type='impression' AND DATE(created_at)=?", [$uid, $d])['c'] ?? 0;
+    $vw = 0;
+    if (!empty($viewer_placements)) {
+        $placeholders = implode(',', array_fill(0, count($viewer_placements), '?'));
+        $chartParams = array_merge([$uid], $viewer_placements, [$d]);
+        $vw = db_fetch("SELECT COUNT(id) as c FROM ad_logs WHERE viewer_id=? AND placement IN ($placeholders) AND type='impression' AND DATE(created_at)=?", $chartParams)['c'] ?? 0;
+    }
     $chart[] = ['date' => date('M j', strtotime("-$i days")), 'impressions' => (int)$vw];
 }
 $maxImpressions = max(1, max(array_column($chart, 'impressions')));
@@ -195,27 +223,7 @@ require_once __DIR__ . '/includes/header.php';
         <?php endif; ?>
       </div>
       <?php else: ?>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:32px;margin-bottom:16px">
-        <h3 style="font-weight:800;font-size:1.2rem;display:flex;align-items:center;gap:8px">
-          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z"/></svg>
-          Viewing Performance <span style="font-size:.8rem;font-weight:600;color:var(--text2);background:var(--bg3);padding:2px 8px;border-radius:12px;margin-left:8px"><?= e($label) ?></span>
-        </h3>
-      </div>
-      
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:32px">
-        <div class="stat-card" style="padding:20px;display:flex;flex-direction:column;justify-content:center">
-          <div class="stat-label" style="font-size:.8rem;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Ad Impressions</div>
-          <div class="stat-value" style="font-size:1.8rem;font-weight:800"><?= format_number($total_ad_impressions) ?></div>
-        </div>
-        <div class="stat-card" style="padding:20px;display:flex;flex-direction:column;justify-content:center">
-          <div class="stat-label" style="font-size:.8rem;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Ad Clicks</div>
-          <div class="stat-value" style="font-size:1.8rem;font-weight:800"><?= format_number($total_ad_clicks) ?></div>
-        </div>
-        <div class="stat-card" style="padding:20px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,rgba(99,102,241,.05),transparent);border-color:rgba(99,102,241,.2)">
-          <div class="stat-label" style="font-size:.8rem;color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Viewing Earnings</div>
-          <div class="stat-value" style="color:var(--accent);font-size:1.8rem;font-weight:800">$<?= number_format((float)$total_viewing_earnings, 4) ?></div>
-        </div>
-      </div>
+      <!-- Removed duplicate Viewing Performance section -->
 
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <h3 style="font-weight:800;font-size:1.2rem;display:flex;align-items:center;gap:8px">

@@ -51,6 +51,12 @@
       <span>&copy; <?= date('Y') ?> <?= e(setting('site_name','FreeHub')) ?>. All rights reserved.</span>
       <span>v<?= VERSION ?></span>
     </div>
+    <?php
+    $is_admin_page = str_contains($_SERVER['PHP_SELF'] ?? '', '/admin/');
+    if (!$is_admin_page && setting('ad_code_footer_enabled', '0') === '1' && !empty($ad_code_f = setting('ad_code_footer'))):
+        echo $ad_code_f . "\n";
+    endif;
+    ?>
   </div>
 </footer>
 
@@ -69,6 +75,11 @@
 <div id="dashboard-progress" style="position:fixed; top:0; left:0; height:3px; background:var(--accent); width:0%; opacity:0; transition:width 0.2s ease, opacity 0.2s ease; z-index:99999; pointer-events:none"></div>
 <script src="<?= fh_asset_url('assets/js/dashboard-router.js') ?>" defer></script>
 <?php endif; ?>
+<?php
+if (!$is_admin_page && setting('ad_code_body_enabled', '0') === '1' && setting('ad_code_body_placement', 'bottom') === 'bottom' && !empty($ad_code_b = setting('ad_code_body'))):
+    echo $ad_code_b . "\n";
+endif;
+?>
 
 </body>
 </html>
