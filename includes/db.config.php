@@ -3,7 +3,7 @@
 <?php
 /**
  * Hostinger database credentials (this file stays on the server only).
- * Do not commit real passwords to public git repos.
+ * Do not commit real passwords to public git repos. ok
  */
 return [
     'host'    => 'localhost',
