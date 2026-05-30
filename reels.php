@@ -230,20 +230,20 @@ body {
 .sub-btn-reel {
   border-radius: 20px;
   font-weight: 700;
-  padding: 6px 14px !important;
-  font-size: 0.8rem !important;
+  padding: 8px 16px !important;
+  font-size: 0.85rem !important;
   transition: all 0.2s;
   border: none;
   cursor: pointer;
-  height: 32px !important;
+  height: 36px !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 .sub-btn-reel.subbed {
-  background: linear-gradient(135deg, var(--accent), var(--accent2)) !important;
+  background: linear-gradient(90deg, var(--accent) 0%, #ff007f 50%, #7000ff 100%) !important;
   color: #fff !important;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
+  box-shadow: 0 2px 10px rgba(255, 0, 127, 0.25) !important;
 }
 
 /* Like icon pop micro-animation */
@@ -384,10 +384,26 @@ body {
 
 @media (max-width: 768px) {
   .reel-mobile-info {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    left: 16px !important;
+    right: 80px !important;
+  }
+  .reel-creator-row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+  .reel-title-row {
+    display: block !important;
+    width: 100% !important;
+    clear: both !important;
+    margin-top: 6px !important;
   }
   .reel-mobile-actions {
     display: flex;
@@ -425,20 +441,7 @@ body {
   -webkit-box-orient: vertical;
 }
 
-.sub-btn-reel {
-  border-radius: 20px;
-  font-weight: 700;
-  padding: 4px 12px;
-  font-size: 0.75rem;
-  transition: all 0.2s;
-  border: none;
-  cursor: pointer;
-}
-.sub-btn-reel.subbed {
-  background: rgba(255,255,255,0.2) !important;
-  color: #fff !important;
-  backdrop-filter: blur(4px);
-}
+/* Merged sub-btn-reel styling with primary style block */
 
 /* Action button items */
 .action-btn {
@@ -838,12 +841,12 @@ body {
             <!-- Mobile info overlay -->
             <div class="reel-mobile-info">
               <div class="reel-creator-row">
-                <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link">
+                <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link" onclick="event.stopPropagation();">
                   <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
                 </a>
-                <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name"><?= $creator ?></a>
+                <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name" onclick="event.stopPropagation();"><?= $creator ?></a>
                 <?php if (!is_logged_in() || auth_user()['id'] != $ch_id): ?>
-                  <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>">
+                  <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>" onclick="event.stopPropagation();">
                     <?= $is_subbed ? 'Subscribed ✓' : 'Subscribe' ?>
                   </button>
                 <?php endif; ?>
@@ -856,7 +859,7 @@ body {
               <!-- Like -->
               <button class="action-btn like-btn <?= $is_liked ? 'liked' : '' ?>" data-id="<?= $r['id'] ?>">
                 <div class="icon-wrap">
-                  <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  <svg width="24" height="24" fill="<?= $is_liked ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                 </div>
                 <span class="count-label"><?= format_number($likes) ?></span>
               </button>
@@ -898,15 +901,15 @@ body {
         <!-- Desktop side details panel -->
         <div class="reel-desktop-panel">
           <div class="panel-header">
-            <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link">
+            <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link" onclick="event.stopPropagation();">
               <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
             </a>
             <div class="creator-details">
-              <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name"><?= $creator ?></a>
+              <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name" onclick="event.stopPropagation();"><?= $creator ?></a>
               <span class="sub-count"><?= format_number((int)$r['subscribers']) ?> subscribers</span>
             </div>
             <?php if (!is_logged_in() || auth_user()['id'] != $ch_id): ?>
-              <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>">
+              <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>" onclick="event.stopPropagation();">
                 <?= $is_subbed ? 'Subscribed ✓' : 'Subscribe' ?>
               </button>
             <?php endif; ?>
@@ -921,7 +924,7 @@ body {
             
             <div class="panel-actions">
               <button class="btn btn-outline btn-sm like-btn <?= $is_liked ? 'liked' : '' ?>" data-id="<?= $r['id'] ?>">
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" style="margin-right:6px"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                <svg width="16" height="16" fill="<?= $is_liked ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                 <span class="like-label"><?= $is_liked ? 'Liked' : 'Like' ?></span> (<span class="like-count"><?= $likes ?></span>)
               </button>
               
@@ -1193,12 +1196,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const reactionData = data.data;
         // Update both mobile and desktop like buttons if present
         document.querySelectorAll(`.like-btn[data-id="${videoId}"]`).forEach(lBtn => {
+          const svg = lBtn.querySelector('svg');
           if (reactionData.reaction === 'like') {
             lBtn.classList.add('liked');
+            if (svg) svg.setAttribute('fill', 'currentColor');
             const label = lBtn.querySelector('.like-label');
             if (label) label.textContent = 'Liked';
           } else {
             lBtn.classList.remove('liked');
+            if (svg) svg.setAttribute('fill', 'none');
             const label = lBtn.querySelector('.like-label');
             if (label) label.textContent = 'Like';
           }
