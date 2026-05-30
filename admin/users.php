@@ -50,14 +50,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         redirect(BASE_URL . '/admin/users.php?view=' . $uid);
     }
     if ($action === 'delete_user') {
-        // Prevent deleting admin
-        $targetUser = db_fetch("SELECT role FROM users WHERE id=?", [$uid]);
-        if ($targetUser && $targetUser['role'] !== 'admin') {
+        // Prevent deleting own account
+        if ($uid !== (int)auth_user()['id']) {
             db_query("DELETE FROM users WHERE id=?", [$uid]);
             flash('success', 'User deleted.');
             redirect(BASE_URL . '/admin/users.php');
         } else {
-            flash('error', 'Cannot delete admin account.');
+            flash('error', 'Cannot delete your own admin account.');
+            redirect(BASE_URL . '/admin/users.php?view=' . $uid);
         }
     }
     flash('success', 'User updated.');
@@ -254,7 +254,7 @@ if ($view_uid) {
             <form method="POST" style="display:flex;flex-direction:column;gap:8px">
               <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
               <input type="hidden" name="user_id" value="<?= $view_uid ?>">
-              <?php if ($view_user['role'] !== 'admin'): ?>
+              <?php if ((int)$view_user['id'] !== (int)auth_user()['id']): ?>
                 <?php if ($view_user['status'] === 'pending' && $view_user['role'] !== 'creator'): ?>
                 <button name="action" value="activate" class="btn btn-sm" style="background:var(--green);color:#fff">✅ Approve Application</button>
                 <?php endif; ?>
@@ -278,13 +278,13 @@ if ($view_uid) {
                 <?php endif; ?>
                 <button name="action" value="delete_user" class="btn btn-outline btn-sm" style="color:var(--red);margin-top:8px;border-color:rgba(239,68,68,.3)" onclick="return confirm('PERMANENTLY DELETE this user and all their data? This cannot be undone!')">🗑️ Delete User</button>
               <?php else: ?>
-                <p class="text-muted text-sm">Admin account — cannot be modified.</p>
+                <p class="text-muted text-sm">Your own admin account — cannot be modified here.</p>
               <?php endif; ?>
             </form>
           </div>
 
           <!-- Change Password -->
-          <?php if ($view_user['role'] !== 'admin'): ?>
+          <?php if ((int)$view_user['id'] !== (int)auth_user()['id']): ?>
           <div class="card" style="margin-bottom:16px">
             <h3 style="font-weight:700;margin-bottom:12px;font-size:.9rem">Change Password</h3>
             <form method="POST">
