@@ -819,6 +819,9 @@ function render_ad_placeholder(string $placement_key): string {
         }
 
         $extra_class = ' ad-global-mobile-full';
+        if ($placement_key === 'home_mobile_top') {
+            $extra_class .= ' ad-full-width-mobile';
+        }
 
         $container_style = 'margin:16px auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);text-align:center;box-sizing:border-box;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0;';
         if ($w) {
