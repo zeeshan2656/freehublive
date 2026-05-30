@@ -16,24 +16,10 @@ if ($sel_cat) {
 }
 
 // ── Fetch hero / featured video ──────────────────────────────
-$hero = db_fetch(
-    "SELECT v.*,u.username,u.channel_name,u.avatar
-     FROM videos v
-     JOIN users u ON u.id=v.user_id
-     WHERE v.status='published' AND v.featured=1 AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
-     ORDER BY v.published_at DESC LIMIT 1",
-    $params
-);
+$hero = null;
 
 // ── Trending ─────────────────────────────────────────────────
-$trending = db_fetchAll(
-    "SELECT v.*,u.username,u.channel_name,u.avatar
-     FROM videos v
-     JOIN users u ON u.id=v.user_id
-     WHERE v.status='published' AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
-     ORDER BY v.views DESC LIMIT 10",
-    $params
-);
+$trending = [];
 
 // ── Latest ───────────────────────────────────────────────────
 $latest = db_fetchAll(
@@ -41,7 +27,7 @@ $latest = db_fetchAll(
      FROM videos v
      JOIN users u ON u.id=v.user_id
      WHERE v.status='published' AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
-     ORDER BY v.published_at DESC LIMIT 12",
+     ORDER BY v.published_at DESC LIMIT 51",
     $params
 );
 
@@ -53,15 +39,6 @@ $categories = db_fetchAll(
 
 // ── Selected Category Videos List ────────────────────────────
 $cat_videos = [];
-if ($sel_cat) {
-    $cat_videos = db_fetchAll(
-        "SELECT v.*,u.username,u.channel_name,u.avatar
-         FROM videos v JOIN users u ON u.id=v.user_id
-         WHERE v.status='published' AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
-         ORDER BY v.views DESC LIMIT 16",
-        $params
-    );
-}
 
 
 // Duration sync removed for performance — durations are synced on watch.php instead
@@ -70,7 +47,7 @@ $ref = auth_user()['ref_code'] ?? '';
 $creatorId    = (is_logged_in() && is_creator()) ? (int)auth_user()['id'] : 0;
 $earningsMap  = [];
 if ($creatorId) {
-    $pool = array_merge($trending, $latest, $cat_videos, $hero ? [$hero] : []);
+    $pool = $latest;
     $ownIds = [];
     foreach ($pool as $row) {
         if ((int)($row['user_id'] ?? 0) === $creatorId) {
@@ -92,77 +69,6 @@ if ($creatorId) {
       <div class="alert alert-<?= e($f['type']) ?>"><?= e($f['msg']) ?></div>
     <?php endforeach; ?>
 
-    <!-- Hero -->
-    <?php if ($hero): ?>
-    <section class="hero" aria-label="Featured video">
-      <img src="<?= thumb_url($hero['thumbnail']) ?>" alt="<?= e($hero['title']) ?>"
-           class="hero-bg" loading="eager" fetchpriority="high" decoding="async" width="1280" height="720">
-      <div class="hero-overlay"></div>
-      <div class="hero-content">
-        <span class="hero-badge">&#9733; Featured</span>
-        <h1 class="hero-title"><?= e(truncate($hero['title'], 80)) ?></h1>
-        <div class="hero-meta">
-          <span><?= e($hero['channel_name'] ?: $hero['username']) ?></span>
-          <span>&#183;</span>
-          <span><?= format_number((int)$hero['views']) ?> views</span>
-          <span>&#183;</span>
-          <span><?= time_ago($hero['published_at'] ?? $hero['created_at']) ?></span>
-        </div>
-        <div class="hero-actions">
-          <a href="<?= BASE_URL ?>/watch.php?v=<?= $hero['id'] ?><?= $ref ? '&ref='.$ref : '' ?>" class="btn-play">
-            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Play Now
-          </a>
-          <a href="<?= BASE_URL ?>/watch.php?v=<?= $hero['id'] ?>" class="btn btn-outline" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.3);color:#fff">
-            + Watch Later
-          </a>
-        </div>
-      </div>
-    </section>
-    <?php endif; ?>
-
-
-
-    <!-- Category Videos -->
-    <?php if ($sel_cat && $cat_videos): ?>
-    <section class="section">
-      <div class="section-header">
-        <h2 class="section-title">Category Videos</h2>
-        <a href="?cat=<?= $sel_cat ?>" class="see-all">See all &rarr;</a>
-      </div>
-      <div class="grid grid-6">
-        <?php 
-        $cat_videos_subset = array_slice($cat_videos, 0, 17);
-        foreach ($cat_videos_subset as $v) {
-            echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
-        }
-        echo render_ad_card('category_grid');
-        ?>
-      </div>
-    </section>
-    <?= render_ad_placeholder('between_sections_1') ?>
-    <?php endif; ?>
-
-    <!-- Trending -->
-    <?php if ($trending): ?>
-    <section class="section">
-      <div class="section-header">
-        <h2 class="section-title">&#128293; Trending Now</h2>
-        <a href="<?= BASE_URL ?>/search.php?sort=views" class="see-all">See all &rarr;</a>
-      </div>
-      <div class="grid grid-6">
-        <?php 
-        $trending_subset = array_slice($trending, 0, 5);
-        foreach ($trending_subset as $v) {
-            echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
-        }
-        echo render_ad_card('landing_trending');
-        ?>
-      </div>
-    </section>
-    <?= render_ad_placeholder('between_sections_2') ?>
-    <?php endif; ?>
-
     <!-- Latest Uploads -->
     <?php if ($latest): ?>
     <section class="section">
@@ -170,24 +76,26 @@ if ($creatorId) {
         <h2 class="section-title">&#127381; Latest Uploads</h2>
         <a href="<?= BASE_URL ?>/search.php?sort=latest" class="see-all">See all &rarr;</a>
       </div>
-      <div class="grid grid-6" id="video-grid">
+      <div class="grid grid-4" id="video-grid">
         <?php 
-        $latest_subset = array_slice($latest, 0, 11);
+        $latest_subset = array_slice($latest, 0, 51);
         foreach ($latest_subset as $v) {
             echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
         }
         echo render_ad_card('landing_latest');
         ?>
       </div>
+      <?php if (count($latest) >= 51): ?>
       <div style="text-align:center;margin-top:24px">
         <button class="btn btn-outline" id="load-more" data-page="2">Load More</button>
       </div>
+      <?php endif; ?>
     </section>
     <?= render_ad_placeholder('between_sections_3') ?>
     <?php endif; ?>
 
     <!-- No videos state -->
-    <?php if (!$trending && !$latest): ?>
+    <?php if (!$latest): ?>
     <div style="text-align:center;padding:80px 20px;color:var(--text2)">
       <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 16px;opacity:.4"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
       <h2 style="font-size:1.2rem;margin-bottom:8px;color:var(--text)">No videos yet</h2>
@@ -217,7 +125,7 @@ function bindLoadMore() {
     btn.disabled = true;
     try {
       const catId = localStorage.getItem('fh_selected_category') || 0;
-      const res = await fetch(`<?= BASE_URL ?>/api/videos.php?page=${page}&per_page=12&cat=${catId}`);
+      const res = await fetch(`<?= BASE_URL ?>/api/videos.php?page=${page}&per_page=48&cat=${catId}`);
       const data = await res.json();
       const grid = document.getElementById('video-grid');
       if (data.videos && data.videos.length) {
@@ -247,7 +155,7 @@ function bindLoadMore() {
                 <div style="min-width:0;">
                   <div class="video-title">${v.title}</div>
                   <div class="video-card-subtitle">
-                    <a href="${channelUrl}" onclick="event.stopPropagation();" style="font-weight:600;font-size:.85rem;color:var(--accent);text-decoration:none;">${v.channel}</a>
+                    <a href="${channelUrl}" onclick="event.stopPropagation();" class="video-card-channel-link">${v.channel}</a>
                   </div>
                 </div>
               </div>

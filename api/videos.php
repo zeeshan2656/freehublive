@@ -14,29 +14,58 @@ $action = $_GET['action'] ?? '';
 // ── GET: paginated video list ────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $page    = max(1, (int)($_GET['page'] ?? 1));
-    $per     = min(24, max(4, (int)($_GET['per_page'] ?? 12)));
-    $cat     = (int)($_GET['cat'] ?? 0);
-    $sort    = $_GET['sort'] ?? 'latest';
-    $ref     = $_GET['ref'] ?? '';
+    $per     = min(100, max(4, (int)($_GET['per_page'] ?? 50)));
+    $cat        = (int)($_GET['cat'] ?? 0);
+    $sort       = $_GET['sort'] ?? 'latest';
+    $ref        = $_GET['ref'] ?? '';
+    $q          = trim($_GET['q'] ?? '');
+    $channel_id = (int)($_GET['channel_id'] ?? 0);
 
-    $where = "v.status='published' AND v.visibility='public' AND v.is_reel=0";
-    if ($cat) {
-        $where .= " AND (v.category_id=$cat OR EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = $cat))";
+    $where_params = [];
+    if ($channel_id) {
+        $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
+        if ($is_owner) {
+            $where = "v.user_id=? AND v.is_reel=0";
+        } else {
+            $where = "v.user_id=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0";
+        }
+        $where_params[] = $channel_id;
+    } else {
+        $where = "v.status='published' AND v.visibility='public' AND v.is_reel=0";
     }
+
+    if ($q) {
+        $where .= " AND MATCH(v.title,v.description,v.tags) AGAINST(? IN BOOLEAN MODE)";
+        $where_params[] = $q . '*';
+    }
+    if ($cat) {
+        $where .= " AND (v.category_id=? OR EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = ?))";
+        $where_params[] = $cat;
+        $where_params[] = $cat;
+    }
+
     $order = match($sort) {
         'views'   => 'v.views DESC',
         'likes'   => 'v.likes DESC',
         'oldest'  => 'v.published_at ASC',
-        default   => 'v.published_at DESC',
+        'latest'  => 'v.published_at DESC',
+        default   => $q ? 'MATCH(v.title,v.description,v.tags) AGAINST(?) DESC' : 'v.published_at DESC',
     };
 
+    $order_params = [];
+    if (!in_array($sort, ['views', 'likes', 'oldest', 'latest']) && $q) {
+        $order_params[] = $q . '*';
+    }
+
     $offset = ($page - 1) * $per;
-    $total  = db_count('videos v', $where);
+    $total  = db_count('videos v', $where, $where_params);
+    $all_params = array_merge($where_params, $order_params);
     $videos = db_fetchAll(
         "SELECT v.id,v.user_id,v.title,v.thumbnail,v.duration,v.views,v.published_at,
                 u.username,u.channel_name,u.avatar
          FROM videos v JOIN users u ON u.id=v.user_id
-         WHERE $where ORDER BY $order LIMIT $per OFFSET $offset"
+         WHERE $where ORDER BY $order LIMIT $per OFFSET $offset",
+        $all_params
     );
 
     $creatorId   = (is_logged_in() && is_creator()) ? (int)auth_user()['id'] : 0;

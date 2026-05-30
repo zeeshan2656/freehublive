@@ -37,13 +37,12 @@ $order_params = [];
 if ($sort === 'relevance' && $q) $order_params[] = $q . '*';
 
 $total = db_count('videos v', $where, $where_params);
-$pg    = paginate($total, 16, $page);
 
 $all_params = array_merge($where_params, $order_params);
 $videos = db_fetchAll(
     "SELECT v.*,u.username,u.channel_name,u.avatar
      FROM videos v JOIN users u ON u.id=v.user_id
-     WHERE $where ORDER BY $order LIMIT 16 OFFSET {$pg['offset']}",
+     WHERE $where ORDER BY $order LIMIT 51",
     $all_params
 );
 $categories = db_fetchAll("SELECT * FROM categories WHERE is_active=1 ORDER BY sort_order");
@@ -99,9 +98,9 @@ require_once __DIR__ . '/includes/header.php';
 
     <!-- Grid -->
     <?php if ($videos): ?>
-    <div class="grid grid-6">
+    <div class="grid grid-4" id="video-grid">
       <?php 
-      $videos_subset = array_slice($videos, 0, 17);
+      $videos_subset = array_slice($videos, 0, 51);
       foreach ($videos_subset as $v) {
           echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
       }
@@ -110,14 +109,9 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
     <!-- Pagination -->
-    <?php if ($pg['pages'] > 1): ?>
-    <div class="flex gap-2" style="margin-top:28px;justify-content:center">
-      <?php if ($pg['has_prev']): ?><a href="?q=<?= urlencode($q) ?>&sort=<?= $sort ?>&cat=<?= $cat ?>&page=<?= $page-1 ?>" class="btn btn-outline">&laquo; Prev</a><?php endif; ?>
-      <?php for ($i = max(1,$page-2); $i <= min($pg['pages'],$page+2); $i++): ?>
-      <a href="?q=<?= urlencode($q) ?>&sort=<?= $sort ?>&cat=<?= $cat ?>&page=<?= $i ?>"
-         class="btn <?= $i===$page?'btn-primary':'btn-outline' ?>"><?= $i ?></a>
-      <?php endfor; ?>
-      <?php if ($pg['has_next']): ?><a href="?q=<?= urlencode($q) ?>&sort=<?= $sort ?>&cat=<?= $cat ?>&page=<?= $page+1 ?>" class="btn btn-outline">Next &raquo;</a><?php endif; ?>
+    <?php if ($total > 51): ?>
+    <div style="text-align:center;margin-top:24px">
+      <button class="btn btn-outline" id="load-more" data-page="2" data-q="<?= e($q) ?>" data-sort="<?= e($sort) ?>" data-cat="<?= $cat ?>">Load More</button>
     </div>
     <?php endif; ?>
 
@@ -130,4 +124,85 @@ require_once __DIR__ . '/includes/header.php';
     <?php endif; ?>
   </main>
 </div>
+
+<script>
+const FH_CREATOR_ID = <?= (int)$creatorId ?>;
+
+function bindLoadMore() {
+  const loadMoreBtn = document.getElementById('load-more');
+  if (!loadMoreBtn) return;
+  
+  const newBtn = loadMoreBtn.cloneNode(true);
+  loadMoreBtn.parentNode.replaceChild(newBtn, loadMoreBtn);
+  
+  newBtn.addEventListener('click', async function(){
+    const btn = this;
+    const page = parseInt(btn.dataset.page);
+    const q = encodeURIComponent(btn.dataset.q || '');
+    const sort = encodeURIComponent(btn.dataset.sort || 'relevance');
+    const cat = parseInt(btn.dataset.cat || 0);
+    
+    btn.textContent = 'Loading…';
+    btn.disabled = true;
+    try {
+      const res = await fetch(`<?= BASE_URL ?>/api/videos.php?page=${page}&per_page=48&q=${q}&sort=${sort}&cat=${cat}`);
+      const data = await res.json();
+      const grid = document.getElementById('video-grid');
+      if (data.videos && data.videos.length) {
+        data.videos.forEach(v => {
+          const el = document.createElement('article');
+          el.className = 'video-card fade-in';
+          const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
+          const tabParam = (parseInt(v.is_reel) === 1) ? 'reels' : 'videos';
+          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=' + tabParam;
+          el.onclick = () => location.href = watchUrl;
+          const durBadge = v.duration_fmt
+            ? `<span class="video-duration">${v.duration_fmt}</span>`
+            : `<span class="video-duration video-duration--pending">…</span>`;
+          const earnHtml = (FH_CREATOR_ID && v.user_id === FH_CREATOR_ID && v.earnings_fmt)
+            ? `<div class="video-card-earnings-box" title="Watch-time earnings on this video"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
+            : '';
+          el.innerHTML = `
+            <div class="video-thumb" style="position:relative">
+              <img src="${v.thumbnail}" alt="${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
+              ${durBadge}
+            </div>
+            <div class="video-card-body">
+              <div class="video-card-info-wrap">
+                <a href="${channelUrl}" onclick="event.stopPropagation();" style="display:inline-block;flex-shrink:0;border-radius:50%;overflow:hidden;width:44px;height:44px;">
+                  <img src="${v.avatar}" alt="${v.channel}" class="video-card-avatar" loading="lazy" width="44" height="44" style="width:100%;height:100%;object-fit:cover">
+                </a>
+                <div style="min-width:0;">
+                  <div class="video-title">${v.title}</div>
+                  <div class="video-card-subtitle">
+                    <a href="${channelUrl}" onclick="event.stopPropagation();" class="video-card-channel-link">${v.channel}</a>
+                  </div>
+                </div>
+              </div>
+              <div class="video-card-stats-row">
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>${v.views}</span>
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>${v.likes || 0}</span>
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h4"/></svg>${v.comments || 0}</span>
+                <span>·</span>
+                <span>${v.ago}</span>
+              </div>
+              ${earnHtml}
+            </div>`;
+          grid.appendChild(el);
+        });
+        btn.dataset.page = page + 1;
+        btn.textContent = 'Load More';
+        btn.disabled = false;
+        if (!data.has_next) btn.style.display = 'none';
+      } else {
+        btn.style.display = 'none';
+      }
+    } catch(e) {
+      btn.textContent = 'Load More';
+      btn.disabled = false;
+    }
+  });
+}
+bindLoadMore();
+</script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
