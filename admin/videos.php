@@ -8,6 +8,32 @@ $approvalMode = setting('video_approval_mode', 'manual');
 
 // Handle actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) {
+    $bulk_action = $_POST['bulk_action'] ?? '';
+    $video_ids = $_POST['video_ids'] ?? [];
+
+    if (!empty($bulk_action) && !empty($video_ids) && is_array($video_ids)) {
+        $ids = array_map('intval', $video_ids);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        if ($bulk_action === 'approve') {
+            db_query("UPDATE videos SET status='published', published_at=? WHERE id IN ($placeholders)", array_merge([date('Y-m-d H:i:s')], $ids));
+            flash('success', count($ids) . ' video(s) approved.');
+        } elseif ($bulk_action === 'reject') {
+            db_query("UPDATE videos SET status='rejected' WHERE id IN ($placeholders)", $ids);
+            flash('success', count($ids) . ' video(s) rejected.');
+        } elseif ($bulk_action === 'delete') {
+            // Also delete video files and thumbnails
+            $files = db_fetchAll("SELECT video_url, thumbnail FROM videos WHERE id IN ($placeholders)", $ids);
+            foreach ($files as $f) {
+                if ($f['video_url'] && !str_starts_with($f['video_url'], 'http')) @unlink(VIDEO_PATH . $f['video_url']);
+                if ($f['thumbnail'] && !str_starts_with($f['thumbnail'], 'http')) @unlink(THUMB_PATH . $f['thumbnail']);
+            }
+            db_query("DELETE FROM videos WHERE id IN ($placeholders)", $ids);
+            flash('success', count($ids) . ' video(s) deleted.');
+        }
+        redirect(BASE_URL . '/admin/videos.php?' . http_build_query($_GET));
+    }
+
     $action = $_POST['action'] ?? '';
     $vid    = (int)($_POST['video_id'] ?? 0);
     $note   = trim($_POST['approval_note'] ?? '');
@@ -251,90 +277,88 @@ require_once __DIR__ . '/partials/admin_head.php';
     </div>
   </form>
 
-  <div class="table-wrap">
-    <table>
-      <thead><tr>
-        <th>Thumbnail</th>
-        <th>Title</th>
-        <th>Creator</th>
-        <th>Status</th>
-        <th>Views &amp; Stats</th>
-        <th>Watch Time</th>
-        <th>Earnings</th>
-        <th>Upload Date</th>
-        <th style="min-width:160px">Actions</th>
-      </tr></thead>
-      <tbody>
-      <?php foreach ($videos as $v): ?>
-      <tr>
-        <td><img src="<?= thumb_url($v['thumbnail']) ?>" style="width:88px;aspect-ratio:16/9;object-fit:cover;border-radius:4px"></td>
-        <td style="max-width:200px; font-weight:600;">
-          <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" target="_blank" style="color:var(--accent); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<?= e($v['title']) ?>">
-            <?= e(truncate($v['title'], 50)) ?>
-          </a>
-          <?php if ((int)($v['is_reel'] ?? 0) === 1): ?>
-            <span class="badge" style="background:rgba(139,92,246,0.15); color:#c084fc; font-size:.65rem; border:1px solid rgba(139,92,246,0.3); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block">Reel</span>
-          <?php else: ?>
-            <span class="badge" style="background:rgba(99,102,241,0.15); color:#818cf8; font-size:.65rem; border:1px solid rgba(99,102,241,0.3); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block">Video</span>
-          <?php endif; ?>
-          <?php if (!empty($v['approval_note'])): ?>
-          <div style="font-size:.72rem;color:var(--yellow);margin-top:2px">Note: <?= e($v['approval_note']) ?></div>
-          <?php endif; ?>
-        </td>
-        <td>
-          <a href="<?= BASE_URL ?>/admin/users.php?view=<?= $v['uid'] ?>" style="font-weight:500;">
-            <?= e($v['channel_name'] ?? $v['username']) ?>
-          </a>
-        </td>
-        <td>
-          <span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>">
-            <?= $v['status']==='processing'?'Pending':ucfirst($v['status']) ?>
-          </span>
-        </td>
-        <td class="text-sm">👁️ <?= number_format((int)$v['views']) ?> views</td>
-        <td class="text-sm"><?= format_duration((int)($v['watch_time'] ?? 0)) ?></td>
-        <td class="text-sm font-bold" style="color:var(--green)">$<?= number_format((float)($v['revenue'] ?? 0), 2) ?></td>
-        <td class="text-xs text-muted"><?= date('M j, Y H:i', strtotime($v['created_at'])) ?></td>
-        <td>
-          <form method="POST" action="?<?= e(http_build_query($_GET)) ?>" style="display:flex; flex-direction:column; gap:4px; min-width:160px;">
-            <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
-            <input type="hidden" name="video_id" value="<?= $v['id'] ?>">
-            
-            <div class="flex gap-1" style="flex-wrap:wrap">
-              <!-- View -->
-              <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" target="_blank" class="btn btn-sm btn-outline" title="View Video" style="flex:1; justify-content:center;">👁️</a>
-              
-              <!-- Edit -->
-              <a href="<?= BASE_URL ?>/admin/video_edit.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline" title="Edit Video" style="flex:1; justify-content:center;">✏️</a>
-              
-              <!-- Delete -->
-              <button name="action" value="delete" class="btn btn-sm btn-outline" title="Delete Video" style="color:var(--red); flex:1; justify-content:center;" onclick="return confirm('Delete this video?')">🗑️</button>
-            </div>
+  <form method="POST" id="bulk-actions-form">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
 
-            <?php if ($v['status'] === 'pending'): ?>
-              <input type="text" name="approval_note" placeholder="Admin note (optional)" class="form-input" style="font-size:.72rem; padding:4px 8px; margin-top:2px; height:26px;">
+    <!-- Bulk Actions Bar -->
+    <div class="bulk-actions-bar card card-sm flex gap-2" style="margin-bottom: 16px; padding: 12px 18px; background: var(--bg2); border: 1px solid var(--border); display: none; align-items: center;">
+      <span style="font-weight: 600; font-size: 0.85rem; color: var(--text2);">With Selected (<span id="selected-count">0</span>):</span>
+      <button type="submit" name="bulk_action" value="approve" class="btn btn-sm btn-primary" style="background: var(--green); color: #fff; border: none; font-size: 0.8rem; padding: 5px 12px; border-radius: 4px;">Approve</button>
+      <button type="submit" name="bulk_action" value="reject" class="btn btn-sm btn-outline" style="color: var(--yellow); border-color: var(--yellow); font-size: 0.8rem; padding: 4px 12px; border-radius: 4px;">Reject</button>
+      <button type="submit" name="bulk_action" value="delete" class="btn btn-sm btn-outline" style="color: var(--red); border-color: var(--red); font-size: 0.8rem; padding: 4px 12px; border-radius: 4px;" onclick="return confirm('Are you sure you want to delete all selected videos?')">Delete</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="compact-table">
+        <thead><tr>
+          <th style="width: 40px; text-align: center;"><input type="checkbox" id="select-all-videos" style="cursor: pointer;"></th>
+          <th>Thumbnail</th>
+          <th>Title</th>
+          <th>Creator</th>
+          <th>Status</th>
+          <th>Views &amp; Stats</th>
+          <th>Ad Stats</th>
+          <th>Earnings</th>
+          <th>Upload Date</th>
+          <th style="width:120px">Actions</th>
+        </tr></thead>
+        <tbody>
+        <?php foreach ($videos as $v): ?>
+        <tr>
+          <td style="text-align: center;">
+            <input type="checkbox" name="video_ids[]" value="<?= $v['id'] ?>" class="video-select-checkbox" style="cursor: pointer;">
+          </td>
+          <td><img src="<?= thumb_url($v['thumbnail']) ?>" style="width:72px;aspect-ratio:16/9;object-fit:cover;border-radius:4px"></td>
+          <td style="max-width:200px; font-weight:600;">
+            <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" target="_blank" style="color:var(--accent); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<?= e($v['title']) ?>">
+              <?= e(truncate($v['title'], 50)) ?>
+            </a>
+            <?php if ((int)($v['is_reel'] ?? 0) === 1): ?>
+              <span class="badge" style="background:rgba(139,92,246,0.15); color:#c084fc; font-size:.65rem; border:1px solid rgba(139,92,246,0.3); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block">Reel</span>
+            <?php else: ?>
+              <span class="badge" style="background:rgba(99,102,241,0.15); color:#818cf8; font-size:.65rem; border:1px solid rgba(99,102,241,0.3); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block">Video</span>
             <?php endif; ?>
-
-            <div class="flex gap-1" style="margin-top:2px;">
-              <!-- Approve -->
-              <?php if ($v['status'] !== 'published'): ?>
-                <button name="action" value="approve" class="btn btn-sm" style="background:var(--green); color:#fff; flex:1; justify-content:center; font-size:.75rem; padding:4px;">Approve</button>
-              <?php endif; ?>
-              <!-- Reject -->
-              <?php if ($v['status'] !== 'rejected'): ?>
-                <button name="action" value="reject" class="btn btn-sm btn-outline" style="color:var(--red); flex:1; justify-content:center; font-size:.75rem; padding:4px;">Reject</button>
-              <?php endif; ?>
+            <?php if (!empty($v['approval_note'])): ?>
+            <div style="font-size:.72rem;color:var(--yellow);margin-top:2px">Note: <?= e($v['approval_note']) ?></div>
+            <?php endif; ?>
+          </td>
+          <td>
+            <a href="<?= BASE_URL ?>/admin/users.php?view=<?= $v['uid'] ?>" style="font-weight:500;">
+              <?= e($v['channel_name'] ?? $v['username']) ?>
+            </a>
+          </td>
+          <td>
+            <span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>">
+              <?= $v['status']==='processing'?'Pending':ucfirst($v['status']) ?>
+            </span>
+          </td>
+          <td class="text-sm">👁️ <?= number_format((int)$v['views']) ?> views</td>
+          <td class="text-sm">
+            <div style="white-space:nowrap">📺 <?= number_format((int)$v['ad_impressions']) ?> imps</div>
+            <div style="white-space:nowrap">🖱️ <?= number_format((int)$v['ad_clicks']) ?> clicks</div>
+          </td>
+          <td class="text-sm font-bold" style="color:var(--green)">$<?= number_format((float)($v['revenue'] ?? 0), 2) ?></td>
+          <td class="text-xs text-muted"><?= date('M j, Y H:i', strtotime($v['created_at'])) ?></td>
+          <td>
+            <div class="flex gap-2" style="align-items:center">
+              <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" target="_blank" class="btn btn-sm btn-outline" title="View Video" style="padding: 4px 8px;">View</a>
+              <a href="<?= BASE_URL ?>/admin/video_edit.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline" title="Edit Video" style="padding: 4px 8px;">Edit</a>
+              <form method="POST" action="?<?= e(http_build_query($_GET)) ?>" style="display:inline" onsubmit="return confirm('Are you sure you want to delete this video?')">
+                <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+                <input type="hidden" name="video_id" value="<?= $v['id'] ?>">
+                <button name="action" value="delete" class="btn btn-sm btn-outline" style="color:var(--red); border-color:rgba(239, 68, 68, 0.4); padding: 4px 8px;" title="Delete Video">Delete</button>
+              </form>
             </div>
-          </form>
-        </td>
-      </tr>
-      <?php endforeach; ?>
-      <?php if (!$videos): ?>
-      <tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text2)">No videos found</td></tr>
-      <?php endif; ?>
-      </tbody>
-    </table>
-  </div>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+        <?php if (!$videos): ?>
+        <tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text2)">No videos found</td></tr>
+        <?php endif; ?>
+        </tbody>
+      </table>
+    </div>
+  </form>
 
   <!-- Pagination -->
   <?php if ($pg['pages'] > 1): ?>
@@ -349,4 +373,56 @@ require_once __DIR__ . '/partials/admin_head.php';
   </div>
   <?php endif; ?>
 </div>
+
+<style>
+.compact-table tbody td {
+  padding: 6px 12px !important;
+  vertical-align: middle;
+}
+.compact-table thead th {
+  padding: 8px 12px !important;
+}
+</style>
+
+<script>
+(function() {
+    const selectAll = document.getElementById('select-all-videos');
+    const checkboxes = document.querySelectorAll('.video-select-checkbox');
+    const bulkBar = document.querySelector('.bulk-actions-bar');
+    const selectedCountSpan = document.getElementById('selected-count');
+
+    function updateBulkBar() {
+        const checkedCount = document.querySelectorAll('.video-select-checkbox:checked').length;
+        if (checkedCount > 0) {
+            bulkBar.style.display = 'flex';
+            selectedCountSpan.textContent = checkedCount;
+        } else {
+            bulkBar.style.display = 'none';
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll.checked;
+            });
+            updateBulkBar();
+        });
+    }
+
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            if (!cb.checked && selectAll) {
+                selectAll.checked = false;
+            }
+            const allChecked = Array.from(checkboxes).every(c => c.checked);
+            if (allChecked && selectAll) {
+                selectAll.checked = true;
+            }
+            updateBulkBar();
+        });
+    });
+})();
+</script>
+
 <?php require_once __DIR__ . '/partials/admin_foot.php'; ?>

@@ -1,0 +1,192 @@
+================================================================================
+                    FREEHUB.LIVE — COMPLETE SYSTEM AUDIT & ARCHITECTURE
+================================================================================
+Author: Senior Core PHP Architect, Monetization Specialist, & Systems Auditor
+Document Version: 1.0.0
+Date: 2026-05-31
+Target Platform: FreeHub.Live Video Sharing & Short Reels Platform
+================================================================================
+
+This document provides a highly detailed, comprehensive audit of the FreeHub.Live
+platform, covering the technologies used, overall system architecture, video
+sharing and short-form Reels setups, monetisation configurations, platform
+workflows, security guidelines, and performance optimization layers.
+
+---
+
+================================================================================
+1. TECHNOLOGY STACK & PROGRAMMING LANGUAGES
+================================================================================
+FreeHub.Live is built using a modern, fast, and light modular architecture that
+avoids the heavy overhead of framework bundles (e.g. Laravel or Symfony),
+achieving optimal request-response performance.
+
+A. BACKEND (SERVER-SIDE)
+   - Core Language: PHP (Vanilla, Modular & Procedural / Utility-Driven)
+   - Database API: PDO (PHP Data Objects) with prepared statements to prevent
+     SQL Injection.
+   - Core Database: MySQL (Optimized indexes, cascading deletes, foreign keys).
+   - Dynamic Migration Engine: Self-healing migrations that automatically
+     run on database instantiation to update schema alterations (payment proof
+     columns, analytics parameters, indexes).
+
+B. FRONTEND (CLIENT-SIDE)
+   - HTML: Semantic HTML5 elements for structure (header, main, nav, article).
+   - Styling: Vanilla CSS3 utilizing customized global custom variables
+     (--bg, --bg2, --bg3, --border, --accent, --green, --yellow, --text).
+     Includes sleeks dark mode support, glassmorphic panels, and backdrop blurs.
+   - Scripting: Vanilla Modern ES6+ JavaScript. Avoids bulky libraries (like jQuery)
+     to maintain sub-millisecond execution. Handles background file uploads,
+     custom media controllers, search filtering, and multi-step form flows.
+
+---
+
+================================================================================
+2. CORE VIDEO SHARING & REELS SETUP
+================================================================================
+The platform operates as a hybrid video and short-form content portal, managing
+both standard videos and Reels under a unified database structure.
+
+A. UNIFIED VIDEO MANAGEMENT SYSTEM (DATABASE LEVEL)
+   - Table: `videos`
+   - Identifier Column: `is_reel` (Boolean. 0 = regular video, 1 = Reel).
+   - This database model allows standard videos and Reels to share views, likes,
+     comments, categories, tags, and creator watch-time earnings while retaining
+     distinct rendering layouts.
+
+B. STANDARD VIDEO SETUP (LONG-FORM / REGULAR VIDEOS)
+   - Watch Page (`watch.php`): Built-in custom video player, side recommended
+     feeds, comments modules, and description expanders.
+   - Grid Representation: Standard 16:9 thumbnails with duration overlays,
+     decoupled views counter, likes counts, comments counts, and published dates.
+   - Background Duration Sync: Video durations are synced asynchronously during
+     playback or decoupled handlers to prevent database lock bottlenecks.
+
+C. SHORT-FORM REELS SETUP (VERTICAL VIDEOS)
+   - Dedicated Feed (`reels.php`): Optimized for mobile viewing using the modern
+     `100dvh` viewport height standard, ignoring traditional header navigations
+     and sidebars on smaller screens to maximize content focus.
+   - Swipe & Scroll Mechanics: Modern CSS scroll-snap alignment enabling smooth
+     mobile swiping. Enhanced with Javascript keyboard navigation (arrow keys),
+     double-tap to like, dynamic mute/unmute overlay toggles, and swipe-in
+     comments sidebar.
+   - Mobile-Top Overlay Ad Placement: Includes dynamic marquee titles and targeted
+     banner ad spaces configured specifically for mobile.
+
+---
+
+================================================================================
+3. PLATFORM SYSTEM WORKFLOWS
+================================================================================
+
+A. AUTHENTICATION & ACCESS CONTROL (MEMBERS-ONLY)
+   1. Unauthenticated Visitor tries to access a protected route (e.g. `/home`,
+      `/watch`, `/reels`, `/channel`, `/creator/upload`).
+   2. System intercepts request using the `require_login()` firewall hook in
+      `includes/auth.php`.
+   3. Visitor is automatically redirected to the Public Welcome Page (`welcome.php`).
+   4. After successful signup/login, the user is transitioned into the primary
+      ecosystem where protected routes become visible.
+
+B. MODERN VIDEO UPLOAD PIPELINE
+   1. Selection: User chooses a video file.
+   2. Instant Preview: Javascript interceptor reads file source instantly via
+      `URL.createObjectURL(file)` to render in a preview player.
+   3. Thumbnail Generation: Automatic extraction of keyframes displayed as
+      selectable thumbnails instantly (no manual buttons required).
+   4. Metadata Inputting: User writes Title, Description, Category, Tags, and
+      Visibility.
+   5. Background Upload: File uploads in the background using asynchronous Ajax
+      with active progress bar reporting, allowing the creator to finish metadata
+      input without interrupting the upload pipeline.
+
+C. CREATOR REVENUE & ANALYTICS PIPELINE
+   1. Interaction: Members watch videos. Impressions/views are recorded.
+   2. Watch-Time Revenue: Creator earnings are logged via a single centralized
+      revenue calculation engine, resolving discrepancies between Analytics and
+      Earnings dashboards.
+   3. Earnings Accumulation: Creator's `balance` in the `users` table is updated
+      in real time.
+
+D. DYNAMIC 4-STEP WITHDRAWAL SYSTEM
+   1. Initiation: Viewer or Creator requests a payout.
+   2. Step 1 (Method Selection): Choose payment method from cards grid (Bank
+      Transfer, JazzCash, Easypaisa, PayPal, Wise, UPI, Crypto, or Custom).
+   3. Step 2 (Country Selector): Live search filter matches the user's country
+      to load regionally supported payouts criteria.
+   4. Step 3 (Account details): JS loads customized form inputs based on selected
+      method + country, validating inputs dynamically.
+   5. Step 4 (Confirm Preview): Renders structured, clean layout preview card of
+      amount, method, and account details. On submit, form sets a client-side
+      formatted hidden input `payment_details` containing clean text labels.
+   6. Approval Lifecycle: Request lands in the admin payouts queue. Admin can:
+      - Transition status (Pending -> Processing -> Paid / Rejected)
+      - Attach custom admin notes (e.g. Transaction hashes)
+      - Upload image or PDF receipt files (Slips/Receipts).
+   7. Member Review: User opens their Payout Transaction History, clicks "View",
+      and sees their request layout, structured account details, case-insensitive
+      status badge, admin notes with newline carriage returns, and download
+      links to proof receipts.
+
+---
+
+================================================================================
+4. MONETIZATION & AD PLACEMENTS SETUP
+================================================================================
+FreeHub.Live features a highly flexible ad engine designed to optimize platform
+earnings without disrupting user experience.
+
+A. TARGETED AD PLACEMENTS
+   - Placement configuration keys: `landing_latest_10`, `landing_latest_20`,
+     `reels_left`, `reels_right`, `reels_mobile_top`, `category_grid`, etc.
+   - Grid Injector: Homepage loops automatically inject sponsored ad cards inside
+     video lists after every 10 video items, mirroring native layout specs.
+
+B. MULTI-FORMAT SUPPORT
+   - Static Image Ads: Standard image uploads rendering as sponsored video cards.
+   - Dynamic HTML Ads: Embedded JS script codes, widgets, or third-party iframe
+     placements loaded via HTML templates.
+
+C. DEVICE & CAMPAIGN TIMEFRAME CONTROLS
+   - Target filters match specific devices (e.g. Only rendering mobile top banners
+     or desktop-only sidebar banners).
+   - Database checks `start_date` and `end_date` parameters to run campaigns
+     in strict date schedules.
+   - Click and impressions tracking calls `fh_track_ad_event()` to maintain
+     analytics reports.
+
+---
+
+================================================================================
+5. SYSTEM PERFORMANCE AUDIT
+================================================================================
+To maintain high responsiveness under traffic loads, several design choices were
+implemented:
+
+- Asynchronous Duration Synced: Homepage doesn't calculate or read video
+  durations in heavy loops. Durations are calculated asynchronously on demand or
+  synced during individual playbacks on `watch.php`.
+- Asset Deferred Loading: Image tags utilize `loading="lazy"` and `decoding="async"`
+  to prevent render blocking and decrease layout shifts (CLS).
+- DB Indexes: Primary queries filtering status, visibility, user relations, and
+  ad keys are matched with indexes to maintain sub-millisecond execution times.
+- Zero-Router Architecture: The codebase leverages direct modular script entries,
+  meaning that index page loadings are parsed instantly by PHP instead of passing
+  through nested controller routing pipelines.
+
+---
+
+================================================================================
+6. SECURITY COMPLIANCE AUDIT
+================================================================================
+- SQL Injection Defense: PDO prepared statements used in 100% of data manipulation
+  and selection functions.
+- Cross-Site Scripting (XSS) Defense: Inputs parsed via `e()` helper wrapping
+  `htmlspecialchars(..., ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')`. User inputs on
+  withdrawal setups undergo `strip_tags` and `trim` before writing.
+- CSRF Protection: CSRF tokens generated dynamically via `csrf_token()` and
+  validated using `verify_csrf()` on all POST handlers.
+- Secure File Handlers: File uploads (payment proofs, video uploads, thumbnails)
+  strictly filter extensions and file types (e.g. limit uploads to JPG, PNG, WEBP,
+  PDF) and enforce size boundaries on the server side (e.g. 10MB limits).
+================================================================================

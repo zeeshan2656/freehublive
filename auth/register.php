@@ -77,12 +77,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } catch (Throwable $e) { /* ignore duplicate */ }
                 }
                 
-                $msg = 'Account created successfully! Please sign in.';
+                $msg = 'Account created successfully!';
                 if ($status === 'pending') {
-                    $msg = 'Account created! Admin will review your application before full access is enabled. Please sign in.';
+                    $msg = 'Account created! Admin will review your application before full access is enabled.';
                 }
                 flash('success', $msg);
-                redirect(BASE_URL . '/auth/login.php');
+
+                // Fetch the new user and automatically log them in
+                $user = db_fetch("SELECT * FROM users WHERE id = ?", [$id]);
+                if ($user) {
+                    login_user($user);
+                }
+
+                redirect(BASE_URL . '/');
         }
     }
 }

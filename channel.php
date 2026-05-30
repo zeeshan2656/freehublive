@@ -3,6 +3,7 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
+require_login();
 
 $channel_id = (int)($_GET['id'] ?? 0);
 if (!$channel_id) { redirect(BASE_URL . '/'); }
@@ -128,12 +129,12 @@ require_once __DIR__ . '/includes/header.php';
         <?= $is_subscribed ? 'Subscribed ✓' : 'Subscribe' ?>
       </button>
       <?php elseif ($is_owner && (is_creator() || is_admin())): ?>
-      <div style="display:flex; flex-direction:column; gap:6px;">
-        <a href="<?= BASE_URL ?>/creator/upload.php" class="btn btn-primary mobile-only-sub-btn" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
+      <div class="mobile-only" style="flex-direction:column; gap:6px; width:100%;">
+        <a href="<?= BASE_URL ?>/creator/upload.php" class="btn btn-primary" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
           Upload Video
         </a>
         <?php if (setting('reels_enabled', '1') === '1'): ?>
-        <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="btn btn-outline mobile-only-sub-btn" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
+        <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="btn btn-outline" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
           Upload Reel
         </a>
         <?php endif; ?>

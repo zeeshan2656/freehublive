@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.05.30.5';
+    $migration_version = '2026.05.30.7';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -102,9 +102,11 @@ function fh_run_migrations(): void {
             processed_at DATETIME DEFAULT NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_user (user_id),
-            INDEX idx_status (status),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB");
+    }
+
+    if (fh_table_exists('withdrawal_requests') && !fh_column_exists('withdrawal_requests', 'payment_proof')) {
+        db_query("ALTER TABLE withdrawal_requests ADD COLUMN payment_proof VARCHAR(255) DEFAULT NULL AFTER admin_note");
     }
 
     // ── Password resets table ───────────────────────────────
@@ -689,6 +691,28 @@ function fh_run_migrations(): void {
     // ── Remove legacy ad placements (2026.05.30.5) ────
     if (fh_table_exists('ad_placements')) {
         db_query("DELETE FROM ad_placements WHERE key_name IN ('landing_trending', 'landing_latest')");
+    }
+
+    // ── Database Relational Cleanup & Orphan Record Eviction (2026.05.30.7) ────
+    try {
+        if (fh_table_exists('comments')) {
+            db_query("DELETE FROM comments WHERE video_id NOT IN (SELECT id FROM videos)");
+            db_query("DELETE FROM comments WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM users)");
+        }
+        if (fh_table_exists('playlist_items')) {
+            db_query("DELETE FROM playlist_items WHERE playlist_id NOT IN (SELECT id FROM playlists)");
+            db_query("DELETE FROM playlist_items WHERE video_id NOT IN (SELECT id FROM videos)");
+        }
+        if (fh_table_exists('watch_later')) {
+            db_query("DELETE FROM watch_later WHERE user_id NOT IN (SELECT id FROM users)");
+            db_query("DELETE FROM watch_later WHERE video_id NOT IN (SELECT id FROM videos)");
+        }
+        if (fh_table_exists('ad_logs')) {
+            db_query("DELETE FROM ad_logs WHERE video_id IS NOT NULL AND video_id NOT IN (SELECT id FROM videos)");
+            db_query("DELETE FROM ad_logs WHERE viewer_id IS NOT NULL AND viewer_id NOT IN (SELECT id FROM users)");
+        }
+    } catch (Throwable $e) {
+        // Suppress database engine or key index lock errors silently
     }
 
     // ── All migrations passed — write flag to skip on next request ──

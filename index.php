@@ -2,6 +2,11 @@
 // ============================================================
 // FreeHub.Live — Homepage
 // ============================================================
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/functions.php';
+require_login();
+
 $meta_title = 'FreeHub — Watch, Share & Earn';
 $meta_desc  = 'Discover trending videos, share and earn with our affiliate program.';
 require_once __DIR__ . '/includes/header.php';
@@ -22,19 +27,22 @@ $hero = null;
 $trending = [];
 
 // ── Latest ───────────────────────────────────────────────────
-$latest = db_fetchAll(
+$latest = db_fetchAll_cached(
     "SELECT v.*,u.username,u.channel_name,u.avatar
      FROM videos v
      JOIN users u ON u.id=v.user_id
      WHERE v.status='published' AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
      ORDER BY v.published_at DESC LIMIT 51",
-    $params
+    $params,
+    60
 );
 
 // ── Categories ───────────────────────────────────────────────
-$categories = db_fetchAll(
+$categories = db_fetchAll_cached(
     "SELECT c.*,(SELECT COUNT(*) FROM videos WHERE category_id=c.id AND status='published' AND is_reel=0) as video_count
-     FROM categories c WHERE c.is_active=1 ORDER BY c.sort_order LIMIT 10"
+     FROM categories c WHERE c.is_active=1 ORDER BY c.sort_order LIMIT 10",
+    [],
+    60
 );
 
 // ── Selected Category Videos List ────────────────────────────

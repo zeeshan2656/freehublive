@@ -2,14 +2,21 @@
 // ============================================================
 // FreeHub.Live — Categories Page
 // ============================================================
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/functions.php';
+require_login();
+
 $meta_title = 'Categories — ' . 'FreeHub';
 $meta_desc  = 'Browse videos by category';
 
 require_once __DIR__ . '/includes/header.php';
 
-$categories = db_fetchAll(
+$categories = db_fetchAll_cached(
     "SELECT c.*, (SELECT COUNT(*) FROM videos v WHERE (v.category_id=c.id OR EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = c.id)) AND v.status='published' AND v.is_reel=0) as video_count
-     FROM categories c WHERE c.is_active=1 ORDER BY c.sort_order"
+     FROM categories c WHERE c.is_active=1 ORDER BY c.sort_order",
+    [],
+    60
 );
 ?>
 <div class="layout">

@@ -1974,3 +1974,28 @@ tbody tr:hover{background:var(--bg3)}
   transform: translateY(-1px) !important;
   box-shadow: 0 4px 12px rgba(112, 0, 255, 0.35) !important;
 }
+
+/* ── Grid Ad Card Overrides ── */
+.ad-card.ad-sponsored-container {
+  display: flex !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: var(--bg2) !important;
+  border-radius: var(--radius-lg) !important;
+  text-align: left !important;
+  min-height: 0 !important;
+  box-shadow: none !important;
+  max-width: none !important;
+  position: relative !important;
+}
+.ad-card.ad-sponsored-container::before {
+  display: none !important;
+}
+.ad-card.ad-sponsored-container .video-thumb {
+  width: 100% !important;
+  aspect-ratio: 16/9 !important;
+  background: #0c0c0d !important;
+}
+

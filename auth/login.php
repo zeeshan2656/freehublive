@@ -17,13 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Smart redirect: admin -> admin dashboard, creator -> studio, else -> homepage or ?next=
                 if (!empty($_GET['next'])) {
                     redirect(BASE_URL . $_GET['next']);
-                } elseif ($user['role'] === 'admin') {
-                    redirect(BASE_URL . '/admin/');
-                } elseif ($user['role'] === 'creator') {
-                    redirect(BASE_URL . '/creator/');
                 } else {
-                    // viewers redirect to Viewer Dashboard
-                    redirect(BASE_URL . '/dashboard.php');
+                    redirect(BASE_URL . '/');
                 }
             }
         } else { $error = 'Invalid credentials.'; }

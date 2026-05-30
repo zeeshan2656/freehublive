@@ -701,11 +701,22 @@ function render_ad_card(string $placement_key): string {
     if (!$placements) {
         $advertise_url = BASE_URL . '/admin/ads.php';
         return <<<HTML
-<article class="video-card ad-card fade-in" style="cursor:pointer; border: 1.5px dashed var(--border); display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:200px; background:rgba(255,255,255,0.01); border-radius:12px; transition:all 0.2s;" onclick="location.href='{$advertise_url}'">
-  <div style="text-align:center; padding:20px; color:var(--text2)">
-    <div style="font-size:1.8rem; margin-bottom:10px; filter: grayscale(0.2);">📺</div>
-    <div style="font-weight:800; font-size:0.9rem; color:var(--text); letter-spacing:0.5px;">Advertise Here</div>
-    <div style="font-size:0.75rem; margin-top:4px; opacity:0.8;">Place your ad on FreeHub</div>
+<article class="video-card ad-card fade-in" style="cursor:pointer; display:flex; flex-direction:column;" onclick="location.href='{$advertise_url}'">
+  <div class="video-thumb" style="position:relative; aspect-ratio:16/9; background:#0c0c0d; display:flex; align-items:center; justify-content:center; border: 1.5px dashed var(--border); box-sizing:border-box;">
+    <span style="font-size:2.5rem; filter: grayscale(0.2);">📺</span>
+  </div>
+  <div class="video-card-body" style="flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex;gap:10px;margin-bottom:8px; align-items: center;">
+      <div style="border-radius:50%; overflow:hidden; width:40px; height:40px; background:var(--bg3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <span style="font-size:1.2rem;">📢</span>
+      </div>
+      <div style="min-width:0;flex:1">
+        <div class="video-title" style="margin:0;line-height:1.3; font-weight:800;">Advertise Here</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--text2)">
+      <span class="video-card-channel-link">Place your ad on FreeHub</span>
+    </div>
   </div>
 </article>
 HTML;
@@ -740,42 +751,80 @@ HTML;
         if ($ad['content_type'] === 'image' && $ad['image_url']) {
             $img_src = str_starts_with($ad['image_url'], 'http') ? $ad['image_url'] : BASE_URL . '/uploads/ads/' . $ad['image_url'];
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}"{$vid_attr} onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; min-height:auto;">
-  <div class="video-thumb" style="position:relative; aspect-ratio:{$aspect_ratio}; background:#0c0c0d; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
+<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}"{$vid_attr} onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; display:flex; flex-direction:column; overflow:hidden; position:relative;">
+  <div class="video-thumb" style="position:relative; aspect-ratio:16/9; background:#0c0c0d; display:flex; align-items:center; justify-content:center; overflow:hidden;">
     <img src="{$img_src}" alt="{$title}" loading="lazy" class="thumb-main" style="width:100%; height:100%; object-fit:cover">
     {$sponsored_tag}
     <span class="video-duration" style="background:rgba(0,0,0,0.8); right:8px; bottom:8px; font-weight:800; letter-spacing:0.5px; border-radius:4px; font-size:0.62rem; padding:2px 6px;">AD</span>
+  </div>
+  <div class="video-card-body" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+    <div style="display:flex;gap:10px;margin-bottom:8px; align-items: center;">
+      <div style="border-radius:50%; overflow:hidden; width:40px; height:40px; background:var(--bg3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <span style="font-size:1.2rem;">📢</span>
+      </div>
+      <div style="min-width:0;flex:1">
+        <div class="video-title" style="margin:0;line-height:1.3">{$title}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--text2)">
+      <span class="video-card-channel-link">Sponsored Ad</span>
+      <span>·</span>
+      <span>Promoted</span>
+    </div>
   </div>
 </article>
 HTML;
         } elseif ($ad['content_type'] === 'html') {
             $html_content = $ad['content'];
             
-            $aspect_ratio_val = ($w && $h) ? ((int)$w . '/' . (int)$h) : '';
-            $card_style = $aspect_ratio_val ? "min-height:auto; aspect-ratio:{$aspect_ratio_val};" : "min-height:200px;";
-            $inner_style = $h ? "height:" . (int)$h . "px;" : "min-height:160px;";
-            
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in{$device_class}" data-device-target="{$ad['placement_device']}"{$vid_attr} style="{$card_style} display:flex; flex-direction:column; overflow:hidden; border-radius:12px; position:relative;">
-  {$sponsored_tag}
-  <div class="ad-html-content" style="flex:1; position:relative; overflow:hidden; z-index:1; {$inner_style}">
-    {$html_content}
+<article class="video-card ad-card ad-sponsored-container fade-in{$device_class}" data-placement="{$placement_key}" data-device-target="{$ad['placement_device']}" data-ad-id="{$ad_id}"{$vid_attr} style="display:flex; flex-direction:column; overflow:hidden; position:relative;">
+  <div class="video-thumb" style="position:relative; aspect-ratio:16/9; background:#0c0c0d;">
+    {$sponsored_tag}
+    <div class="ad-html-content" style="width:100%; height:100%; position:relative; overflow:hidden; z-index:1;">
+      <template class="ad-html-template">{$html_content}</template>
+    </div>
+  </div>
+  <div class="video-card-body" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+    <div style="display:flex;gap:10px;margin-bottom:8px; align-items: center;">
+      <div style="border-radius:50%; overflow:hidden; width:40px; height:40px; background:var(--bg3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <span style="font-size:1.2rem;">📢</span>
+      </div>
+      <div style="min-width:0;flex:1">
+        <div class="video-title" style="margin:0;line-height:1.3">{$title}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--text2)">
+      <span class="video-card-channel-link">Sponsored Ad</span>
+      <span>·</span>
+      <span>Promoted</span>
+    </div>
   </div>
 </article>
 HTML;
         } else {
             $content_text = e($ad['content']);
             $inner_html = <<<HTML
-<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}"{$vid_attr} onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; background:linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.03)); display:flex; flex-direction:column; justify-content:space-between; min-height:220px; border:1px solid rgba(99,102,241,0.15); border-radius:12px; transition:all 0.2s; position:relative;">
-  {$sponsored_tag}
-  <div style="padding:22px; flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center">
-    <div style="font-size:2rem; margin-bottom:12px; filter: drop-shadow(0 2px 6px rgba(99,102,241,0.25));">🚀</div>
-    <div style="font-size:0.78rem; color:var(--text2); margin-top:8px; line-height:1.4; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; opacity:0.85;">
-      {$content_text}
-    </div>
+<article class="video-card ad-card fade-in ad-click-link{$device_class}" data-ad-id="{$ad_id}" data-device-target="{$ad['placement_device']}"{$vid_attr} onclick="window.open('{$click_url}', '_blank');" style="cursor:pointer; display:flex; flex-direction:column; overflow:hidden; position:relative;">
+  <div class="video-thumb" style="position:relative; aspect-ratio:16/9; background:linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.03)); display:flex; align-items:center; justify-content:center; overflow:hidden;">
+    <div style="font-size:2.5rem; filter: drop-shadow(0 2px 6px rgba(99,102,241,0.25));">🚀</div>
+    {$sponsored_tag}
+    <span class="video-duration" style="background:rgba(0,0,0,0.8); right:8px; bottom:8px; font-weight:800; letter-spacing:0.5px; border-radius:4px; font-size:0.62rem; padding:2px 6px;">AD</span>
   </div>
-  <div style="border-top:1px solid rgba(99,102,241,0.15); padding:10px; background:rgba(0,0,0,0.12); text-align:center;">
-    <span style="font-size:0.8rem; font-weight:700; color:var(--accent); letter-spacing:0.3px;">Learn More &rarr;</span>
+  <div class="video-card-body" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+    <div style="display:flex;gap:10px;margin-bottom:8px; align-items: center;">
+      <div style="border-radius:50%; overflow:hidden; width:40px; height:40px; background:var(--bg3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <span style="font-size:1.2rem;">📢</span>
+      </div>
+      <div style="min-width:0;flex:1">
+        <div class="video-title" style="margin:0;line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">{$content_text}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--text2)">
+      <span class="video-card-channel-link">Sponsored Ad</span>
+      <span>·</span>
+      <span>Learn More &rarr;</span>
+    </div>
   </div>
 </article>
 HTML;
@@ -987,4 +1036,61 @@ function fh_asset_url(string $path): string {
 
     return BASE_URL . '/' . ltrim($path, '/') . '?v=' . filemtime($fullPath);
 }
+
+/**
+ * Retrieve cached data by key. Returns null if expired or missing.
+ */
+function fh_cache_get(string $key): mixed {
+    $dir = __DIR__ . '/../cache';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $file = $dir . '/fh_cache_' . md5($key) . '.cache';
+    if (!is_file($file)) {
+        return null;
+    }
+    $content = @file_get_contents($file);
+    if (!$content) {
+        return null;
+    }
+    $data = @unserialize($content);
+    if (!is_array($data) || !isset($data['expire']) || !isset($data['value'])) {
+        @unlink($file);
+        return null;
+    }
+    if (time() > $data['expire']) {
+        @unlink($file);
+        return null;
+    }
+    return $data['value'];
+}
+
+/**
+ * Store data in the cache with a specified TTL (in seconds).
+ */
+function fh_cache_set(string $key, mixed $value, int $ttl = 60): bool {
+    $dir = __DIR__ . '/../cache';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $file = $dir . '/fh_cache_' . md5($key) . '.cache';
+    $data = [
+        'expire' => time() + $ttl,
+        'value'  => $value
+    ];
+    $serialized = @serialize($data);
+    return @file_put_contents($file, $serialized) !== false;
+}
+
+/**
+ * Evict a cache item by key.
+ */
+function fh_cache_delete(string $key): bool {
+    $file = __DIR__ . '/../cache/fh_cache_' . md5($key) . '.cache';
+    if (is_file($file)) {
+        return @unlink($file);
+    }
+    return false;
+}
+
 

@@ -126,11 +126,54 @@ function db_count(string $table, string $where = '1', array $params = []): int {
 function setting(string $key, mixed $default = ''): mixed {
     static $cache = null;
     if ($cache === null) {
-        if (!fh_table_exists('settings')) {
-            return $default;
+        if (function_exists('fh_cache_get')) {
+            $cache = fh_cache_get('fh_settings_cache');
         }
-        $rows = db_fetchAll("SELECT `key`,`value` FROM settings");
-        $cache = array_column($rows, 'value', 'key');
+        if ($cache === null) {
+            if (!fh_table_exists('settings')) {
+                return $default;
+            }
+            $rows = db_fetchAll("SELECT `key`,`value` FROM settings");
+            $cache = array_column($rows, 'value', 'key');
+            if (function_exists('fh_cache_set')) {
+                fh_cache_set('fh_settings_cache', $cache, 120);
+            }
+        }
     }
     return $cache[$key] ?? $default;
 }
+
+/**
+ * Fetch all rows from a query, utilizing filesystem cache if valid.
+ */
+function db_fetchAll_cached(string $sql, array $params = [], int $ttl = 60): array {
+    if (!function_exists('fh_cache_get')) {
+        return db_fetchAll($sql, $params);
+    }
+    $cache_key = 'db_query_all_' . md5($sql . serialize($params));
+    $cached = fh_cache_get($cache_key);
+    if ($cached !== null) {
+        return $cached;
+    }
+    $res = db_fetchAll($sql, $params);
+    fh_cache_set($cache_key, $res, $ttl);
+    return $res;
+}
+
+/**
+ * Fetch a single row from a query, utilizing filesystem cache if valid.
+ */
+function db_fetch_cached(string $sql, array $params = [], int $ttl = 60): ?array {
+    if (!function_exists('fh_cache_get')) {
+        return db_fetch($sql, $params);
+    }
+    $cache_key = 'db_query_row_' . md5($sql . serialize($params));
+    $cached = fh_cache_get($cache_key);
+    if ($cached !== null) {
+        return $cached;
+    }
+    $res = db_fetch($sql, $params);
+    fh_cache_set($cache_key, $res, $ttl);
+    return $res;
+}
+

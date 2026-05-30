@@ -1,8 +1,11 @@
 <?php
+// ============================================================
+// FreeHub.Live — Modern Background Video Upload System (SPA)
+// ============================================================
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_role(['creator','admin']);
+require_role(['creator', 'admin']);
 
 $site_theme = setting('active_theme', 'dark-minimal');
 $primary    = setting('primary_color', '#6366f1');
@@ -10,160 +13,7 @@ $primary    = setting('primary_color', '#6366f1');
 $uid     = auth_user()['id'];
 $error   = '';
 $success = '';
-$new_vid_id = null;
 
-// If returning to thumbnail step via client-side flow
-if (!empty($_GET['thumb_for'])) {
-  $possible = (int)$_GET['thumb_for'];
-  $rec = db_fetch('SELECT id,user_id FROM videos WHERE id=?', [$possible]);
-  if ($rec && ((int)$rec['user_id'] === (int)$uid || is_admin())) {
-    $new_vid_id = $possible;
-    $success = 'Video saved earlier — continue to thumbnails';
-  }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!verify_csrf($_POST['csrf'] ?? '')) { 
-        $error = 'Invalid request.'; 
-    } else {
-        $title       = trim($_POST['title'] ?? '');
-        $description = trim($_POST['description'] ?? '');
-        $tags        = trim($_POST['tags'] ?? '');
-        $category_ids = array_map('intval', $_POST['category_ids'] ?? []);
-        $category_id  = !empty($category_ids) ? $category_ids[0] : 0;
-        $visibility  = in_array($_POST['visibility']??'', ['public','unlisted','private']) ? $_POST['visibility'] : 'public';
-        $upload_type = trim($_POST['upload_type'] ?? 'file');
-
-        if (strlen($title) < 3) { 
-            $error = 'Title must be at least 3 characters.'; 
-        } else {
-            $vfilename = '';
-            $file_size = 0;
-            $duration = 0;
-            $thumbnail = null;
-
-            if ($upload_type === 'file') {
-                if (empty($_FILES['video']['name'])) { 
-                    $error = 'Please select a video file.'; 
-                } else {
-                    $vfile = $_FILES['video'];
-                    $mime  = mime_content_type($vfile['tmp_name']);
-                    if (!allowed_video($mime)) { 
-                        $error = 'Invalid video format. Use MP4, WebM, or MOV.'; 
-                    } elseif ($vfile['size'] > 2 * 1024 * 1024 * 1024) { 
-                        $error = 'Video max size is 2GB.'; 
-                    } else {
-                        if (!is_dir(VIDEO_PATH)) mkdir(VIDEO_PATH, 0755, true);
-                        if (!is_dir(THUMB_PATH)) mkdir(THUMB_PATH, 0755, true);
-
-                        $ext       = strtolower(pathinfo($vfile['name'], PATHINFO_EXTENSION));
-                        $vfilename = unique_filename($ext);
-                        move_uploaded_file($vfile['tmp_name'], VIDEO_PATH . $vfilename);
-
-                        $file_size = $vfile['size'];
-                        $postedDur = (int)($_POST['duration_seconds'] ?? 0);
-                        $probedDur = fh_probe_video_duration($vfilename);
-                        $duration  = max($postedDur, $probedDur);
-                    }
-                }
-            } else {
-                // Embed URL
-                $embed_url = trim($_POST['embed_url'] ?? '');
-                if (empty($embed_url)) {
-                    $error = 'Please enter a video URL.';
-                } elseif (!filter_var($embed_url, FILTER_VALIDATE_URL)) {
-                    $error = 'Please enter a valid URL.';
-                } else {
-                    $vfilename = $embed_url;
-                    $file_size = 0;
-
-                    $yt_id = fh_youtube_id($vfilename);
-                    if ($yt_id) {
-                        $thumb_filename = unique_filename('jpg');
-                        $thumb_local_path = __DIR__ . '/../uploads/thumbnails/' . $thumb_filename;
-                        $img_data = @file_get_contents("https://img.youtube.com/vi/{$yt_id}/maxresdefault.jpg");
-                        if (!$img_data) {
-                            $img_data = @file_get_contents("https://img.youtube.com/vi/{$yt_id}/hqdefault.jpg");
-                        }
-                        if ($img_data) {
-                            if (!is_dir(dirname($thumb_local_path))) mkdir(dirname($thumb_local_path), 0755, true);
-                            file_put_contents($thumb_local_path, $img_data);
-                            $thumbnail = $thumb_filename;
-                        }
-                    }
-                    $duration = (int)($_POST['duration_seconds_embed'] ?? 0);
-                }
-            }
-
-            if (!$error) {
-                $slug = slugify($title);
-                $base = $slug; $i = 1;
-                while (db_fetch("SELECT id FROM videos WHERE slug=?", [$slug])) {
-                    $slug = $base . '-' . $i++;
-                }
-
-                $approvalMode  = setting('video_approval_mode', 'manual');
-                $initialStatus = ($approvalMode === 'auto') ? 'published' : 'pending';
-                $publishedAt   = ($approvalMode === 'auto') ? date('Y-m-d H:i:s') : null;
-
-                $new_vid_id = db_insert('videos', [
-                    'user_id'      => $uid,
-                    'category_id'  => $category_id ?: null,
-                    'title'        => $title,
-                    'slug'         => $slug,
-                    'description'  => $description,
-                    'tags'         => $tags,
-                    'video_url'    => $vfilename,
-                    'thumbnail'    => $thumbnail,
-                    'file_size'    => $file_size,
-                    'duration'     => $duration > 0 ? $duration : 0,
-                    'visibility'   => $visibility,
-                    'status'       => $initialStatus,
-                    'published_at' => $publishedAt,
-                ]);
-
-                if ($new_vid_id && $duration < 1 && $upload_type === 'file') {
-                    fh_ensure_video_duration((int)$new_vid_id);
-                }
-
-                if ($new_vid_id && !empty($category_ids)) {
-                    foreach ($category_ids as $cid) {
-                        db_insert('video_categories', [
-                            'video_id'    => $new_vid_id,
-                            'category_id' => $cid
-                        ]);
-                    }
-                }
-
-                $playlist_ids = array_map('intval', $_POST['playlist_ids'] ?? []);
-                if ($new_vid_id && !empty($playlist_ids)) {
-                    foreach ($playlist_ids as $pid) {
-                        $playlist = db_fetch("SELECT id FROM playlists WHERE id = ? AND user_id = ?", [$pid, $uid]);
-                        if ($playlist) {
-                            $max_sort = (int)db_fetch("SELECT MAX(sort_order) as m FROM playlist_videos WHERE playlist_id = ?", [$pid])['m'];
-                            db_insert('playlist_videos', [
-                                'playlist_id' => $pid,
-                                'video_id'    => $new_vid_id,
-                                'sort_order'  => $max_sort + 1
-                            ]);
-                            $max_pos = (int)db_fetch("SELECT MAX(position) as m FROM playlist_items WHERE playlist_id = ?", [$pid])['m'];
-                            db_insert('playlist_items', [
-                                'playlist_id' => $pid,
-                                'video_id'    => $new_vid_id,
-                                'position'    => $max_pos + 1
-                            ]);
-                            db_query("UPDATE playlists SET video_count = video_count + 1 WHERE id = ?", [$pid]);
-                        }
-                    }
-                }
-
-                $success = $initialStatus === 'published'
-                    ? 'Video saved and published! Now select a thumbnail below.'
-                    : 'Video saved successfully! Now select a thumbnail below.';
-            }
-        }
-    }
-}
 $categories = db_fetchAll("SELECT * FROM categories WHERE is_active=1 ORDER BY sort_order");
 $user_playlists = db_fetchAll("SELECT id, title FROM playlists WHERE user_id = ? ORDER BY title ASC", [$uid]);
 $meta_title = 'Upload Video';
@@ -171,16 +21,15 @@ require_once __DIR__ . '/../includes/header.php';
 ?>
 <script>document.body.classList.add('upload-single-screen');</script>
 
-
 <style>
-/* ── YouTube Style Upload Redesign ── */
+/* ── YouTube Style Background Upload Redesign ── */
 .upload-wizard {
-  max-width: 1040px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 16px 8px 48px;
 }
 
-/* Steps Progress bar */
+/* Steps progress indicator */
 .step-progress-bar {
   display: flex;
   justify-content: space-between;
@@ -209,7 +58,7 @@ require_once __DIR__ . '/../includes/header.php';
   font-size: 0.85rem;
   font-weight: 800;
   color: var(--text2);
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .wizard-step.active .step-icon {
   background: var(--accent);
@@ -227,41 +76,49 @@ require_once __DIR__ . '/../includes/header.php';
 .step-connector { flex: 1; height: 2px; background: var(--border); margin: 0 16px; }
 .wizard-step.done .step-connector { background: var(--green); }
 
-/* Upload Type Tabs */
-.upload-tab-header {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
-}
-.upload-tab-btn {
-  background: none;
-  border: none;
-  color: var(--text2);
-  font-size: 0.88rem;
-  font-weight: 700;
-  padding: 10px 18px;
+/* Main Dropzone */
+.upload-dropzone {
+  border: 2.5px dashed var(--border);
+  border-radius: 20px;
+  padding: 80px 24px;
+  text-align: center;
   cursor: pointer;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all var(--trans);
+  background: var(--bg2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  margin-bottom: 24px;
 }
-.upload-tab-btn:hover {
-  color: var(--text);
-  background: var(--bg3);
+.upload-dropzone:hover, .upload-dropzone.drag-over {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.04);
+  box-shadow: 0 12px 40px rgba(99, 102, 241, 0.08);
 }
-.upload-tab-btn.active {
+.upload-dropzone svg {
+  width: 64px;
+  height: 64px;
+  color: var(--text3);
+  margin-bottom: 20px;
+  transition: transform 0.3s, color 0.3s;
+}
+.upload-dropzone:hover svg {
+  transform: translateY(-6px);
   color: var(--accent);
-  background: rgba(99, 102, 241, 0.12);
+}
+.upload-title {
+  font-family: var(--font2);
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.upload-sub {
+  font-size: 0.85rem;
+  color: var(--text2);
 }
 
-/* Two column layout */
+/* Two Column Layout */
 .wizard-layout-cols {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: 1.6fr 1fr;
   gap: 24px;
   align-items: start;
 }
@@ -270,83 +127,25 @@ require_once __DIR__ . '/../includes/header.php';
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
 }
 .wizard-preview-panel {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  position: sticky;
+  top: 80px;
 }
 
-/* Video Preview Card */
-.preview-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.18);
-}
-.preview-aspect-ratio {
-  position: relative;
-  aspect-ratio: 16/9;
-  background: var(--bg3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text3);
-}
-.preview-details {
-  padding: 16px;
-}
-.preview-title {
-  font-size: 0.92rem;
-  font-weight: 700;
-  line-height: 1.4;
-  margin-bottom: 6px;
-  word-break: break-word;
-}
-.preview-meta {
-  font-size: 0.78rem;
-  color: var(--text2);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Dropzone style */
-.upload-dropzone {
-  border: 2px dashed var(--border);
-  border-radius: 12px;
-  padding: 44px 20px;
-  text-align: center;
-  cursor: pointer;
-  background: var(--bg3);
-  transition: all 0.25s ease;
-}
-.upload-dropzone:hover, .upload-dropzone.drag-over {
-  border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.05);
-}
-.upload-dropzone svg {
-  width: 48px;
-  height: 48px;
-  color: var(--text3);
-  margin-bottom: 12px;
-  transition: transform 0.25s;
-}
-.upload-dropzone:hover svg {
-  transform: translateY(-3px);
-  color: var(--accent);
-}
-
-/* Details Section label */
+/* Details Section labels */
 .wizard-section-lbl {
-  font-size: .72rem;
+  font-family: var(--font2);
+  font-size: 0.85rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--text3);
-  margin-bottom: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text2);
+  margin: 24px 0 16px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -358,12 +157,64 @@ require_once __DIR__ . '/../includes/header.php';
   background: var(--border);
 }
 
-/* Thumbnails Grid styling */
+/* Preview Card */
+.preview-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+}
+.preview-aspect-ratio {
+  position: relative;
+  aspect-ratio: 16/9;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+}
+.preview-details { padding: 16px; }
+.preview-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  word-break: break-word;
+  color: #fff;
+}
+.preview-meta {
+  font-size: 0.8rem;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Thumbnails Grid */
+.thumbnail-box {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.thumbnail-header {
+  font-weight: 700;
+  font-size: 0.92rem;
+  margin-bottom: 4px;
+  color: #fff;
+}
+.thumbnail-sub {
+  font-size: 0.8rem;
+  color: var(--text2);
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
 .thumb-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
-  margin-top: 14px;
 }
 .thumb-option {
   position: relative;
@@ -372,28 +223,28 @@ require_once __DIR__ . '/../includes/header.php';
   overflow: hidden;
   border: 2px solid transparent;
   cursor: pointer;
-  background: var(--bg3);
-  transition: all 0.2s ease;
+  background: #000;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .thumb-option:hover {
-  transform: scale(1.02);
-  border-color: var(--border);
+  transform: scale(1.03);
+  border-color: var(--text3);
 }
 .thumb-option.selected {
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.45);
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.45);
 }
 .thumb-option img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.thumb-option .check {
+.thumb-option .check-badge {
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   background: var(--accent);
   border-radius: 50%;
   display: flex;
@@ -403,1042 +254,1048 @@ require_once __DIR__ . '/../includes/header.php';
   transform: scale(0.7);
   transition: all 0.2s ease;
 }
-.thumb-option.selected .check {
+.thumb-option.selected .check-badge {
   opacity: 1;
   transform: scale(1);
 }
-
-.thumb-loading {
+.custom-thumb-trigger {
   aspect-ratio: 16/9;
-  background: var(--bg3);
+  background: rgba(255,255,255,0.02);
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.2s;
+  gap: 6px;
+}
+.custom-thumb-trigger:hover {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.05);
+  color: #fff;
+}
+.thumb-loading-placeholder {
+  aspect-ratio: 16/9;
+  background: rgba(0,0,0,0.3);
   border-radius: 8px;
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: var(--text3);
 }
 
-/* Custom scrollbar for scrollable inner areas */
-.wizard-main-scrollable::-webkit-scrollbar {
-  width: 6px;
+/* Diagnostics Upload Progress Widget */
+.upload-diagnostics-card {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%);
+  border: 1.5px solid var(--accent);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.1);
 }
-.wizard-main-scrollable::-webkit-scrollbar-track {
-  background: transparent;
+.progress-bar-wrapper {
+  height: 8px;
+  background: var(--bg3);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 10px 0;
 }
-.wizard-main-scrollable::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+.progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), #a855f7);
+  transition: width 0.3s ease;
+  border-radius: 6px;
 }
-.wizard-main-scrollable::-webkit-scrollbar-thumb:hover {
-  background: var(--text3);
-}
-
-@media(max-width: 860px) {
-  body.upload-single-screen .dashboard-main-viewport,
-  body.upload-single-screen .dashboard-content-scroll {
-    height: auto !important;
-    overflow: visible !important;
-  }
-  .upload-wizard {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding: 8px 4px 32px !important;
-  }
-  .wizard-layout-cols {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  .wizard-main-panel {
-    padding: 16px 12px !important;
-    border-radius: 12px !important;
-  }
-  .wizard-main-scrollable {
-    overflow: visible !important;
-    height: auto !important;
-    flex: none !important;
-  }
-  .thumb-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
+.diagnostics-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text2);
+  margin-top: 4px;
 }
 
-@media(max-width: 600px) {
-  .step-progress-bar {
-    padding: 12px 16px;
-  }
-  .wizard-step:not(.active) .step-title {
-    display: none;
-  }
-  .wizard-step:not(.active) {
-    flex: none;
-  }
-  .wizard-step.active {
-    flex: 1;
-  }
-  .step-connector {
-    margin: 0 8px;
-  }
+/* Success Card */
+.success-screen-card {
+  max-width: 620px;
+  margin: 40px auto;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px;
+  text-align: center;
+  box-shadow: 0 12px 50px rgba(0,0,0,0.22);
+}
+.success-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  margin: 0 auto 24px;
+  border: 2px solid rgba(34, 197, 94, 0.2);
+}
+.success-title {
+  font-family: var(--font2);
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.success-subtitle {
+  font-size: 0.95rem;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 24px;
 }
 
-@media (min-width: 861px) {
-  body.upload-single-screen .dashboard-main-viewport {
-    overflow: hidden !important;
-  }
-  body.upload-single-screen .dashboard-content-scroll {
-    height: calc(100vh - 50px) !important;
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
-    padding: 16px 20px !important;
-  }
-  .upload-wizard {
-    height: 100% !important;
-    max-width: 1200px !important;
-    padding: 0 !important;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    gap: 16px;
-  }
-  body.upload-single-screen .step-progress-bar {
-    margin-bottom: 0 !important;
-    padding: 12px 20px !important;
-    flex-shrink: 0;
-  }
-  .wizard-layout-cols {
-    flex: 1;
-    min-height: 0;
-    height: calc(100% - 10px);
-    grid-template-columns: 1.6fr 1fr;
-    align-items: stretch;
-    gap: 20px;
-  }
-  .wizard-main-panel {
-    height: 100% !important;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: 20px !important;
-  }
-  .wizard-main-scrollable {
-    flex: 1;
-    overflow-y: auto;
-    padding-right: 8px;
-  }
-  .wizard-preview-panel {
-    height: 100% !important;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    overflow: hidden;
-  }
-  
-  /* Make sure step 2 panel handles flex correctly */
-  #thumb-step {
-    display: flex;
-    flex-direction: column;
-    height: 100% !important;
-    overflow: hidden;
-  }
-}
-
+/* Layout switches */
+#details-view, #success-view { display: none; }
 </style>
 
 <div class="upload-wizard">
 
-  <!-- Step progress bar -->
+  <!-- Step progress indicator -->
   <div class="step-progress-bar">
-    <div class="wizard-step <?= !$success ? 'active' : 'done' ?>" id="step1-el">
+    <div class="wizard-step active" id="step1-indicator">
       <div class="step-icon">1</div>
-      <div class="step-title">Video Source &amp; Details</div>
+      <div class="step-title">Select &amp; Import</div>
       <div class="step-connector"></div>
     </div>
-    <div class="wizard-step <?= $success ? 'active' : '' ?>" id="step2-el">
+    <div class="wizard-step" id="step2-indicator">
       <div class="step-icon">2</div>
-      <div class="step-title">Select Thumbnail</div>
+      <div class="step-title">Details &amp; Metadata</div>
       <div class="step-connector"></div>
     </div>
-    <div class="wizard-step" id="step3-el">
+    <div class="wizard-step" id="step3-indicator">
       <div class="step-icon">3</div>
       <div class="step-title">Complete</div>
     </div>
   </div>
 
-  <?php if ($error): ?>
-  <div class="alert alert-error" style="border-radius: 12px; margin-bottom: 20px">
-    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="display:inline-block; vertical-align:middle; margin-right:8px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    <?= e($error) ?>
-  </div>
-  <?php endif; ?>
+  <!-- ── VIEW 1: Dropzone ── -->
+  <div id="dropzone-view" class="fade-in">
+    <!-- Tab selector -->
+    <div class="upload-tab-header" style="margin-bottom:24px">
+      <button type="button" class="upload-tab-btn active" id="tab-file-btn" onclick="switchSourceType('file')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload Video File
+      </button>
+      <button type="button" class="upload-tab-btn" id="tab-embed-btn" onclick="switchSourceType('embed')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Embed Link (YouTube / Direct URL)
+      </button>
+      <?php if (setting('reels_enabled', '1') === '1'): ?>
+      <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="upload-tab-btn" style="text-decoration:none">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+        Upload Reel
+      </a>
+      <?php endif; ?>
+    </div>
 
-  <!-- STEP 1: Upload Source & Details -->
-  <?php if (!$success): ?>
-  <form method="POST" enctype="multipart/form-data" id="upload-form">
-    <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
-    <input type="hidden" name="upload_type" id="upload-type-input" value="file">
-    <input type="hidden" name="duration_seconds" id="duration-seconds" value="0">
-    <input type="hidden" name="duration_seconds_embed" id="duration-seconds-embed" value="0">
+    <!-- Dropzone File block -->
+    <div id="file-drop-container">
+      <div class="upload-dropzone" id="drop-zone" onclick="document.getElementById('video-file-input').click()">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <h2 class="upload-title">Drag and drop video files to upload</h2>
+        <p class="upload-sub">Your videos will be members-only private until published.</p>
+        <button class="btn btn-primary" style="margin-top:20px; font-weight:700">Select File</button>
+      </div>
+      <input type="file" id="video-file-input" accept="video/mp4,video/webm,video/quicktime" style="display:none">
+    </div>
 
-    <div class="wizard-layout-cols">
-      
-      <!-- Main Details Form -->
-      <div class="wizard-main-panel">
-        
-        <!-- Tab selector -->
-        <div class="upload-tab-header">
-          <button type="button" class="upload-tab-btn active" id="tab-file-btn" onclick="switchUploadType('file')">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Upload File
-          </button>
-          <button type="button" class="upload-tab-btn" id="tab-embed-btn" onclick="switchUploadType('embed')">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            Embed Link (YouTube / URL)
-          </button>
-          <?php if (setting('reels_enabled', '1') === '1'): ?>
-          <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="upload-tab-btn" style="text-decoration:none">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-            Upload Reel
-          </a>
-          <?php endif; ?>
+    <!-- Embed input block -->
+    <div id="embed-url-container" style="display:none">
+      <div class="wizard-main-panel" style="padding:40px; text-align:center">
+        <div style="max-width:580px; margin:0 auto">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--text3); margin-bottom:16px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          <h2 class="upload-title" style="margin-bottom:8px">Import Video from External Source</h2>
+          <p class="upload-sub" style="margin-bottom:24px">Paste a YouTube video URL or a direct link ending in .mp4 / .webm</p>
+          <div style="display:flex; gap:10px">
+            <input class="form-input" type="url" id="embed-link-field" placeholder="https://www.youtube.com/watch?v=..." style="border-radius:8px">
+            <button type="button" class="btn btn-primary" onclick="verifyAndLoadEmbed()" style="border-radius:8px; font-weight:700">Verify &amp; Continue</button>
+          </div>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <div class="wizard-main-scrollable">
-          <!-- File Upload Dragzone -->
-          <div id="upload-file-container">
-            <div class="upload-dropzone" id="video-zone" onclick="document.getElementById('video-file').click()">
-              <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <div class="upload-title" id="video-zone-text" style="font-size: 0.95rem">Drag &amp; drop your video here</div>
-              <div class="upload-sub" style="font-size: 0.76rem; opacity: 0.8">MP4, WebM, MOV — up to 2GB</div>
-            </div>
-            <input type="file" id="video-file" name="video" accept="video/mp4,video/webm,video/quicktime" style="display:none">
+  <!-- ── VIEW 2: SPA Details Wizard ── -->
+  <div id="details-view" class="fade-in">
+    <form id="spa-upload-form" onsubmit="submitDetailsForm(event)">
+      <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+      
+      <div class="wizard-layout-cols">
+        
+        <!-- Left details panel -->
+        <div class="wizard-main-panel">
+          <div class="wizard-section-lbl" style="margin-top:0">Video Details</div>
+          
+          <div class="form-group">
+            <label class="form-label">Title *</label>
+            <input class="form-input" type="text" id="details-title" name="title" required placeholder="Catchy video title" style="border-radius:8px">
           </div>
 
-          <!-- Embed Link input -->
-          <div id="upload-embed-container" style="display:none">
-            <div class="form-group" style="margin-bottom: 20px">
-              <label class="form-label" style="font-weight: 700">Video Embed URL</label>
-              <div style="display:flex; gap:10px">
-                <input class="form-input" type="url" id="embed-url-input" name="embed_url" placeholder="Paste YouTube link (e.g., https://www.youtube.com/watch?v=...) or direct MP4 link" style="border-radius: 8px">
-                <button type="button" class="btn btn-outline" onclick="probeEmbedLink()" style="border-radius: 8px; font-weight:600">Verify</button>
-              </div>
-              <p class="text-xs text-muted" style="margin-top: 6px; line-height: 1.4">Supports YouTube standard URLs, short URLs, and direct URLs ending in .mp4 or .webm.</p>
-            </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-input" id="details-desc" name="description" rows="4" placeholder="Tell viewers what your video is about…" style="resize:vertical; border-radius:8px"></textarea>
           </div>
 
-          <div style="margin-top:24px">
-            <div class="wizard-section-lbl">Video Details</div>
+          <div class="form-group">
+            <label class="form-label">Tags <span class="text-muted">(comma separated)</span></label>
+            <input class="form-input" type="text" id="details-tags" name="tags" placeholder="gaming, music, vlog" style="border-radius:8px">
+          </div>
+
+          <!-- Thumbnail Selection Grid -->
+          <div class="thumbnail-box">
+            <div class="thumbnail-header">Thumbnail Selector</div>
+            <div class="thumbnail-sub">Select one of our instantly extracted frames or upload a custom image.</div>
             
+            <div class="thumb-grid" id="details-thumb-grid">
+              <!-- Custom upload card -->
+              <div class="custom-thumb-trigger" onclick="document.getElementById('spa-custom-thumb').click()">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                <span>Upload Custom</span>
+              </div>
+              <input type="file" id="spa-custom-thumb" accept="image/jpeg,image/png,image/webp" style="display:none">
+              
+              <!-- Frame placeholders -->
+              <?php for($i=0; $i<7; $i++): ?>
+              <div class="thumb-loading-placeholder" id="placeholder-<?= $i ?>">
+                <span>Frame..</span>
+              </div>
+              <?php endfor; ?>
+            </div>
+          </div>
+
+          <!-- Metas row -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px">
             <div class="form-group">
-              <label class="form-label">Title *</label>
-              <input class="form-input" type="text" name="title" id="title-field" required maxlength="200" placeholder="Give your video a catchy title" value="<?= e($_POST['title'] ?? '') ?>" style="border-radius: 8px">
+              <label class="form-label">Categories (Select one or more)</label>
+              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
+                <?php foreach ($categories as $c): ?>
+                <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
+                  <input type="checkbox" name="category_ids[]" value="<?= $c['id'] ?>">
+                  <span><?= e($c['name']) ?></span>
+                </label>
+                <?php endforeach; ?>
+              </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Description</label>
-              <textarea class="form-input" name="description" id="desc-field" rows="4" placeholder="Tell viewers what your video is about…" style="resize:vertical; border-radius: 8px"><?= e($_POST['description'] ?? '') ?></textarea>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Tags <span class="text-muted">(comma separated)</span></label>
-              <input class="form-input" type="text" name="tags" id="tags-field" maxlength="500" placeholder="gaming, music, vlog" value="<?= e($_POST['tags'] ?? '') ?>" style="border-radius: 8px">
-            </div>
-
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-top:20px">
-              <div class="form-group">
-                <label class="form-label">Categories (Select one or more)</label>
-                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
-                  <?php foreach ($categories as $c): ?>
+              <label class="form-label">Playlists</label>
+              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
+                <?php if (!empty($user_playlists)): ?>
+                  <?php foreach ($user_playlists as $pl): ?>
                   <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
-                    <input type="checkbox" name="category_ids[]" value="<?= $c['id'] ?>" <?= in_array($c['id'], $_POST['category_ids'] ?? []) ? 'checked' : '' ?>>
-                    <span><?= e($c['name']) ?></span>
+                    <input type="checkbox" name="playlist_ids[]" value="<?= $pl['id'] ?>">
+                    <span><?= e($pl['title']) ?></span>
                   </label>
                   <?php endforeach; ?>
-                </div>
+                <?php else: ?>
+                  <span class="text-muted text-xs" style="padding:4px">No playlists available.</span>
+                <?php endif; ?>
               </div>
+            </div>
 
-              <div class="form-group">
-                <label class="form-label">Playlists (Assign to one or more)</label>
-                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
-                  <?php if (!empty($user_playlists)): ?>
-                    <?php foreach ($user_playlists as $pl): ?>
-                    <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
-                      <input type="checkbox" name="playlist_ids[]" value="<?= $pl['id'] ?>" <?= in_array($pl['id'], $_POST['playlist_ids'] ?? []) ? 'checked' : '' ?>>
-                      <span><?= e($pl['title']) ?></span>
-                    </label>
-                    <?php endforeach; ?>
-                  <?php else: ?>
-                    <span class="text-muted text-xs" style="padding:4px">No playlists created yet.</span>
-                  <?php endif; ?>
-                </div>
-              </div>
-              
-              <div class="form-group">
-                <label class="form-label">Visibility</label>
-                <select class="form-input form-select" name="visibility" style="border-radius: 8px">
-                  <option value="public">Public</option>
-                  <option value="unlisted">Unlisted</option>
-                  <option value="private">Private</option>
-                </select>
-              </div>
+            <div class="form-group">
+              <label class="form-label">Visibility</label>
+              <select class="form-input form-select" id="details-visibility" name="visibility" style="border-radius: 8px">
+                <option value="public">Public</option>
+                <option value="unlisted" selected>Unlisted</option>
+                <option value="private">Private</option>
+              </select>
             </div>
           </div>
         </div>
 
-
-      </div>
-
-      <!-- Right Sidebar (Preview / Publish mode) -->
-      <div class="wizard-preview-panel">
-        
-        <!-- Video Preview Card -->
-        <div class="preview-card">
-          <div class="preview-aspect-ratio" id="preview-video-container">
-            <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            <div id="preview-yt-iframe" style="display:none; width:100%; height:100%"></div>
-            <video id="preview-direct-player" style="display:none; width:100%; height:100%; object-fit:cover" controls></video>
-          </div>
-          <div class="preview-details">
-            <div class="preview-title" id="preview-video-title">Video Title Preview</div>
-            <div class="preview-meta">
-              <span id="preview-channel-name"><?= e(auth_user()['channel_name'] ?? auth_user()['username']) ?></span>
-              <span>·</span>
-              <span id="preview-video-length">0:00</span>
+        <!-- Right sticky preview & diagnostics panel -->
+        <div class="wizard-preview-panel">
+          <!-- Video Card -->
+          <div class="preview-card">
+            <div class="preview-aspect-ratio" id="details-video-preview">
+              <video id="spa-player" style="width:100%; height:100%; object-fit:cover" controls></video>
+              <iframe id="spa-iframe-player" style="display:none; width:100%; height:100%; border:none" allowfullscreen></iframe>
             </div>
-          </div>
-        </div>
-
-        <!-- Video Approval Info -->
-        <div id="upload-progress" style="margin:12px 0 14px; padding:14px; background:linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04)); border:1.5px solid var(--accent); border-radius:12px; display:none">
-          <div style="margin-bottom:10px">
-            <div style="font-size:0.85rem; font-weight:700; color:var(--accent); display:flex; align-items:center; gap:6px; margin-bottom:2px">
-              <span id="upload-icon" style="display:inline-block">📤</span>
-              <span id="upload-main-status">Starting upload...</span>
-            </div>
-            <div style="font-size:0.75rem; color:var(--text2)">You can continue filling details while video uploads</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:12px">
-            <div style="flex:1">
-              <div style="height:8px; background:var(--bg3); border-radius:6px; overflow:hidden">
-                <div id="upload-progress-bar" style="height:100%; width:0%; background:linear-gradient(90deg, var(--accent), #7000ff); transition:width 0.3s ease"></div>
-              </div>
-              <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:6px; font-weight:600">
-                <span id="upload-percent">0%</span>
-                <span id="upload-status">Idle</span>
+            <div class="preview-details">
+              <div class="preview-title" id="details-preview-title">Video Title Preview</div>
+              <div class="preview-meta">
+                <span><?= e(auth_user()['channel_name'] ?? auth_user()['username']) ?></span>
+                <span>·</span>
+                <span id="details-preview-duration">0:00</span>
               </div>
             </div>
           </div>
-          <div style="display:flex; gap:16px; margin-top:8px; font-size:0.78rem; color:var(--text2)">
-            <div>Speed: <span id="upload-speed" style="font-weight:600">—</span></div>
-            <div>ETA: <span id="upload-eta" style="font-weight:600">—</span></div>
+
+          <!-- Diagnostics Upload Progress widget -->
+          <div class="upload-diagnostics-card" id="spa-diagnostics-widget">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div style="font-size:0.88rem; font-weight:800; color:var(--accent); display:flex; align-items:center; gap:8px" id="spa-status-text">
+                <span style="animation: spin 1.5s linear infinite; display:inline-block" id="spa-status-spinner">🔄</span>
+                Initializing upload...
+              </div>
+              <div style="font-size:0.85rem; font-weight:800; color:#fff" id="spa-percentage-text">0%</div>
+            </div>
+            
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar-fill" id="spa-progress-fill"></div>
+            </div>
+            
+            <div class="diagnostics-meta">
+              <div>Speed: <span id="spa-speed-text">—</span></div>
+              <div>ETA: <span id="spa-eta-text">—</span></div>
+            </div>
+
+            <!-- Retry button (hidden by default) -->
+            <button type="button" class="btn btn-outline btn-sm w-full" id="spa-retry-btn" style="margin-top:12px; display:none; justify-content:center; gap:6px; color:var(--yellow); border-color:rgba(245,158,11,0.3)">
+              🔁 Resume Interrupted Upload
+            </button>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-full" id="spa-submit-btn" style="justify-content:center; padding:14px; border-radius:12px; font-weight:800; box-shadow:0 4px 14px rgba(99,102,241,0.25)">
+            🚀 Publish &amp; Finish
+          </button>
+          <div style="text-align:center; font-size:0.75rem; color:var(--text3); font-weight:500">
+            Upload continues in background — details will update instantly
           </div>
         </div>
 
-        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:20px; box-shadow:0 6px 20px rgba(0,0,0,0.12)">
-          <?php if (setting('video_approval_mode','manual') === 'auto'): ?>
-          <div style="font-size:0.85rem; font-weight:700; color:var(--green); margin-bottom:6px; display:flex; align-items:center; gap:8px">
-            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green)"></span>
-            Auto-Publish Enabled
-          </div>
-          <p class="text-xs text-muted" style="line-height:1.45; margin:0">Your video will go live immediately and count towards your creator earnings stats once the upload completes successfully.</p>
-          <?php else: ?>
-          <div style="font-size:0.85rem; font-weight:700; color:var(--yellow); margin-bottom:6px; display:flex; align-items:center; gap:8px">
-            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--yellow)"></span>
-            Pending Approval Review
-          </div>
-          <p class="text-xs text-muted" style="line-height:1.45; margin:0">Your video will be queued for manual review. Our moderation team reviews uploads within 24 hours.</p>
-          <?php endif; ?>
-        </div>
-
-        <button type="submit" class="btn btn-primary w-full" style="justify-content:center; padding:12px 24px; border-radius:12px; font-weight:700; font-size:0.92rem; box-shadow:0 4px 14px rgba(99,102,241,0.3); transition:all 0.3s; disabled: opacity 0.6" id="submit-continue-btn">
-          📤 Upload & Continue
-        </button>
-        <div style="font-size:0.75rem; color:var(--text3); text-align:center; margin-top:8px; font-weight:500">
-          Upload happens in background — you can edit details immediately
-        </div>
-
       </div>
-
-    </div>
-  </form>
-  <?php endif; ?>
-
-  <!-- STEP 2: Thumbnail Selection (loaded after successful upload) -->
-  <?php if ($success && $new_vid_id): ?>
-  <?php 
-    $video_record = db_fetch("SELECT video_url, thumbnail FROM videos WHERE id=?", [$new_vid_id]);
-    $video_uri = $video_record['video_url'] ?? '';
-    $has_initial_thumb = !empty($video_record['thumbnail']);
-    $initial_thumb_url = $has_initial_thumb ? thumb_url($video_record['thumbnail']) : '';
-  ?>
-  <div id="thumb-step" class="wizard-main-panel" style="box-shadow: 0 10px 40px rgba(0,0,0,0.22)">
-    <div class="alert alert-success" style="border-radius: 12px; margin-bottom: 20px; font-weight:500">
-      &#10003; <?= e($success) ?>
-    </div>
-
-    <!-- Hidden video for frame extraction (for direct videos) -->
-    <video id="thumb-src" crossorigin="anonymous" preload="auto"
-           src="<?= video_url($video_uri) ?>"
-           style="display:none"></video>
-    <canvas id="thumb-canvas" style="display:none"></canvas>
-
-    <div class="wizard-main-scrollable">
-      <div style="margin-bottom: 20px">
-        <h2 style="font-size:1.15rem; font-weight:800; margin-bottom:6px">&#127775; Select or Upload Thumbnail</h2>
-        <p class="text-muted text-sm" style="line-height:1.5; margin:0">
-          Choose a display thumbnail for your video. You can select one of our auto-extracted frames, keep the YouTube fetched thumbnail, or upload a custom image.
-        </p>
-      </div>
-
-      <!-- Thumbnails option grid -->
-      <div class="thumb-grid" id="thumb-grid">
-        <?php for($i=0; $i<10; $i++): ?>
-        <div class="thumb-loading" id="tl-<?= $i ?>">
-          <span>Loading frame…</span>
-        </div>
-        <?php endfor; ?>
-      </div>
-
-      <!-- Selected thumbnail preview box -->
-      <div id="thumb-select-info" style="display:none; margin-top:20px; padding:16px; background:rgba(99,102,241,0.06); border-radius:12px; border:1px solid rgba(99,102,241,0.25)">
-        <div style="display:flex; align-items:center; gap:16px">
-          <img id="selected-thumb-preview" src="" style="width:144px; aspect-ratio:16/9; border-radius:8px; object-fit:cover; border:1px solid var(--border)">
-          <div>
-            <div style="font-weight:800; font-size:0.95rem; margin-bottom:2px">Selected Thumbnail</div>
-            <p class="text-sm text-muted" style="margin:0">Click the button below to confirm your selection and save.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-
-    <!-- Actions area -->
-    <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border); display:flex; gap:12px; align-items:center; flex-wrap:wrap">
-      <input type="file" id="custom-thumb-input" accept="image/jpeg,image/png,image/webp" style="display:none">
-      <button type="button" class="btn btn-outline" onclick="document.getElementById('custom-thumb-input').click()" style="border-radius:8px; font-weight:600; padding:10px 18px">
-        📂 Upload Custom Thumbnail
-      </button>
-
-      <button id="save-thumb-btn" class="btn btn-primary" disabled onclick="saveThumbnail()" style="border-radius:8px; font-weight:700; padding:10px 22px">
-        Set as Thumbnail
-      </button>
-      
-      <a href="<?= BASE_URL ?>/creator/videos.php" class="btn btn-outline" style="margin-left:auto; border-radius:8px">
-        Finish upload &rarr;
-      </a>
-    </div>
+    </form>
   </div>
 
-  <script data-page-script="true">
-  (function() {
-    const VID_ID = <?= $new_vid_id ?>;
-    const video  = document.getElementById('thumb-src');
-    const canvas = document.getElementById('thumb-canvas');
-    const ctx    = canvas ? canvas.getContext('2d') : null;
-    if (canvas) {
-      canvas.width  = 1280;
-      canvas.height = 720;
-    }
+  <!-- ── VIEW 3: Success Completion Page ── -->
+  <div id="success-view" class="fade-in">
+    <div class="success-screen-card">
+      <div class="success-icon">&#10003;</div>
+      <h2 class="success-title">Video Published Successfully!</h2>
+      <p class="success-subtitle" id="success-subtitle-text">
+        Your video metadata and custom thumbnail have been securely saved. The background uploader is finalizing details.
+      </p>
 
-    const hasInitialThumb = <?= $has_initial_thumb ? 'true' : 'false' ?>;
-    const initialThumbUrl = "<?= $initial_thumb_url ?>";
-    const videoUrlStr = <?= json_encode($video_uri) ?>;
+      <div class="preview-card" style="max-width:320px; margin:0 auto 30px">
+        <div class="preview-aspect-ratio">
+          <img id="success-thumb-preview" src="" style="width:100%; height:100%; object-fit:cover">
+        </div>
+        <div class="preview-details" style="text-align:left">
+          <div class="preview-title" id="success-video-title" style="font-size:0.88rem; margin:0">Video Title</div>
+        </div>
+      </div>
 
-    let selectedDataUrl = null;
-    let capturedFrames  = [];
-    let videoDuration   = 0;
+      <!-- Keep uploader progress card in the success screen if it hasn't finalized! -->
+      <div class="upload-diagnostics-card" id="success-diagnostics-card" style="text-align:left; margin-bottom:30px">
+        <div style="display:flex; justify-content:space-between; align-items:center">
+          <div style="font-size:0.82rem; font-weight:800; color:var(--accent)" id="success-status-lbl">Background Finalizing...</div>
+          <div style="font-size:0.82rem; font-weight:800; color:#fff" id="success-percent-lbl">100%</div>
+        </div>
+        <div class="progress-bar-wrapper">
+          <div class="progress-bar-fill" id="success-progress-fill" style="width:100%"></div>
+        </div>
+      </div>
 
-    function getYoutubeId(url) {
-      if (!url) return null;
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-      const match = url.match(regExp);
-      return (match && match[2].length === 11) ? match[2] : null;
-    }
-
-    const ytId = getYoutubeId(videoUrlStr);
-
-    if (ytId) {
-      // YouTube embed thumbnail handling
-      const grid = document.getElementById('thumb-grid');
-      grid.innerHTML = ''; // Clear loading items
-
-      // Prepend initial pre-fetched YouTube thumbnail if it exists
-      if (hasInitialThumb) {
-        addThumbOption(initialThumbUrl, 'YouTube MaxRes (Prefetched)', true);
-      }
-
-      // Add other quality options from YouTube
-      const ytThumbs = [
-        { label: 'YouTube High Quality', url: `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` },
-        { label: 'YouTube Med Quality', url: `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` },
-        { label: 'YouTube Standard', url: `https://img.youtube.com/vi/${ytId}/sddefault.jpg` }
-      ];
-
-      ytThumbs.forEach(t => {
-        // Skip duplicate of pre-fetched if it's identical
-        addThumbOption(t.url, t.label, !hasInitialThumb && t.label === 'YouTube High Quality');
-      });
-
-    } else {
-      // Standard local/direct video thumbnail capture
-      if (video) {
-        video.addEventListener('loadedmetadata', () => {
-          videoDuration = Math.max(1, Math.floor(video.duration || 0));
-          saveVideoDuration(videoDuration);
-          captureFrames();
-        });
-
-        video.addEventListener('error', () => {
-          document.querySelectorAll('.thumb-loading').forEach(el => {
-            el.textContent = 'Preview N/A';
-          });
-        });
-      }
-    }
-
-    function addThumbOption(url, label, autoSelect = false) {
-      const grid = document.getElementById('thumb-grid');
-      const div = document.createElement('div');
-      div.className = 'thumb-option' + (autoSelect ? ' selected' : '');
-      div.innerHTML = `
-        <img src="${url}" crossorigin="anonymous" loading="lazy">
-        <div class="check"><svg width="12" height="12" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-        <div style="position:absolute;bottom:4px;left:6px;font-size:.65rem;color:rgba(255,255,255,.9);text-shadow:0 1px 2px #000">${label}</div>
-      `;
-      div.addEventListener('click', () => {
-        document.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
-        div.classList.add('selected');
-        
-        // If it's the prefetched/initial one, we don't need to re-encode it
-        if (url === initialThumbUrl) {
-          selectedDataUrl = "initial";
-        } else {
-          // Attempt to convert external YouTube link to canvas data URL (re-encoding handles CORS)
-          convertImageToDataUri(url);
-        }
-        document.getElementById('selected-thumb-preview').src = url;
-        document.getElementById('thumb-select-info').style.display = 'block';
-        document.getElementById('save-thumb-btn').disabled = false;
-      });
-      grid.appendChild(div);
-
-      if (autoSelect) {
-        selectedDataUrl = url === initialThumbUrl ? "initial" : null;
-        if (url !== initialThumbUrl) convertImageToDataUri(url);
-        document.getElementById('selected-thumb-preview').src = url;
-        document.getElementById('thumb-select-info').style.display = 'block';
-        document.getElementById('save-thumb-btn').disabled = false;
-      }
-    }
-
-    function convertImageToDataUri(url) {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.src = url;
-      img.onload = () => {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = 1280;
-        tempCanvas.height = 720;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(img, 0, 0, 1280, 720);
-        selectedDataUrl = tempCanvas.toDataURL('image/jpeg', 0.85);
-      };
-    }
-
-    async function saveVideoDuration(seconds) {
-      if (!seconds || seconds < 1) return;
-      try {
-        await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_duration', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({video_id: VID_ID, duration: seconds})
-        });
-      } catch (e) { /* non-blocking */ }
-    }
-
-    async function captureFrames() {
-      const count = 10;
-      const step  = videoDuration / (count + 1);
-      const times = Array.from({length: count}, (_, i) => step * (i + 1));
-
-      const grid = document.getElementById('thumb-grid');
-      grid.innerHTML = ''; // Clear loading items
-
-      if (hasInitialThumb) {
-        // Prepend pre-fetched initial thumbnail option
-        addThumbOption(initialThumbUrl, 'Prefetched Thumbnail', true);
-      }
-
-      for (let i = 0; i < count; i++) {
-        const t = times[i];
-        const dataUrl = await seekAndCapture(t);
-        capturedFrames.push(dataUrl);
-
-        const div = document.createElement('div');
-        div.className = 'thumb-option';
-        div.innerHTML = `
-          <img src="${dataUrl}" loading="lazy">
-          <div class="check"><svg width="12" height="12" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-          <div style="position:absolute;bottom:4px;left:6px;font-size:.65rem;color:rgba(255,255,255,.9);text-shadow:0 1px 2px #000">${formatTime(t)}</div>
-        `;
-        div.addEventListener('click', () => {
-          document.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
-          div.classList.add('selected');
-          selectedDataUrl = dataUrl;
-          document.getElementById('selected-thumb-preview').src = dataUrl;
-          document.getElementById('thumb-select-info').style.display = 'block';
-          document.getElementById('save-thumb-btn').disabled = false;
-        });
-        grid.appendChild(div);
-      }
-    }
-
-    function seekAndCapture(time) {
-      return new Promise(resolve => {
-        video.currentTime = time;
-        video.addEventListener('seeked', function onSeeked() {
-          video.removeEventListener('seeked', onSeeked);
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
-        }, {once: true});
-      });
-    }
-
-
-
-    // Custom thumbnail upload handler
-    const customThumbInput = document.getElementById('custom-thumb-input');
-    customThumbInput?.addEventListener('change', function() {
-      const file = this.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = e => {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = () => {
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = 1280;
-          tempCanvas.height = 720;
-          const tempCtx = tempCanvas.getContext('2d');
-          tempCtx.drawImage(img, 0, 0, 1280, 720);
-          const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.85);
-
-          selectedDataUrl = dataUrl;
-          document.getElementById('selected-thumb-preview').src = dataUrl;
-          document.getElementById('thumb-select-info').style.display = 'block';
-          document.getElementById('save-thumb-btn').disabled = false;
-          
-          document.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
-        };
-      };
-      reader.readAsDataURL(file);
-    });
-
-    window.saveThumbnail = async function() {
-      if (!selectedDataUrl) return;
-      const btn = document.getElementById('save-thumb-btn');
-      btn.disabled = true;
-      btn.textContent = 'Saving…';
-
-      if (selectedDataUrl === "initial") {
-        btn.textContent = '✓ Saved!';
-        btn.style.background = 'var(--green)';
-        setTimeout(() => {
-          window.location.href = '<?= BASE_URL ?>/creator/videos.php';
-        }, 1000);
-        return;
-      }
-
-      try {
-        const res = await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({video_id: VID_ID, data_url: selectedDataUrl})
-        });
-        const d = await res.json();
-        if (d.success) {
-          btn.textContent = '✓ Saved!';
-          btn.style.background = 'var(--green)';
-          setTimeout(() => {
-            window.location.href = '<?= BASE_URL ?>/creator/videos.php';
-          }, 1200);
-        } else {
-          btn.textContent = 'Error — retry';
-          btn.disabled = false;
-        }
-      } catch(e) {
-        btn.textContent = 'Error — retry';
-        btn.disabled = false;
-      }
-    };
-
-    function formatTime(s) {
-      s = Math.floor(s);
-      return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
-    }
-  })();
-  </script>
-  <?php endif; ?>
+      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap">
+        <a href="<?= BASE_URL ?>/creator/videos.php" class="btn btn-primary" style="font-weight:700; border-radius:8px">
+          📂 Go to Videos
+        </a>
+        <a href="<?= BASE_URL ?>/channel.php?id=<?= $uid ?>" target="_blank" class="btn btn-outline" style="font-weight:600; border-radius:8px">
+          📺 View Channel
+        </a>
+        <button type="button" class="btn btn-outline" onclick="resetUploadWizard()" style="font-weight:600; border-radius:8px">
+          ➕ Upload Another
+        </button>
+      </div>
+    </div>
+  </div>
 
 </div>
 
-<!-- STEP 1 Helper Scripts -->
-<?php if (!$success): ?>
+<!-- Hidden Canvas for local frame extraction -->
+<canvas id="offscreen-canvas" style="display:none"></canvas>
+
 <script data-page-script="true">
 (function() {
-  const zone  = document.getElementById('video-zone');
-  const input = document.getElementById('video-file');
-  const uploadTypeInput = document.getElementById('upload-type-input');
+  // Global Upload States
+  let activeFile = null;
+  let uploadVideoId = null;
+  let uploadToken = null;
+  let selectedThumbDataUrl = null;
+  let isUploading = false;
+  let uploadProgress = 0;
   
-  const tabFileBtn = document.getElementById('tab-file-btn');
-  const tabEmbedBtn = document.getElementById('tab-embed-btn');
-  const fileContainer = document.getElementById('upload-file-container');
-  const embedContainer = document.getElementById('upload-embed-container');
+  // DOM Elements
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('video-file-input');
   
-  const titleField = document.getElementById('title-field');
-  const previewTitle = document.getElementById('preview-video-title');
-  const previewLength = document.getElementById('preview-video-length');
-  const previewContainer = document.getElementById('preview-video-container');
+  const step1Indicator = document.getElementById('step1-indicator');
+  const step2Indicator = document.getElementById('step2-indicator');
+  const step3Indicator = document.getElementById('step3-indicator');
+  
+  const dropzoneView = document.getElementById('dropzone-view');
+  const detailsView = document.getElementById('details-view');
+  const successView = document.getElementById('success-view');
+  
+  const detailsTitle = document.getElementById('details-title');
+  const previewTitle = document.getElementById('details-preview-title');
+  const previewDuration = document.getElementById('details-preview-duration');
+  
+  const spaPlayer = document.getElementById('spa-player');
+  const spaIframePlayer = document.getElementById('spa-iframe-player');
+  const detailsThumbGrid = document.getElementById('details-thumb-grid');
+  
+  const statusText = document.getElementById('spa-status-text');
+  const statusSpinner = document.getElementById('spa-status-spinner');
+  const percentageText = document.getElementById('spa-percentage-text');
+  const progressFill = document.getElementById('spa-progress-fill');
+  const speedText = document.getElementById('spa-speed-text');
+  const etaText = document.getElementById('spa-eta-text');
+  const retryBtn = document.getElementById('spa-retry-btn');
+  const submitBtn = document.getElementById('spa-submit-btn');
 
-  // Real-time title update
-  titleField?.addEventListener('input', () => {
-    if (previewTitle) {
-      previewTitle.textContent = titleField.value.trim() || 'Video Title Preview';
+  // Prevent Navigation Warning
+  window.addEventListener('beforeunload', function(e) {
+    if (isUploading) {
+      e.preventDefault();
+      e.returnValue = 'Your video upload is currently in progress. Leaving this page will cancel the upload. Are you sure you want to exit?';
+      return e.returnValue;
     }
   });
 
-  // Switch between Upload file and Embed url
-  window.switchUploadType = function(type) {
-    uploadTypeInput.value = type;
+  // real-time preview title sync
+  detailsTitle.addEventListener('input', () => {
+    previewTitle.textContent = detailsTitle.value.trim() || 'Video Title Preview';
+  });
+
+  // Drag & drop handlers
+  if (dropZone && fileInput) {
+    ['dragover','dragenter'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); }));
+    ['dragleave','drop'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('drag-over'); }));
+    dropZone.addEventListener('drop', e => { if(e.dataTransfer.files[0]) handleSelectedFile(e.dataTransfer.files[0]); });
+    fileInput.addEventListener('change', () => { if(fileInput.files[0]) handleSelectedFile(fileInput.files[0]); });
+  }
+
+  // Switch tabs
+  window.switchSourceType = function(type) {
+    document.querySelectorAll('.upload-tab-btn').forEach(btn => btn.classList.remove('active'));
     if (type === 'file') {
-      tabFileBtn.classList.add('active');
-      tabEmbedBtn.classList.remove('active');
-      fileContainer.style.display = 'block';
-      embedContainer.style.display = 'none';
-      input.required = true;
-      document.getElementById('embed-url-input').required = false;
+      document.getElementById('tab-file-btn').classList.add('active');
+      document.getElementById('file-drop-container').style.display = 'block';
+      document.getElementById('embed-url-container').style.display = 'none';
     } else {
-      tabFileBtn.classList.remove('active');
-      tabEmbedBtn.classList.add('active');
-      fileContainer.style.display = 'none';
-      embedContainer.style.display = 'block';
-      input.required = false;
-      document.getElementById('embed-url-input').required = true;
+      document.getElementById('tab-embed-btn').classList.add('active');
+      document.getElementById('file-drop-container').style.display = 'none';
+      document.getElementById('embed-url-container').style.display = 'block';
     }
-    resetPreview();
   };
 
-  function resetPreview() {
-    previewContainer.innerHTML = `<svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
-    previewLength.textContent = '0:00';
-  }
-
-  // File drag & drop handlers
-  if (zone && input) {
-    ['dragover','dragenter'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.add('drag-over'); }));
-    ['dragleave','drop'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.remove('drag-over'); }));
-    zone.addEventListener('drop', e => { if(e.dataTransfer.files[0]) { input.files = e.dataTransfer.files; updateVideoFile(e.dataTransfer.files[0]); } });
-    input.addEventListener('change', () => { if(input.files[0]) updateVideoFile(input.files[0]); });
-  }
-
-  function updateVideoFile(f) {
-    const zt = document.getElementById('video-zone-text');
-    if (zt) { zt.textContent = '✓ ' + f.name + ' (' + (f.size/1048576).toFixed(1) + ' MB)'; }
-    if (zone) zone.style.borderColor = 'var(--green)';
+  // Main Handler once local file is selected
+  function handleSelectedFile(file) {
+    activeFile = file;
+    isUploading = true;
     
-    // Auto-fill title with filename without extension if title is empty
-    if (titleField && !titleField.value.trim()) {
-      const nameWithoutExt = f.name.substring(0, f.name.lastIndexOf('.')) || f.name;
-      titleField.value = nameWithoutExt.substring(0, 100);
-      titleField.dispatchEvent(new Event('input'));
-    }
-
-    const durInput = document.getElementById('duration-seconds');
-    if (!durInput || !f) return;
-    durInput.value = '0';
-
-    const blobUrl = URL.createObjectURL(f);
+    // Auto-fill Title immediately
+    const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+    detailsTitle.value = nameWithoutExt.substring(0, 100);
+    previewTitle.textContent = detailsTitle.value;
     
-    // Render preview player for local file
-    previewContainer.innerHTML = `<video id="preview-direct-player" style="width:100%; height:100%; object-fit:cover" controls></video>`;
-    const playerEl = document.getElementById('preview-direct-player');
-    playerEl.src = blobUrl;
-    playerEl.style.display = 'block';
-
-    playerEl.addEventListener('loadedmetadata', () => {
-      const d = Math.max(1, Math.floor(playerEl.duration || 0));
-      durInput.value = String(d);
+    // Transition wizard panels instantly (SPA)
+    dropzoneView.style.display = 'none';
+    detailsView.style.display = 'block';
+    
+    step1Indicator.classList.add('done');
+    step1Indicator.classList.remove('active');
+    step2Indicator.classList.add('active');
+    
+    // Render local video playing in player
+    const localBlobUrl = URL.createObjectURL(file);
+    spaPlayer.src = localBlobUrl;
+    spaPlayer.style.display = 'block';
+    spaIframePlayer.style.display = 'none';
+    
+    // Listen for duration
+    spaPlayer.addEventListener('loadedmetadata', () => {
+      const d = Math.max(1, Math.floor(spaPlayer.duration || 0));
+      previewDuration.textContent = formatTime(d);
       
-      const m = Math.floor(d / 60), s = d % 60;
-      const formattedTime = m + ':' + String(s).padStart(2, '0');
-      
-      previewLength.textContent = formattedTime;
-      if (zt) {
-        zt.textContent += ' — length ' + formattedTime;
-      }
+      // Auto-extract client-side thumbnails instantly!
+      generateClientThumbnails(file, d);
     }, {once: true});
 
-    // Start background upload automatically (non-blocking)
-    (async function() {
-      try {
-        const progressBox = document.getElementById('upload-progress');
-        const percentEl = document.getElementById('upload-percent');
-        const barEl = document.getElementById('upload-progress-bar');
-        const statusEl = document.getElementById('upload-status');
-        const speedEl = document.getElementById('upload-speed');
-        const etaEl = document.getElementById('upload-eta');
-        const mainStatusEl = document.getElementById('upload-main-status');
-        const submitBtn = document.querySelector('button[type="submit"]');
+    // Start background progressive chunk upload loop (non-blocking)
+    startProgressiveChunkUpload(file);
+  }
 
-        progressBox.style.display = 'block';
-        mainStatusEl.textContent = '🔄 Preparing video for upload...';
-        statusEl.textContent = 'Init';
-        if (submitBtn) submitBtn.disabled = true;
-
-        // Initialize upload placeholder on server
-        const meta = {
-          title: titleField?.value || '',
-          description: document.getElementById('desc-field')?.value || '',
-          tags: document.getElementById('tags-field')?.value || '',
-          category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value),
-          visibility: document.querySelector('select[name="visibility"]')?.value || 'public'
-        };
-
-        const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({meta})
+  // Auto-generate client-side thumbnails instantly
+  async function generateClientThumbnails(file, duration) {
+    const canvas = document.getElementById('offscreen-canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    
+    const count = 7;
+    const step = duration / (count + 1);
+    const times = Array.from({length: count}, (_, i) => step * (i + 1));
+    
+    // Clear frames container and show dynamic frames loading
+    const grid = document.getElementById('details-thumb-grid');
+    // keep custom upload element
+    const customTrigger = grid.querySelector('.custom-thumb-trigger');
+    grid.innerHTML = '';
+    grid.appendChild(customTrigger);
+    
+    // Load a helper video element
+    const helperVideo = document.createElement('video');
+    helperVideo.preload = 'auto';
+    helperVideo.src = URL.createObjectURL(file);
+    helperVideo.muted = true;
+    helperVideo.playsInline = true;
+    
+    helperVideo.addEventListener('loadedmetadata', async () => {
+      for (let i = 0; i < count; i++) {
+        // create temporary placeholder item
+        const placeholder = document.createElement('div');
+        placeholder.className = 'thumb-loading-placeholder';
+        placeholder.textContent = 'Frame..';
+        grid.appendChild(placeholder);
+        
+        const time = times[i];
+        const dataUrl = await seekAndCapture(helperVideo, canvas, ctx, time);
+        
+        // replace placeholder with clickable thumbnail option
+        placeholder.className = 'thumb-option';
+        placeholder.textContent = '';
+        placeholder.innerHTML = `
+          <img src="${dataUrl}">
+          <div class="check-badge"><svg width="10" height="10" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div style="position:absolute;bottom:3px;left:6px;font-size:0.6rem;color:#fff;text-shadow:0 1px 2px #000">${formatTime(time)}</div>
+        `;
+        
+        placeholder.addEventListener('click', () => {
+          grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
+          placeholder.classList.add('selected');
+          selectedThumbDataUrl = dataUrl;
         });
-        const initData = await initRes.json();
-        if (!initData.success) {
-          mainStatusEl.textContent = '✗ Initialization failed';
-          statusEl.textContent = 'Failed';
-          if (submitBtn) submitBtn.disabled = false;
+        
+        // Auto-select the first generated frame as default thumbnail!
+        if (i === 0) {
+          placeholder.click();
+        }
+      }
+      
+      // Clean up helper Blob
+      URL.revokeObjectURL(helperVideo.src);
+    }, {once: true});
+  }
+
+  function seekAndCapture(video, canvas, ctx, time) {
+    return new Promise(resolve => {
+      video.currentTime = time;
+      video.addEventListener('seeked', function onSeeked() {
+        video.removeEventListener('seeked', onSeeked);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      }, {once: true});
+    });
+  }
+
+  // Handle Custom Thumbnail Select File and Draw
+  const customThumbInput = document.getElementById('spa-custom-thumb');
+  customThumbInput.addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.src = e.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280;
+        canvas.height = 720;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 1280, 720);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        
+        selectedThumbDataUrl = dataUrl;
+        
+        // Create custom thumbnail card and append to grid
+        const grid = document.getElementById('details-thumb-grid');
+        const customOpt = document.createElement('div');
+        customOpt.className = 'thumb-option selected';
+        customOpt.innerHTML = `
+          <img src="${dataUrl}">
+          <div class="check-badge"><svg width="10" height="10" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div style="position:absolute;bottom:3px;left:6px;font-size:0.6rem;color:#fff;text-shadow:0 1px 2px #000">Uploaded</div>
+        `;
+        grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
+        customOpt.addEventListener('click', () => {
+          grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
+          customOpt.classList.add('selected');
+          selectedThumbDataUrl = dataUrl;
+        });
+        grid.appendChild(customOpt);
+      };
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Start Background Resumable Progressive Chunk Upload (Fetch & AJAX)
+  async function startProgressiveChunkUpload(file) {
+    try {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.65';
+      statusText.innerHTML = `<span style="animation: spin 1.5s linear infinite; display:inline-block">🔄</span> Initializing background upload...`;
+      
+      const meta = {
+        title: detailsTitle.value || 'Untitled Upload',
+        description: document.getElementById('details-desc').value || '',
+        tags: document.getElementById('details-tags').value || '',
+        category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value),
+        visibility: document.getElementById('details-visibility').value || 'unlisted'
+      };
+
+      // 1. Initialize Upload Placeholder Record
+      const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({meta})
+      });
+      const initData = await initRes.json();
+      if (!initData.success) {
+        statusText.innerHTML = `✗ Initialization failed.`;
+        isUploading = false;
+        return;
+      }
+
+      uploadVideoId = initData.data.video_id;
+      uploadToken = initData.data.upload_token;
+      
+      // Enable Submit Button Immediately - User can complete metadata save and continue working!
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+      
+      // 2. Perform Resumable progressive Chunk Upload Loop
+      const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+      const totalSize = file.size;
+      let uploadedBytes = 0;
+      
+      // status check (resumability)
+      try {
+        const checkRes = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&video_id=${uploadVideoId}&token=${uploadToken}`);
+        const checkData = await checkRes.json();
+        if (checkData.success && checkData.data.uploaded) {
+          uploadedBytes = checkData.data.uploaded;
+        }
+      } catch (e) {}
+
+      let lastTime = Date.now();
+      let lastBytes = uploadedBytes;
+
+      statusText.innerHTML = `<span style="animation: spin 1.5s linear infinite; display:inline-block">📤</span> Uploading chunks...`;
+      
+      // Define resilient chunk loop
+      for (let start = uploadedBytes; start < totalSize; start += CHUNK_SIZE) {
+        if (!isUploading) break; // cancelled
+        
+        const end = Math.min(start + CHUNK_SIZE, totalSize);
+        const chunkBlob = file.slice(start, end);
+        const formData = new FormData();
+        formData.append('chunk', chunkBlob, file.name);
+
+        let attempt = 0;
+        let success = false;
+        
+        while (attempt < 5 && !success) {
+          try {
+            const uploadRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${uploadVideoId}&token=${uploadToken}`, {
+              method: 'POST',
+              body: formData
+            });
+            const uploadData = await uploadRes.json();
+            if (uploadData.success) {
+              success = true;
+              uploadedBytes = uploadData.data.uploaded || end;
+            } else {
+              attempt++;
+              await new Promise(r => setTimeout(r, 1500));
+            }
+          } catch (e) {
+            attempt++;
+            statusText.innerHTML = `⚠️ Connection flicker — retrying chunk (${attempt}/5)...`;
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        }
+
+        if (!success) {
+          isUploading = false;
+          statusText.innerHTML = `❌ Upload failed.`;
+          retryBtn.style.display = 'flex';
+          retryBtn.onclick = () => {
+            retryBtn.style.display = 'none';
+            isUploading = true;
+            startProgressiveChunkUpload(file);
+          };
           return;
         }
-        const VID = initData.data.video_id;
-        const TOKEN = initData.data.upload_token;
+
+        // Calculate Speeds & ETAs
+        const now = Date.now();
+        const delta = (now - lastTime) / 1000;
+        const deltaBytes = uploadedBytes - lastBytes;
+        const speed = delta > 0 ? Math.round(deltaBytes / delta) : 0;
+        lastTime = now;
+        lastBytes = uploadedBytes;
+
+        const pct = Math.floor((uploadedBytes / totalSize) * 100);
+        uploadProgress = pct;
         
-        // Store on form immediately so submit handler can use it
-        document.getElementById('upload-form').dataset.videoId = VID;
-        document.getElementById('upload-form').dataset.uploadToken = TOKEN;
+        // Update diagnostics text
+        percentageText.textContent = pct + '%';
+        progressFill.style.width = pct + '%';
         
-        // Enable button immediately after init succeeds - user can click NOW
-        mainStatusEl.textContent = '📤 Uploading video in background...';
-        statusEl.textContent = 'Upload';
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.style.opacity = '1';
-        }
+        // Success screen diagnostic update
+        const successPercentLbl = document.getElementById('success-percent-lbl');
+        const successProgressFill = document.getElementById('success-progress-fill');
+        if (successPercentLbl) successPercentLbl.textContent = pct + '%';
+        if (successProgressFill) successProgressFill.style.width = pct + '%';
 
-        // Start resumable chunk upload (background - does NOT block the page)
-        const CHUNK = 5 * 1024 * 1024; // 5MB
-        const total = f.size;
-        let uploaded = 0;
-
-        // Query server for already uploaded bytes
-        try {
-          const st = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&video_id=${VID}&token=${TOKEN}`);
-          const sd = await st.json();
-          if (sd.success && sd.data.uploaded) uploaded = sd.data.uploaded;
-        } catch(e){}
-
-        let lastTime = Date.now();
-        let lastBytes = uploaded;
-
-        mainStatusEl.textContent = '📤 Uploading video in background...';
-        statusEl.textContent = 'Uploading';
-
-        for (let start = uploaded; start < total; start += CHUNK) {
-          const end = Math.min(start + CHUNK, total);
-          const blob = f.slice(start, end);
-
-          const form = new FormData();
-          form.append('chunk', blob, f.name);
-
-          const resp = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${VID}&token=${TOKEN}`, {
-            method: 'POST', body: form
-          });
-          const j = await resp.json();
-          if (!j.success) {
-            statusEl.textContent = 'Upload error - retrying...';
-          mainStatusEl.textContent = '⚠️ Upload error - retrying...';
-            // Don't break; let it retry
-            await new Promise(r => setTimeout(r, 1000));
-            start -= CHUNK; // retry this chunk
-            continue;
-          }
-
-          uploaded = j.data.uploaded || Math.min(end, total);
-
-          const now = Date.now();
-          const delta = (now - lastTime) / 1000;
-          const deltaBytes = uploaded - lastBytes;
-          const speed = delta > 0 ? Math.round(deltaBytes / delta) : 0;
-          lastTime = now; lastBytes = uploaded;
-
-          const pct = Math.floor((uploaded / total) * 100);
-          percentEl.textContent = pct + '%';
-          barEl.style.width = pct + '%';
-          speedEl.textContent = speed ? formatBytes(speed) + '/s' : '—';
-          const remain = speed ? Math.max(0, Math.round((total - uploaded) / speed)) : null;
-          etaEl.textContent = remain !== null ? formatETA(remain) : '—';
-        }
-
-        if (uploaded >= total) {
-          statusEl.textContent = 'Finalizing';
-          mainStatusEl.textContent = '⏳ Finalizing upload...';
-          // Finalize and move to permanent file
-          const finalizeResp = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${VID}&token=${TOKEN}&finalize=1&filename=${encodeURIComponent(f.name)}`, { method: 'POST', body: '' });
-          const fj = await finalizeResp.json();
-          if (fj.success) {
-            percentEl.textContent = '100%'; barEl.style.width='100%';
-            statusEl.textContent = 'Complete';
-            mainStatusEl.textContent = '✅ Upload complete! Video submitted successfully...';
-            // update local hidden duration if known
-            const durInput = document.getElementById('duration-seconds');
-            if (durInput && parseInt(durInput.value) > 0) {
-              await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_duration', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({video_id:VID,duration:parseInt(durInput.value)}) });
-            }
-          } else {
-            statusEl.textContent = 'Failed';
-            mainStatusEl.textContent = '✗ Upload finalization failed';
-          }
-        }
-
-        // store vid id on form for metadata saves
-        document.getElementById('upload-form').dataset.videoId = VID;
-      } catch(e) {
-        console.error(e);
+        speedText.textContent = speed > 0 ? formatBytes(speed) + '/s' : '—';
+        
+        const remainSeconds = speed > 0 ? Math.max(0, Math.round((totalSize - uploadedBytes) / speed)) : null;
+        etaText.textContent = remainSeconds !== null ? formatETA(remainSeconds) : '—';
       }
-    })();
 
-    function formatBytes(n) {
-      if (n >= 1073741824) return (n/1073741824).toFixed(2) + ' GB';
-      if (n >= 1048576) return (n/1048576).toFixed(2) + ' MB';
-      if (n >= 1024) return (n/1024).toFixed(2) + ' KB';
-      return n + ' B';
-    }
+      if (uploadedBytes >= totalSize) {
+        statusText.innerHTML = `⏳ Finalizing upload...`;
+        
+        const successStatusLbl = document.getElementById('success-status-lbl');
+        if (successStatusLbl) successStatusLbl.textContent = 'Finalizing background file...';
 
-    function formatETA(s) {
-      if (s < 60) return s + 's';
-      const m = Math.floor(s/60); const sec = s%60;
-      return m + 'm ' + sec + 's';
+        // Finalize chunk merger on the server
+        const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${uploadVideoId}&token=${uploadToken}&finalize=1&filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST'
+        });
+        const finalizeData = await finalizeRes.json();
+        
+        if (finalizeData.success) {
+          isUploading = false;
+          statusText.innerHTML = `✅ Complete`;
+          statusSpinner.textContent = '✓';
+          percentageText.textContent = '100%';
+          progressFill.style.width = '100%';
+          
+          if (successStatusLbl) successStatusLbl.textContent = 'Upload Completed & Processing Finished!';
+          
+          // Save duration
+          const d = Math.max(1, Math.floor(spaPlayer.duration || 0));
+          if (d > 0) {
+            await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_duration', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({video_id: uploadVideoId, duration: d})
+            });
+          }
+          
+          // Hide progress card on success screen once complete
+          const successDiagCard = document.getElementById('success-diagnostics-card');
+          if (successDiagCard) successDiagCard.style.display = 'none';
+        } else {
+          statusText.textContent = `✗ Finalization failed.`;
+          isUploading = false;
+        }
+      }
+
+    } catch (e) {
+      console.error(e);
+      isUploading = false;
+      statusText.innerHTML = `❌ Server connection failed.`;
     }
   }
 
+  // Verify and load External embeds (YouTube / direct links)
+  window.verifyAndLoadEmbed = async function() {
+    let urlVal = document.getElementById('embed-link-field').value.trim();
+    if (!urlVal) {
+      alert('Please enter a video URL.');
+      return;
+    }
+
+    if (urlVal.includes('<iframe')) {
+      const match = urlVal.match(/src=["']([^"']+)["']/i);
+      if (match && match[1]) {
+        urlVal = match[1];
+        document.getElementById('embed-link-field').value = urlVal;
+      }
+    }
+
+    const ytId = getYoutubeId(urlVal);
+    
+    // Set wizard elements
+    dropzoneView.style.display = 'none';
+    detailsView.style.display = 'block';
+    
+    step1Indicator.classList.add('done');
+    step1Indicator.classList.remove('active');
+    step2Indicator.classList.add('active');
+
+    // Display appropriate preview player
+    if (ytId) {
+      spaPlayer.style.display = 'none';
+      spaIframePlayer.src = `https://www.youtube.com/embed/${ytId}`;
+      spaIframePlayer.style.display = 'block';
+      previewDuration.textContent = 'YouTube Embed';
+      
+      // Auto-fetch YouTube title
+      fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.title) {
+            detailsTitle.value = data.title;
+            previewTitle.textContent = data.title;
+          }
+        }).catch(()=>{});
+
+      // Load YouTube Thumbnails in selector grid
+      const grid = document.getElementById('details-thumb-grid');
+      const customTrigger = grid.querySelector('.custom-thumb-trigger');
+      grid.innerHTML = '';
+      grid.appendChild(customTrigger);
+
+      const ytThumbs = [
+        { label: 'Max Resolution', url: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg` },
+        { label: 'High Quality', url: `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` },
+        { label: 'Medium Quality', url: `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` }
+      ];
+
+      ytThumbs.forEach((t, i) => {
+        const option = document.createElement('div');
+        option.className = 'thumb-option';
+        option.innerHTML = `
+          <img src="${t.url}">
+          <div class="check-badge"><svg width="10" height="10" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div style="position:absolute;bottom:3px;left:6px;font-size:0.6rem;color:#fff;text-shadow:0 1px 2px #000">${t.label}</div>
+        `;
+        option.addEventListener('click', () => {
+          grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
+          option.classList.add('selected');
+          convertYtImageToBase64(t.url);
+        });
+        grid.appendChild(option);
+        
+        if (i === 0) option.click();
+      });
+
+    } else {
+      // Direct file link
+      spaPlayer.src = urlVal;
+      spaPlayer.style.display = 'block';
+      spaIframePlayer.style.display = 'none';
+      
+      spaPlayer.addEventListener('loadedmetadata', () => {
+        previewDuration.textContent = formatTime(Math.max(1, Math.floor(spaPlayer.duration || 0)));
+      }, {once: true});
+
+      previewDuration.textContent = 'Direct URL';
+    }
+
+    // Hide Diagnostics progress bar for embeds (since no file chunks are uploaded!)
+    document.getElementById('spa-diagnostics-widget').style.display = 'none';
+  };
+
+  // Convert external YouTube image to base64 via canvas to allow server saving
+  function convertYtImageToBase64(url) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, 1280, 720);
+      selectedThumbDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    };
+  }
+
+  // Submit Details Form & Complete SPA Transition (Non-blocking)
+  window.submitDetailsForm = async function(e) {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving details...';
+
+    // If it's an embed URL, initialize upload session and placeholder first
+    let urlVal = document.getElementById('embed-link-field').value.trim();
+    if (urlVal && !uploadVideoId) {
+      const meta = {
+        title: detailsTitle.value || 'Untitled Embed',
+        description: document.getElementById('details-desc').value || '',
+        tags: document.getElementById('details-tags').value || '',
+        category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value),
+        visibility: document.getElementById('details-visibility').value || 'public'
+      };
+      
+      const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({meta})
+      });
+      const initData = await initRes.json();
+      if (initData.success) {
+        uploadVideoId = initData.data.video_id;
+        uploadToken = initData.data.upload_token;
+        
+        // Update direct video URL on backend
+        await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${uploadVideoId}&token=${uploadToken}&finalize=1&filename=${encodeURIComponent(urlVal)}`, {
+          method: 'POST'
+        });
+      }
+    }
+
+    if (!uploadVideoId) {
+      alert('Error initializing video upload. Please select a valid file.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Publish & Finish';
+      return;
+    }
+
+    // Capture metadata details
+    const meta = {
+      video_id: uploadVideoId,
+      title: detailsTitle.value,
+      description: document.getElementById('details-desc').value,
+      tags: document.getElementById('details-tags').value,
+      visibility: document.getElementById('details-visibility').value,
+      category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value)
+    };
+
+    try {
+      // 1. Submit metadata update via AJAX
+      await fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({meta})
+      });
+
+      // 2. Save selected base64 client-side thumbnail via AJAX
+      if (selectedThumbDataUrl) {
+        await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({video_id: uploadVideoId, data_url: selectedThumbDataUrl})
+        });
+      }
+
+      // Transition wizard instantly to Success View (SPA)
+      detailsView.style.display = 'none';
+      successView.style.display = 'block';
+      
+      step2Indicator.classList.add('done');
+      step2Indicator.classList.remove('active');
+      step3Indicator.classList.add('active');
+
+      // Populate success view details
+      document.getElementById('success-video-title').textContent = detailsTitle.value;
+      if (selectedThumbDataUrl) {
+        document.getElementById('success-thumb-preview').src = selectedThumbDataUrl;
+      } else {
+        document.getElementById('success-thumb-preview').src = '<?= thumb_url(null) ?>';
+      }
+
+      // Hide active progress indicator on success view if upload has already completed!
+      const successDiagCard = document.getElementById('success-diagnostics-card');
+      if (!isUploading) {
+        if (successDiagCard) successDiagCard.style.display = 'none';
+      } else {
+        if (successDiagCard) {
+          successDiagCard.style.display = 'block';
+          document.getElementById('success-status-lbl').textContent = 'Uploading in background...';
+          document.getElementById('success-percent-lbl').textContent = uploadProgress + '%';
+          document.getElementById('success-progress-fill').style.width = uploadProgress + '%';
+        }
+      }
+
+    } catch (e) {
+      console.error(e);
+      alert('Error updating details. Please try again.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Publish & Finish';
+    }
+  };
+
+  // Reset entire SPA uploader state to upload another video
+  window.resetUploadWizard = function() {
+    isUploading = false;
+    activeFile = null;
+    uploadVideoId = null;
+    uploadToken = null;
+    selectedThumbDataUrl = null;
+    uploadProgress = 0;
+    
+    // Reset forms
+    document.getElementById('spa-upload-form').reset();
+    detailsTitle.value = '';
+    previewTitle.textContent = 'Video Title Preview';
+    previewDuration.textContent = '0:00';
+    
+    // Stop players
+    spaPlayer.pause();
+    spaPlayer.src = '';
+    spaIframePlayer.src = '';
+    
+    // Transition views
+    successView.style.display = 'none';
+    detailsView.style.display = 'none';
+    dropzoneView.style.display = 'block';
+    
+    step1Indicator.className = 'wizard-step active';
+    step2Indicator.className = 'wizard-step';
+    step3Indicator.className = 'wizard-step';
+    
+    // Reset dropzone text
+    document.getElementById('embed-link-field').value = '';
+    document.getElementById('spa-diagnostics-widget').style.display = 'block';
+    percentageText.textContent = '0%';
+    progressFill.style.width = '0%';
+    speedText.textContent = '—';
+    etaText.textContent = '—';
+  };
+
+  // Utilities
   function getYoutubeId(url) {
     if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    if (url.match(/^[a-zA-Z0-9_-]{11}$/)) return url;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
   }
 
-  // Probe & preview embedded URLs
-  window.probeEmbedLink = function() {
-    const urlVal = document.getElementById('embed-url-input').value.trim();
-    if (!urlVal) {
-      alert('Please enter a link to verify.');
-      return;
-    }
+  function formatTime(s) {
+    s = Math.floor(s);
+    return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+  }
 
-    const ytId = getYoutubeId(urlVal);
-    const durInputEmbed = document.getElementById('duration-seconds-embed');
+  function formatBytes(n) {
+    if (n >= 1073741824) return (n/1073741824).toFixed(2) + ' GB';
+    if (n >= 1048576) return (n/1048576).toFixed(2) + ' MB';
+    if (n >= 1024) return (n/1024).toFixed(2) + ' KB';
+    return n + ' B';
+  }
 
-    if (ytId) {
-      // Render YouTube iframe preview
-      previewContainer.innerHTML = `<iframe src="https://www.youtube.com/embed/${ytId}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="width:100%; height:100%; border:none"></iframe>`;
-      previewLength.textContent = 'YouTube Embed';
-      
-      // Auto-fetch YouTube title via JSONP/no-key oEmbed (extremely premium feature!)
-      fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`)
-        .then(r => r.json())
-        .then(data => {
-          if (data && data.title && titleField && !titleField.value.trim()) {
-            titleField.value = data.title;
-            titleField.dispatchEvent(new Event('input'));
-          }
-        }).catch(() => {});
-        
-      if (durInputEmbed) durInputEmbed.value = '0'; // default for YouTube embeds
-    } else if (urlVal.match(/\.(mp4|webm|mov|ogg)(\?.*)?$/i) || urlVal.includes('stream') || urlVal.startsWith('http')) {
-      // Render direct video element preview
-      previewContainer.innerHTML = `<video id="preview-direct-player" style="width:100%; height:100%; object-fit:cover" controls></video>`;
-      const playerEl = document.getElementById('preview-direct-player');
-      playerEl.src = urlVal;
-      playerEl.style.display = 'block';
-      
-      playerEl.addEventListener('loadedmetadata', () => {
-        const d = Math.max(1, Math.floor(playerEl.duration || 0));
-        if (durInputEmbed) durInputEmbed.value = String(d);
-        const m = Math.floor(d / 60), s = d % 60;
-        previewLength.textContent = m + ':' + String(s).padStart(2, '0');
-      }, {once: true});
+  function formatETA(s) {
+    if (s < 60) return s + 's';
+    const m = Math.floor(s/60); const sec = s%60;
+    return m + 'm ' + sec + 's';
+  }
 
-      playerEl.addEventListener('error', () => {
-        previewLength.textContent = 'Direct Video Link';
-      });
-    } else {
-      alert('Link format is verified but preview is not supported. You can still upload.');
-      previewLength.textContent = 'External Embed';
-    }
-  };
 })();
 </script>
-<?php endif; ?>
-
-<?php if (!$success): ?>
-<script data-page-script="true">
-document.getElementById('upload-form').addEventListener('submit', async function(e){
-  e.preventDefault();
-  const form = e.target;
-  const vid = form.dataset.videoId ? parseInt(form.dataset.videoId) : 0;
-  const token = form.dataset.uploadToken || '';
-  
-  if (!vid) {
-    alert('Video not initialized yet. Please wait a moment and try again.');
-    return;
-  }
-
-  const submitBtn = document.querySelector('button[type="submit"]');
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Redirecting...';
-  }
-
-  const meta = {
-    video_id: vid,
-    title: document.getElementById('title-field')?.value || '',
-    description: document.getElementById('desc-field')?.value || '',
-    tags: document.getElementById('tags-field')?.value || '',
-    visibility: document.querySelector('select[name="visibility"]')?.value || 'public',
-    category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value)
-  };
-
-  try {
-    // Save metadata (non-blocking - fire and forget for speed)
-    fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
-      method: 'POST', 
-      headers: {'Content-Type':'application/json'}, 
-      body: JSON.stringify({meta})
-    }).catch(e => console.error('Metadata save failed:', e));
-
-    // Redirect immediately - don't wait for metadata save or upload to finish
-    // The upload continues in the background
-    setTimeout(() => {
-      window.location.href = '<?= BASE_URL ?>/creator/upload.php?thumb_for=' + vid;
-    }, 200);
-  } catch(e) { 
-    console.error(e); 
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Upload & Continue';
-    }
-    alert('Error - please try again'); 
-  }
-});
-</script>
-<?php endif; ?>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
+require_login();
 
 $vid = (int)($_GET['v'] ?? 0);
 if (!$vid) { redirect(BASE_URL . '/'); }
@@ -111,7 +112,7 @@ if ($is_xhr_view) {
 }
 
 // Related (optimized indexed UNION query)
-$related = db_fetchAll(
+$related = db_fetchAll_cached(
     "(SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
       JOIN users u ON u.id=v.user_id
       WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0 AND v.category_id=?
@@ -128,7 +129,8 @@ $related = db_fetchAll(
       WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0
       ORDER BY v.views DESC LIMIT 12)
      LIMIT 12",
-    [$vid, $video['category_id'], $vid, $video['category_id'], $vid]
+    [$vid, $video['category_id'], $vid, $video['category_id'], $vid],
+    60
 );
 
 
@@ -157,22 +159,34 @@ require_once __DIR__ . '/includes/header.php';
       <!-- Player -->
       <div class="player-wrapper" id="player-wrapper">
         <?php
-        $yt_id = fh_youtube_id($video['video_url']);
+        $video_url = $video['video_url'] ?? '';
+        $is_external = str_starts_with($video_url, 'http://') || str_starts_with($video_url, 'https://');
+        $yt_id = fh_youtube_id($video_url);
+
+        $is_direct_video = false;
+        if ($is_external) {
+            $path = parse_url($video_url, PHP_URL_PATH);
+            if ($path) {
+                $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                if (in_array($ext, ['mp4', 'webm', 'mov', 'ogg', 'm3u8', 'mp3'])) {
+                    $is_direct_video = true;
+                }
+            }
+        }
+
         if ($yt_id):
         ?>
           <iframe id="fh-youtube-player" width="100%" height="100%"
-                  data-src="https://www.youtube.com/embed/<?= e($yt_id) ?>?autoplay=1&enablejsapi=1"
+                  src="https://www.youtube.com/embed/<?= e($yt_id) ?>?autoplay=1&enablejsapi=1"
                   frameborder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowfullscreen style="width:100%;height:100%;border:none;display:block"></iframe>
-          <script>
-            window.addEventListener('load', () => {
-              const player = document.getElementById('fh-youtube-player');
-              if (player) {
-                player.src = player.getAttribute('data-src');
-              }
-            });
-          </script>
+        <?php elseif ($is_external && !$is_direct_video): ?>
+          <iframe id="fh-embed-player" width="100%" height="100%"
+                  src="<?= BASE_URL ?>/embed_proxy.php?url=<?= urlencode($video_url) ?>"
+                  frameborder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowfullscreen style="width:100%;height:100%;border:none;display:block"></iframe>
         <?php else: ?>
           <video id="fh-player" playsinline preload="metadata"
                  poster="<?= thumb_url($video['thumbnail']) ?>"

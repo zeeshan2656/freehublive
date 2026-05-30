@@ -11,12 +11,34 @@
     adDiv.innerHTML = '';
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;overflow:hidden;background:transparent;';
-    adDiv.appendChild(iframe);
-    
-    try {
-      const doc = iframe.contentDocument || iframe.contentWindow.document;
-      doc.open();
-      doc.write(`
+
+    const safeDirectRender = (div, content) => {
+      div.innerHTML = '';
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(content, 'text/html');
+      
+      const nodes = Array.from(doc.body.childNodes);
+      nodes.forEach(node => {
+        if (node.tagName === 'SCRIPT') {
+          const newScript = document.createElement('script');
+          Array.from(node.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+          newScript.textContent = node.textContent;
+          div.appendChild(newScript);
+        } else {
+          div.appendChild(node);
+        }
+      });
+      const headScripts = Array.from(doc.head.querySelectorAll('script'));
+      headScripts.forEach(node => {
+        const newScript = document.createElement('script');
+        Array.from(node.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        newScript.textContent = node.textContent;
+        div.appendChild(newScript);
+      });
+    };
+
+    if ('srcdoc' in iframe) {
+      iframe.srcdoc = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -29,11 +51,32 @@
           ${htmlContent}
         </body>
         </html>
-      `);
-      doc.close();
-    } catch (e) {
-      console.error('Failed to write to iframe:', e);
-      adDiv.innerHTML = htmlContent;
+      `;
+      adDiv.appendChild(iframe);
+    } else {
+      adDiv.appendChild(iframe);
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+            </style>
+          </head>
+          <body>
+            ${htmlContent}
+          </body>
+          </html>
+        `);
+        doc.close();
+      } catch (e) {
+        console.error('Failed to write to iframe, falling back to direct render:', e);
+        safeDirectRender(adDiv, htmlContent);
+      }
     }
   }
 
@@ -190,6 +233,7 @@
         }
         
         trackImpression(ad.id, videoId, placement);
+        container.dataset.processed = "true";
         setupAdReload(container, reloadSeconds);
       } else {
         container.style.display = 'none';
@@ -203,6 +247,7 @@
     }
   }
 
+  let detectionsPromise = null;
   let adBlockDetected = false;
   let vpnDetected = false;
 
@@ -282,6 +327,11 @@
   }
 
   async function trackImpression(adId, videoId, placement) {
+    if (detectionsPromise) {
+      try {
+        await detectionsPromise;
+      } catch(e) {}
+    }
     if (adBlockDetected || vpnDetected) {
       console.warn('Impression tracking skipped: AdBlock or VPN active.');
       return;
@@ -294,6 +344,11 @@
   }
 
   async function trackClick(adId, videoId, placement) {
+    if (detectionsPromise) {
+      try {
+        await detectionsPromise;
+      } catch(e) {}
+    }
     if (adBlockDetected || vpnDetected) {
       console.warn('Click tracking skipped: AdBlock or VPN active.');
       return;
@@ -318,10 +373,15 @@
   });
 
   function processAdContainer(container) {
+    if (container.dataset.processed === "true") {
+      return;
+    }
+    
     const template = container.querySelector('.ad-html-template');
     const htmlContentEl = container.querySelector('.ad-html-content');
     
     if (template && htmlContentEl) {
+      container.dataset.processed = "true";
       // Render it inside safe iframe
       const content = template.innerHTML;
       renderHtmlAdInIframe(htmlContentEl, content);
@@ -337,6 +397,7 @@
         trackImpression(adId, videoId, placement);
       }
     } else if (container.querySelector('.ad-click-link, .ad-html-content')) {
+      container.dataset.processed = "true";
       const reloadSeconds = parseInt(container.dataset.reloadInterval) || 0;
       if (reloadSeconds > 0) {
         setupAdReload(container, reloadSeconds);
@@ -355,7 +416,9 @@
   }
 
   async function initAds() {
-    await runDetections();
+    detectionsPromise = runDetections().catch(err => {
+      console.error('runDetections failed:', err);
+    });
 
     const containers = document.querySelectorAll('.ad-sponsored-container');
     containers.forEach(container => {

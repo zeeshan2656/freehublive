@@ -1043,7 +1043,7 @@ endif;
         <a href="<?= BASE_URL ?>/creator/videos.php" class="studio-nav-item <?= $current_page === 'videos.php' || $current_page === 'edit.php' ? 'active' : '' ?>">
           <span>🎬 My Videos</span>
         </a>
-        <a href="<?= BASE_URL ?>/dashboard.php" class="studio-nav-item <?= $current_page === 'dashboard.php' ? 'active' : '' ?>">
+        <a href="<?= BASE_URL ?>/creator/earnings.php" class="studio-nav-item <?= $current_page === 'earnings.php' ? 'active' : '' ?>">
           <span>💰 Earnings</span>
         </a>
         <a href="<?= BASE_URL ?>/withdrawal.php" class="studio-nav-item <?= $current_page === 'withdrawal.php' ? 'active' : '' ?>">
@@ -1157,7 +1157,7 @@ endif;
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                   <span>Dashboard</span>
                 </a>
-                <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
+                <a href="<?= BASE_URL ?>/creator/earnings.php" class="dropdown-item" role="menuitem">
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                   <span>Earnings</span>
                 </a>
@@ -1282,7 +1282,7 @@ endif;
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span>Dashboard</span>
               </a>
-              <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
+              <a href="<?= BASE_URL ?>/creator/earnings.php" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                 <span>Earnings</span>
               </a>
@@ -1381,7 +1381,7 @@ endif;
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span>Dashboard</span>
               </a>
-              <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
+              <a href="<?= BASE_URL ?>/creator/earnings.php" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                 <span>Earnings</span>
               </a>
@@ -1518,6 +1518,7 @@ async function selectCategory(catId, catName) {
             }
           });
           if (window.bindLoadMore) window.bindLoadMore();
+          if (window.initAds) window.initAds();
         }
       } catch(e) {
         window.location.reload();

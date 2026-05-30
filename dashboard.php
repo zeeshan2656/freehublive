@@ -136,7 +136,9 @@ require_once __DIR__ . '/includes/header.php';
       <?php endforeach; ?>
       <?php if ($error): ?><div class="alert alert-error"><?= e($error) ?></div><?php endif; ?>
 
-      <?php $watch_stats_user_id = $uid; require __DIR__ . '/includes/partials/watch_earnings_stats.php'; ?>
+      <?php if ($tab === 'dashboard' || empty($tab)): ?>
+        <?php $watch_stats_user_id = $uid; require __DIR__ . '/includes/partials/watch_earnings_stats.php'; ?>
+      <?php endif; ?>
 
       <?php if ($tab === 'subscriptions'): ?>
       <div class="card" style="padding:24px">
@@ -187,38 +189,59 @@ require_once __DIR__ . '/includes/header.php';
       </div>
       <?php elseif ($tab === 'saved'): ?>
       <?php
+        $subtab = $_GET['subtab'] ?? 'videos';
+        if (!in_array($subtab, ['videos', 'reels'], true)) {
+            $subtab = 'videos';
+        }
+
         $savedVideos = db_fetchAll(
             "SELECT v.*, u.username, u.channel_name, u.avatar
              FROM watch_later w
              JOIN videos v ON v.id = w.video_id
              JOIN users u ON u.id = v.user_id
-             WHERE w.user_id = ?
+             WHERE w.user_id = ? AND (v.is_reel IS NULL OR v.is_reel = 0)
              ORDER BY w.added_at DESC",
             [$uid]
         );
+
+        $savedReels = db_fetchAll(
+            "SELECT v.*, u.username, u.channel_name, u.avatar
+             FROM watch_later w
+             JOIN videos v ON v.id = w.video_id
+             JOIN users u ON u.id = v.user_id
+             WHERE w.user_id = ? AND v.is_reel = 1
+             ORDER BY w.added_at DESC",
+            [$uid]
+        );
+
         $savedRef = auth_user()['ref_code'] ?? '';
+        $activeList = ($subtab === 'reels') ? $savedReels : $savedVideos;
       ?>
       <div class="card" style="padding:24px">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
-          <h3 style="font-weight:800;font-size:1.2rem;display:flex;align-items:center;gap:8px">
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M5 11.5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6.5"/><path d="M5 11.5l7 7 7-7"/></svg>
-            Saved Videos
-          </h3>
-          <span class="text-muted" style="font-size:.9rem">Showing <?= format_number(count($savedVideos)) ?> saved video<?= count($savedVideos) === 1 ? '' : 's' ?></span>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:16px">
+          <div style="display:flex;gap:12px">
+            <a href="<?= BASE_URL ?>/dashboard.php?tab=saved&subtab=videos" class="chip <?= $subtab==='videos'?'active':'' ?>" style="font-weight:600;padding:6px 16px;border-radius:20px;font-size:0.85rem">
+              🎥 Saved Videos
+            </a>
+            <a href="<?= BASE_URL ?>/dashboard.php?tab=saved&subtab=reels" class="chip <?= $subtab==='reels'?'active':'' ?>" style="font-weight:600;padding:6px 16px;border-radius:20px;font-size:0.85rem">
+              ⚡ Saved Reels
+            </a>
+          </div>
+          <span class="text-muted" style="font-size:.9rem">Showing <?= format_number(count($activeList)) ?> item<?= count($activeList) === 1 ? '' : 's' ?></span>
         </div>
 
-        <?php if ($savedVideos): ?>
+        <?php if ($activeList): ?>
           <div class="grid grid-6">
-            <?php foreach ($savedVideos as $video): ?>
+            <?php foreach ($activeList as $video): ?>
               <?= render_video_card($video, fh_video_card_opts($video, [], $savedRef)) ?>
             <?php endforeach; ?>
           </div>
         <?php else: ?>
           <div style="text-align:center; padding:48px 24px; color:var(--text2)">
             <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px; opacity:.4"><path d="M5 13l4 4 10-10"/><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
-            <p style="font-size:.95rem; margin-top:8px;">No saved videos yet.</p>
-            <p class="text-muted" style="margin-top:6px; font-size:.9rem">Save videos from the watch page to see them here.</p>
-            <a href="<?= BASE_URL ?>/" class="btn btn-primary btn-sm" style="margin-top:14px">Browse Videos</a>
+            <p style="font-size:.95rem; margin-top:8px;">No saved <?= $subtab ?> yet.</p>
+            <p class="text-muted" style="margin-top:6px; font-size:.9rem">Save <?= $subtab ?> from the watch page to see them here.</p>
+            <a href="<?= BASE_URL ?>/<?= $subtab === 'reels' ? 'reels.php' : '' ?>" class="btn btn-primary btn-sm" style="margin-top:14px">Browse <?= ucfirst($subtab) ?></a>
           </div>
         <?php endif; ?>
       </div>
