@@ -174,19 +174,38 @@ body {
   display: none !important;
 }
 
-/* Reels-Specific Ad Placement Styling */
-.reel-center-column {
+/* Reels-Specific Layout & Ad Placement Styling */
+.reel-middle-column {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   flex: 1;
-  max-width: 450px;
+  min-width: 0;
   height: 100%;
 }
 @media (max-width: 768px) {
-  .reel-center-column {
+  .reel-middle-column {
     max-width: 100%;
+    height: 100%;
+    display: block;
+  }
+}
+
+.reel-player-and-panel-row {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+@media (max-width: 768px) {
+  .reel-player-and-panel-row {
+    display: block;
+    width: 100%;
     height: 100%;
   }
 }
@@ -196,7 +215,7 @@ body {
   flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
-  align-items: center;
+  align-items: stretch;
   height: 100%;
 }
 @media (max-width: 1024px) {
@@ -210,7 +229,7 @@ body {
   flex-shrink: 0;
   display: flex;
   justify-content: flex-start;
-  align-items: center;
+  align-items: stretch;
   height: 100%;
 }
 @media (max-width: 1024px) {
@@ -221,13 +240,22 @@ body {
 
 .reel-left-ad-wrapper .ad-sponsored-container,
 .reel-right-ad-wrapper .ad-sponsored-container {
+  height: 100% !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-direction: column;
   width: 100% !important;
-  max-width: 100% !important;
+  background: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  box-sizing: border-box;
 }
 
 .reel-bottom-ad-wrapper {
   width: 100%;
-  max-width: 450px;
+  max-width: 820px;
   margin-top: 12px;
   display: flex;
   justify-content: center;
@@ -320,7 +348,7 @@ body {
 .reel-slide {
   display: flex;
   width: 100%;
-  max-width: <?= (450 + 350 + $left_w + $right_w + 80) ?>px;
+  max-width: <?= (450 + 350 + $left_w + $right_w + 120) ?>px;
   height: 100%;
   flex-shrink: 0;
   padding: 20px 0;
@@ -850,36 +878,102 @@ body {
           <div class="ad-sponsored-container ad-reels-left" data-placement="reels_left" data-lazy="true" style="display:none;"></div>
         </div>
 
-        <!-- Center Player & Bottom Ad column -->
-        <div class="reel-center-column">
-          <!-- Video element container -->
-          <div class="reel-player-container">
-            <video class="reel-video" src="<?= $video_src ?>" loop playsinline webkit-playsinline preload="none" poster="<?= $thumb ?>"></video>
-            
-            <!-- Tap/Play/Volume overlays -->
-            <div class="video-overlay-play-btn">
-              <svg width="40" height="40" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </div>
-            <div class="video-overlay-volume-btn">
-              <svg width="40" height="40" fill="currentColor" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/></svg>
-            </div>
+        <!-- Middle Column containing Player, Panel, and Bottom Ad -->
+        <div class="reel-middle-column">
+          <div class="reel-player-and-panel-row">
+            <!-- Video element container -->
+            <div class="reel-player-container">
+              <video class="reel-video" src="<?= $video_src ?>" loop playsinline webkit-playsinline preload="none" poster="<?= $thumb ?>"></video>
+              
+              <!-- Tap/Play/Volume overlays -->
+              <div class="video-overlay-play-btn">
+                <svg width="40" height="40" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+              <div class="video-overlay-volume-btn">
+                <svg width="40" height="40" fill="currentColor" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/></svg>
+              </div>
 
-            <!-- Mobile top overlay (Ad and Title) -->
-            <div class="reel-mobile-top-overlay">
-              <div class="ad-sponsored-container ad-reels-mobile-top" data-placement="reels_mobile_top" data-lazy="true" style="display:none;"></div>
-              <div class="reel-mobile-top-title-wrapper" onclick="event.stopPropagation();">
-                <div class="reel-mobile-top-title"><?= $title ?></div>
+              <!-- Mobile top overlay (Ad and Title) -->
+              <div class="reel-mobile-top-overlay">
+                <div class="ad-sponsored-container ad-reels-mobile-top" data-placement="reels_mobile_top" data-lazy="true" style="display:none;"></div>
+                <div class="reel-mobile-top-title-wrapper" onclick="event.stopPropagation();">
+                  <div class="reel-mobile-top-title"><?= $title ?></div>
+                </div>
+              </div>
+
+              <!-- Mobile info overlay -->
+              <div class="reel-mobile-info">
+                <div class="reel-creator-row <?= $is_subbed ? 'is-subbed-state' : '' ?>">
+                  <div class="creator-badge-container" onclick="event.stopPropagation();">
+                    <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link">
+                      <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
+                    </a>
+                    <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name"><?= $creator ?></a>
+                  </div>
+                  <?php if (!is_logged_in() || auth_user()['id'] != $ch_id): ?>
+                    <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>" onclick="event.stopPropagation();">
+                      <?= $is_subbed ? 'Subscribed ✓' : 'Subscribe' ?>
+                    </button>
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <!-- Mobile actions overlay -->
+              <div class="reel-mobile-actions">
+                <!-- Sound Toggle -->
+                <button class="action-btn sound-toggle-btn" onclick="event.stopPropagation();" title="Toggle sound">
+                  <div class="icon-wrap">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" class="sound-mute-icon" viewBox="0 0 24 24" style="display: none;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" class="sound-unmute-icon" viewBox="0 0 24 24" style="display: block;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                  </div>
+                  <span class="count-label sound-label">Sound</span>
+                </button>
+
+                <!-- Like -->
+                <button class="action-btn like-btn <?= $is_liked ? 'liked' : '' ?>" data-id="<?= $r['id'] ?>">
+                  <div class="icon-wrap">
+                    <svg width="24" height="24" fill="<?= $is_liked ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  </div>
+                  <span class="count-label"><?= format_number($likes) ?></span>
+                </button>
+
+                <!-- Comments -->
+                <button class="action-btn comment-trigger-btn" data-id="<?= $r['id'] ?>">
+                  <div class="icon-wrap">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <span class="count-label"><?= format_number($comments_count) ?></span>
+                </button>
+
+                <!-- Share -->
+                <button class="action-btn share-trigger-btn" data-id="<?= $r['id'] ?>" data-url="<?= BASE_URL ?>/reels.php?v=<?= $r['id'] ?>">
+                  <div class="icon-wrap">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+                  </div>
+                  <span class="count-label">Share</span>
+                </button>
+
+                <!-- Views -->
+                <div class="action-btn" style="cursor: default;">
+                  <div class="icon-wrap">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </div>
+                  <span class="count-label views-count" data-id="<?= $r['id'] ?>"><?= format_number($views) ?></span>
+                </div>
               </div>
             </div>
 
-            <!-- Mobile info overlay -->
-            <div class="reel-mobile-info">
-              <div class="reel-creator-row <?= $is_subbed ? 'is-subbed-state' : '' ?>">
+            <!-- Desktop side details panel -->
+            <div class="reel-desktop-panel">
+              <div class="panel-header <?= $is_subbed ? 'is-subbed-state' : '' ?>">
                 <div class="creator-badge-container" onclick="event.stopPropagation();">
                   <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link">
                     <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
                   </a>
-                  <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name"><?= $creator ?></a>
+                  <div class="creator-details">
+                    <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name"><?= $creator ?></a>
+                    <span class="sub-count"><?= format_number((int)$r['subscribers']) ?> subscribers</span>
+                  </div>
                 </div>
                 <?php if (!is_logged_in() || auth_user()['id'] != $ch_id): ?>
                   <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>" onclick="event.stopPropagation();">
@@ -887,49 +981,36 @@ body {
                   </button>
                 <?php endif; ?>
               </div>
-            </div>
 
-            <!-- Mobile actions overlay -->
-            <div class="reel-mobile-actions">
-              <!-- Sound Toggle -->
-              <button class="action-btn sound-toggle-btn" onclick="event.stopPropagation();" title="Toggle sound">
-                <div class="icon-wrap">
-                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" class="sound-mute-icon" viewBox="0 0 24 24" style="display: block;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
-                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" class="sound-unmute-icon" viewBox="0 0 24 24" style="display: none;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              <div class="panel-body">
+                <h2 class="reel-title"><?= $title ?></h2>
+                <div class="reel-stats">
+                  <span class="stat-item views-count" data-id="<?= $r['id'] ?>"><?= format_number($views) ?> views</span>
+                  <span class="stat-item"><?= time_ago($r['published_at']) ?></span>
                 </div>
-                <span class="count-label sound-label">Muted</span>
-              </button>
+                
+                <div class="panel-actions">
+                  <button class="btn btn-outline btn-sm like-btn <?= $is_liked ? 'liked' : '' ?>" data-id="<?= $r['id'] ?>">
+                    <svg width="16" height="16" fill="<?= $is_liked ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    <span class="like-label"><?= $is_liked ? 'Liked' : 'Like' ?></span> (<span class="like-count"><?= $likes ?></span>)
+                  </button>
+                  
+                  <button class="btn btn-outline btn-sm share-trigger-btn" data-url="<?= BASE_URL ?>/reels.php?v=<?= $r['id'] ?>">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:6px"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> Share
+                  </button>
+                </div>
+              </div>
 
-              <!-- Like -->
-              <button class="action-btn like-btn <?= $is_liked ? 'liked' : '' ?>" data-id="<?= $r['id'] ?>">
-                <div class="icon-wrap">
-                  <svg width="24" height="24" fill="<?= $is_liked ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              <div class="panel-comments-section">
+                <h3>Comments</h3>
+                <div class="panel-comments-list" data-id="<?= $r['id'] ?>">
+                  <div class="comments-loading">Loading comments...</div>
                 </div>
-                <span class="count-label"><?= format_number($likes) ?></span>
-              </button>
-
-              <!-- Comments -->
-              <button class="action-btn comment-trigger-btn" data-id="<?= $r['id'] ?>">
-                <div class="icon-wrap">
-                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <span class="count-label"><?= format_number($comments_count) ?></span>
-              </button>
-
-              <!-- Share -->
-              <button class="action-btn share-trigger-btn" data-id="<?= $r['id'] ?>" data-url="<?= BASE_URL ?>/reels.php?v=<?= $r['id'] ?>">
-                <div class="icon-wrap">
-                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
-                </div>
-                <span class="count-label">Share</span>
-              </button>
-
-              <!-- Views -->
-              <div class="action-btn" style="cursor: default;">
-                <div class="icon-wrap">
-                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </div>
-                <span class="count-label"><?= format_number($views) ?></span>
+                
+                <form class="reel-comment-form" data-id="<?= $r['id'] ?>">
+                  <input type="text" placeholder="Add a comment..." class="comment-input" required autocomplete="off">
+                  <button type="submit" class="comment-submit-btn">Post</button>
+                </form>
               </div>
             </div>
           </div>
@@ -943,57 +1024,6 @@ body {
         <!-- Right ad wrapper (Desktop Only) -->
         <div class="reel-right-ad-wrapper">
           <div class="ad-sponsored-container ad-reels-right" data-placement="reels_right" data-lazy="true" style="display:none;"></div>
-        </div>
-
-        <!-- Desktop side details panel -->
-        <div class="reel-desktop-panel">
-          <div class="panel-header <?= $is_subbed ? 'is-subbed-state' : '' ?>">
-            <div class="creator-badge-container" onclick="event.stopPropagation();">
-              <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link">
-                <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
-              </a>
-              <div class="creator-details">
-                <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name"><?= $creator ?></a>
-                <span class="sub-count"><?= format_number((int)$r['subscribers']) ?> subscribers</span>
-              </div>
-            </div>
-            <?php if (!is_logged_in() || auth_user()['id'] != $ch_id): ?>
-              <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>" onclick="event.stopPropagation();">
-                <?= $is_subbed ? 'Subscribed ✓' : 'Subscribe' ?>
-              </button>
-            <?php endif; ?>
-          </div>
-
-          <div class="panel-body">
-            <h2 class="reel-title"><?= $title ?></h2>
-            <div class="reel-stats">
-              <span class="stat-item"><?= format_number($views) ?> views</span>
-              <span class="stat-item"><?= time_ago($r['published_at']) ?></span>
-            </div>
-            
-            <div class="panel-actions">
-              <button class="btn btn-outline btn-sm like-btn <?= $is_liked ? 'liked' : '' ?>" data-id="<?= $r['id'] ?>">
-                <svg width="16" height="16" fill="<?= $is_liked ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                <span class="like-label"><?= $is_liked ? 'Liked' : 'Like' ?></span> (<span class="like-count"><?= $likes ?></span>)
-              </button>
-              
-              <button class="btn btn-outline btn-sm share-trigger-btn" data-url="<?= BASE_URL ?>/reels.php?v=<?= $r['id'] ?>">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:6px"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> Share
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-comments-section">
-            <h3>Comments</h3>
-            <div class="panel-comments-list" data-id="<?= $r['id'] ?>">
-              <div class="comments-loading">Loading comments...</div>
-            </div>
-            
-            <form class="reel-comment-form" data-id="<?= $r['id'] ?>">
-              <input type="text" placeholder="Add a comment..." class="comment-input" required autocomplete="off">
-              <button type="submit" class="comment-submit-btn">Post</button>
-            </form>
-          </div>
         </div>
       </div>
       <?php endforeach; ?>
@@ -1041,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (!feed || slides.length === 0) return;
 
   let activeIndex = 0;
-  let mutedGlobal = true; // initially muted for autoplay compliance
+  let mutedGlobal = false; // default to normal mode (unmuted)
 
   // Reload all ads associated with a specific slide
   function reloadAdsForSlide(slide) {
@@ -1077,9 +1107,46 @@ document.addEventListener('DOMContentLoaded', function() {
         video.preload = "auto";
         video.play().then(() => {
           // Increment view via watches if needed
-          fetch(`<?= BASE_URL ?>/watch.php?v=${slide.dataset.id}&xhr_view=1`).catch(()=>{});
+          fetch(`<?= BASE_URL ?>/watch.php?v=${slide.dataset.id}&xhr_view=1`)
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.success) {
+                // Update all view counters on the page for this reel in real-time
+                document.querySelectorAll(`.views-count[data-id="${slide.dataset.id}"]`).forEach(el => {
+                  if (el.classList.contains('stat-item')) {
+                    el.textContent = `${data.formatted} views`;
+                  } else {
+                    el.textContent = data.formatted;
+                  }
+                });
+              }
+            }).catch(()=>{});
         }).catch(err => {
           console.log("Autoplay blocked or failed:", err);
+          // Fallback to muted playback if autoplay with sound is blocked
+          if (!mutedGlobal) {
+            video.muted = true;
+            mutedGlobal = true;
+            syncSoundButtonsState();
+            video.play().then(() => {
+              // Increment view for muted playback too
+              fetch(`<?= BASE_URL ?>/watch.php?v=${slide.dataset.id}&xhr_view=1`)
+                .then(res => res.json())
+                .then(data => {
+                  if (data && data.success) {
+                    document.querySelectorAll(`.views-count[data-id="${slide.dataset.id}"]`).forEach(el => {
+                      if (el.classList.contains('stat-item')) {
+                        el.textContent = `${data.formatted} views`;
+                      } else {
+                        el.textContent = data.formatted;
+                      }
+                    });
+                  }
+                }).catch(()=>{});
+            }).catch(muteErr => {
+              console.log("Muted autoplay also blocked:", muteErr);
+            });
+          }
         });
         
         // Load comments for this active reel

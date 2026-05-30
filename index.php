@@ -225,6 +225,8 @@ function bindLoadMore() {
           const el = document.createElement('article');
           el.className = 'video-card fade-in';
           const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
+          const tabParam = (parseInt(v.is_reel) === 1) ? 'reels' : 'videos';
+          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=' + tabParam;
           el.onclick = () => location.href = watchUrl;
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`
@@ -232,7 +234,6 @@ function bindLoadMore() {
           const earnHtml = (FH_CREATOR_ID && v.user_id === FH_CREATOR_ID && v.earnings_fmt)
             ? `<div class="video-card-earnings-box" title="Watch-time earnings on this video"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
             : '';
-          const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
           el.innerHTML = `
             <div class="video-thumb" style="position:relative">
               <img src="${v.thumbnail}" alt="${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
@@ -240,10 +241,14 @@ function bindLoadMore() {
             </div>
             <div class="video-card-body">
               <div class="video-card-info-wrap">
-                <img src="${v.avatar}" alt="${v.channel}" class="video-card-avatar" loading="lazy" width="44" height="44">
+                <a href="${channelUrl}" onclick="event.stopPropagation();" style="display:inline-block;flex-shrink:0;border-radius:50%;overflow:hidden;width:44px;height:44px;">
+                  <img src="${v.avatar}" alt="${v.channel}" class="video-card-avatar" loading="lazy" width="44" height="44" style="width:100%;height:100%;object-fit:cover">
+                </a>
                 <div style="min-width:0;">
                   <div class="video-title">${v.title}</div>
-                  <div class="video-card-subtitle">${v.channel}</div>
+                  <div class="video-card-subtitle">
+                    <a href="${channelUrl}" onclick="event.stopPropagation();" style="font-weight:600;font-size:.85rem;color:var(--accent);text-decoration:none;">${v.channel}</a>
+                  </div>
                 </div>
               </div>
               <div class="video-card-stats-row">

@@ -13,4 +13,3 @@ return [
     'name'    => 'u434697879_yt',
     'charset' => 'utf8mb4',
 ];
-

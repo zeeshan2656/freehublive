@@ -614,6 +614,8 @@ function render_video_card(array $v, array $opts = []): string {
     $earnings  = isset($opts['earnings_usd']) ? (float)$opts['earnings_usd'] : null;
     $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
     $url       = BASE_URL . '/watch.php?v=' . (int)$v['id'] . $ref_param;
+    $tabParam = ((int)($v['is_reel'] ?? 0) === 1) ? 'reels' : 'videos';
+    $channelUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=' . $tabParam;
     $thumb     = thumb_url($v['thumbnail'] ?? null);
     $durSec    = (int)($v['duration'] ?? 0);
     $dur       = $durSec > 0 ? format_duration($durSec) : '';
@@ -627,8 +629,8 @@ function render_video_card(array $v, array $opts = []): string {
 
     $srcAttr  = !empty($v['video_url']) ? ' data-video-src="' . e(video_url($v['video_url'])) . '"' : '';
     $durBadge = $dur !== ''
-        ? '<span class="video-duration">' . $dur . '</span>'
-        : '<span class="video-duration video-duration--pending" data-video-id="' . (int)$v['id'] . '"' . $srcAttr . '>…</span>';
+         ? '<span class="video-duration">' . $dur . '</span>'
+         : '<span class="video-duration video-duration--pending" data-video-id="' . (int)$v['id'] . '"' . $srcAttr . '>…</span>';
 
     $formatClass = $format === 'full' ? ' video-card--full-width' : ($format === 'side' ? ' video-card--side' : '');
 
@@ -649,13 +651,15 @@ function render_video_card(array $v, array $opts = []): string {
   </div>
   <div class="video-card-body">
     <div style="display:flex;gap:10px;margin-bottom:8px">
-      <img src="{$avatar}" alt="{$creator}" class="video-card-avatar" loading="lazy" width="40" height="40" style="flex-shrink:0;border-radius:50%;object-fit:cover">
+      <a href="{$channelUrl}" onclick="event.stopPropagation();" style="display:inline-block;flex-shrink:0;border-radius:50%;overflow:hidden;width:40px;height:40px;">
+        <img src="{$avatar}" alt="{$creator}" class="video-card-avatar" loading="lazy" width="40" height="40" style="width:100%;height:100%;object-fit:cover">
+      </a>
       <div style="min-width:0;flex:1">
         <div class="video-title" style="margin:0;line-height:1.3">{$title}</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.75rem;color:var(--text2)">
-      <div style="font-weight:600;font-size:.85rem;color:var(--accent)">{$creator}</div>
+      <a href="{$channelUrl}" onclick="event.stopPropagation();" style="font-weight:600;font-size:.85rem;color:var(--accent);text-decoration:none;">{$creator}</a>
       <span>·</span>
       <span style="display:inline-flex;align-items:center;gap:2px">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>

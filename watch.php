@@ -12,7 +12,8 @@ $video = db_fetch(
      WHERE v.id=? AND v.status='published' AND v.visibility='public'", [$vid]
 );
 if (!$video) { http_response_code(404); die('Video not found'); }
-if ((int)($video['is_reel'] ?? 0) === 1) {
+$is_xhr_view = isset($_GET['xhr_view']);
+if ((int)($video['is_reel'] ?? 0) === 1 && !$is_xhr_view) {
     redirect(BASE_URL . '/reels.php?v=' . $video['id']);
 }
 
@@ -85,8 +86,28 @@ if (!$viewRow) {
         'is_unique'    => 1,
     ]);
     db_update('videos', ['views' => $video['views']+1], 'id=?', [$vid]);
-} else {
-    $view_session_id = (int)$viewRow['id'];
+} elseif ((int)($video['is_reel'] ?? 0) === 1) {
+    $view_session_id = db_insert('video_views', [
+        'video_id'     => $vid,
+        'user_id'      => auth_user()['id'] ?? null,
+        'affiliate_id' => $affId,
+        'ip_hash'      => $ip,
+        'ref_code'     => $aff,
+        'device'       => detect_device(),
+        'is_unique'    => 0,
+    ]);
+    db_update('videos', ['views' => $video['views']+1], 'id=?', [$vid]);
+}
+
+if ($is_xhr_view) {
+    header('Content-Type: application/json');
+    $current_views = db_fetch("SELECT views FROM videos WHERE id=?", [$vid])['views'];
+    echo json_encode([
+        'success'   => true,
+        'views'     => (int)$current_views,
+        'formatted' => format_number((int)$current_views)
+    ]);
+    exit;
 }
 
 // Related (optimized indexed UNION query)
@@ -281,7 +302,7 @@ require_once __DIR__ . '/includes/header.php';
 
       <!-- Channel Info -->
       <div class="watch-channel-row">
-        <a href="<?= BASE_URL ?>/channel.php?id=<?= $video['user_id'] ?>" class="flex gap-3">
+        <a href="<?= BASE_URL ?>/channel.php?id=<?= $video['user_id'] ?>&tab=videos" class="flex gap-3">
           <img src="<?= avatar_url($video['avatar']) ?>" alt="<?= e($video['channel_name']??$video['username']) ?>"
                class="avatar avatar-lg" width="64" height="64" loading="lazy">
           <div>
