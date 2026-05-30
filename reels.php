@@ -87,46 +87,92 @@ body {
   opacity: 0.6;
 }
 
-/* Mobile overlay header */
-.mobile-reels-header {
-  display: none;
+/* Mobile overlay header - Removed home/reel buttons and replaced with ad and marquee title */
+.reel-mobile-top-overlay {
   position: absolute;
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 8px 24px;
-  border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 30px rgba(0,0,0,0.5);
-  align-items: center;
-  gap: 12px;
+  z-index: 95;
+  width: calc(100% - 32px);
+  max-width: <?= $mobile_top_w ?>px;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {
-  .mobile-reels-header {
+  .reel-mobile-top-overlay {
     display: flex;
   }
 }
 
-.mobile-reels-header .header-link {
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
+.reel-mobile-top-title-wrapper {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  border-radius: 20px;
+  padding: 8px 16px;
+  overflow: hidden;
+  pointer-events: auto;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.reel-mobile-top-title {
+  font-size: 0.88rem;
   font-weight: 600;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-}
-
-.mobile-reels-header .header-link.active {
   color: #fff;
-  text-shadow: 0 0 8px var(--accent);
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  display: inline-block;
+  max-width: 100%;
+  transition: transform 0.1s linear;
 }
 
-.mobile-reels-header .header-sep {
-  color: rgba(255,255,255,0.2);
+.reel-mobile-top-title.scroll-active {
+  max-width: none;
+  animation: marquee-scroll 4s ease-in-out infinite alternate;
+}
+
+@keyframes marquee-scroll {
+  0%, 15% { transform: translate3d(0, 0, 0); }
+  85%, 100% { transform: translate3d(var(--scroll-dist, 0px), 0, 0); }
+}
+
+.creator-badge-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  border-radius: 30px;
+}
+
+@media (max-width: 768px) {
+  .reel-creator-row.is-subbed-state .creator-badge-container {
+    background: linear-gradient(90deg, var(--accent) 0%, #ff007f 50%, #7000ff 100%);
+    padding: 6px 14px 6px 6px;
+    border-radius: 30px;
+    box-shadow: 0 4px 15px rgba(255, 0, 127, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+  }
+  .reel-creator-row.is-subbed-state .creator-badge-container .creator-name {
+    color: #fff !important;
+    text-shadow: none !important;
+    font-weight: 700;
+  }
+  .reel-creator-row.is-subbed-state .creator-badge-container .creator-avatar {
+    border: 1.5px solid #fff !important;
+  }
+}
+
+.panel-header.is-subbed-state .sub-btn-reel,
+.reel-creator-row.is-subbed-state .sub-btn-reel {
+  display: none !important;
 }
 
 /* Reels-Specific Ad Placement Styling */
@@ -194,23 +240,7 @@ body {
   }
 }
 
-.reel-mobile-top-ad-wrapper {
-  position: absolute;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 95;
-  width: calc(100% - 32px);
-  max-width: <?= $mobile_top_w ?>px;
-  display: none;
-}
-@media (max-width: 768px) {
-  .reel-mobile-top-ad-wrapper {
-    display: block;
-  }
-}
-
-.reel-mobile-top-ad-wrapper .ad-sponsored-container {
+.reel-mobile-top-overlay .ad-sponsored-container {
   margin: 0 !important;
   width: 100% !important;
   max-width: 100% !important;
@@ -220,6 +250,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
   border-radius: 8px !important;
+  pointer-events: auto;
 }
 
 .ad-sponsored-container {
@@ -785,12 +816,7 @@ body {
       <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="btn btn-primary">Upload Reel</a>
     </div>
   <?php else: ?>
-    <!-- Mobile top floating header -->
-    <div class="mobile-reels-header">
-      <a href="<?= BASE_URL ?>/" class="header-link">Home</a>
-      <span class="header-sep">|</span>
-      <a href="<?= BASE_URL ?>/reels.php" class="header-link active">Reels</a>
-    </div>
+    <!-- Mobile top floating header removed -->
 
 
 
@@ -838,20 +864,29 @@ body {
               <svg width="40" height="40" fill="currentColor" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/></svg>
             </div>
 
+            <!-- Mobile top overlay (Ad and Title) -->
+            <div class="reel-mobile-top-overlay">
+              <div class="ad-sponsored-container ad-reels-mobile-top" data-placement="reels_mobile_top" data-lazy="true" style="display:none;"></div>
+              <div class="reel-mobile-top-title-wrapper" onclick="event.stopPropagation();">
+                <div class="reel-mobile-top-title"><?= $title ?></div>
+              </div>
+            </div>
+
             <!-- Mobile info overlay -->
             <div class="reel-mobile-info">
-              <div class="reel-creator-row">
-                <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link" onclick="event.stopPropagation();">
-                  <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
-                </a>
-                <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name" onclick="event.stopPropagation();"><?= $creator ?></a>
+              <div class="reel-creator-row <?= $is_subbed ? 'is-subbed-state' : '' ?>">
+                <div class="creator-badge-container" onclick="event.stopPropagation();">
+                  <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link">
+                    <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
+                  </a>
+                  <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name"><?= $creator ?></a>
+                </div>
                 <?php if (!is_logged_in() || auth_user()['id'] != $ch_id): ?>
                   <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>" onclick="event.stopPropagation();">
                     <?= $is_subbed ? 'Subscribed ✓' : 'Subscribe' ?>
                   </button>
                 <?php endif; ?>
               </div>
-              <div class="reel-title-row"><?= $title ?></div>
             </div>
 
             <!-- Mobile actions overlay -->
@@ -880,11 +915,6 @@ body {
                 <span class="count-label">Share</span>
               </button>
             </div>
-
-            <!-- Reels Mobile Top Ad Overlay (layered above video, video visible behind it) -->
-            <div class="reel-mobile-top-ad-wrapper">
-              <div class="ad-sponsored-container ad-reels-mobile-top" data-placement="reels_mobile_top" data-lazy="true" style="display:none;"></div>
-            </div>
           </div>
           
           <!-- Reels Bottom Ad (Desktop Only) -->
@@ -900,13 +930,15 @@ body {
 
         <!-- Desktop side details panel -->
         <div class="reel-desktop-panel">
-          <div class="panel-header">
-            <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link" onclick="event.stopPropagation();">
-              <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
-            </a>
-            <div class="creator-details">
-              <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name" onclick="event.stopPropagation();"><?= $creator ?></a>
-              <span class="sub-count"><?= format_number((int)$r['subscribers']) ?> subscribers</span>
+          <div class="panel-header <?= $is_subbed ? 'is-subbed-state' : '' ?>">
+            <div class="creator-badge-container" onclick="event.stopPropagation();">
+              <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-avatar-link">
+                <img src="<?= $avatar ?>" alt="<?= $creator ?>" class="creator-avatar">
+              </a>
+              <div class="creator-details">
+                <a href="<?= BASE_URL ?>/channel.php?id=<?= $ch_id ?>&tab=reels" class="creator-name"><?= $creator ?></a>
+                <span class="sub-count"><?= format_number((int)$r['subscribers']) ?> subscribers</span>
+              </div>
             </div>
             <?php if (!is_logged_in() || auth_user()['id'] != $ch_id): ?>
               <button class="btn btn-primary btn-sm sub-btn-reel <?= $is_subbed ? 'subbed' : '' ?>" data-channel="<?= $ch_id ?>" onclick="event.stopPropagation();">
@@ -1036,6 +1068,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Lazy load ad placements for this active reel slide
         lazyLoadAdsForSlide(slide);
+
+        // Adjust marquee scroll for title
+        adjustTitleScroll(slide);
       } else {
         // Pause other videos
         video.pause();
@@ -1046,6 +1081,31 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
+  function adjustTitleScroll(slide) {
+    const wrapper = slide.querySelector('.reel-mobile-top-title-wrapper');
+    const title = slide.querySelector('.reel-mobile-top-title');
+    if (!wrapper || !title || wrapper.clientWidth === 0) return;
+
+    title.classList.remove('scroll-active');
+    title.style.removeProperty('--scroll-dist');
+    title.style.removeProperty('animation-duration');
+
+    const overflow = title.scrollWidth - wrapper.clientWidth;
+    if (overflow > 0) {
+      title.style.setProperty('--scroll-dist', `-${overflow + 16}px`);
+      const duration = Math.max(3, (overflow / 30) + 2);
+      title.style.animationDuration = `${duration}s`;
+      title.classList.add('scroll-active');
+    }
+  }
+
+  window.addEventListener('resize', () => {
+    const activeSlide = slides[activeIndex];
+    if (activeSlide) {
+      adjustTitleScroll(activeSlide);
+    }
+  });
 
   // Set up intersection observer to detect current visible reel slide
   const observerOptions = {
@@ -1236,12 +1296,18 @@ document.addEventListener('DOMContentLoaded', function() {
       if (data.success && data.data) {
         const subData = data.data;
         document.querySelectorAll(`.sub-btn-reel[data-channel="${channelId}"]`).forEach(sBtn => {
+          const row = sBtn.closest('.reel-creator-row');
+          const header = sBtn.closest('.panel-header');
           if (subData.subscribed) {
             sBtn.classList.add('subbed');
             sBtn.textContent = 'Subscribed ✓';
+            if (row) row.classList.add('is-subbed-state');
+            if (header) header.classList.add('is-subbed-state');
           } else {
             sBtn.classList.remove('subbed');
             sBtn.textContent = 'Subscribe';
+            if (row) row.classList.remove('is-subbed-state');
+            if (header) header.classList.remove('is-subbed-state');
           }
         });
       } else {
