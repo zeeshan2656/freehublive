@@ -101,10 +101,17 @@ require_once __DIR__ . '/includes/header.php';
     <div class="grid grid-4" id="video-grid">
       <?php 
       $videos_subset = array_slice($videos, 0, 51);
+      $i = 0;
       foreach ($videos_subset as $v) {
+          $i++;
           echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
+          if ($i % 10 === 0) {
+              echo render_ad_card('search_grid_' . $i);
+          }
       }
-      echo render_ad_card('search_grid');
+      if ($i < 10) {
+          echo render_ad_card('search_grid');
+      }
       ?>
     </div>
 

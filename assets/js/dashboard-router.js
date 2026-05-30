@@ -20,10 +20,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   toggleBtn?.addEventListener('click', function(e) {
     e.stopPropagation();
-    if (sidebar?.classList.contains('open')) {
-      closeSidebar();
+    if (window.innerWidth <= 768) {
+      if (sidebar?.classList.contains('open')) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
     } else {
-      openSidebar();
+      document.body.classList.toggle('sidebar-collapsed');
+      const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+      localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
     }
   });
 

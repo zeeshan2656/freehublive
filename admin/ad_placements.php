@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         $id = (int)($_POST['placement_id'] ?? 0);
         $orig = db_fetch("SELECT key_name FROM ad_placements WHERE id = ?", [$id]);
         $protected_keys = [
-            'landing_trending', 'landing_latest', 'search_grid', 'category_grid',
+            'search_grid', 'category_grid',
             'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay', 'watch_up_next', 'above_footer',
             'reels_mobile_top', 'reels_left', 'reels_right', 'reels_bottom'
         ];
@@ -114,6 +114,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
 $search = trim($_GET['search'] ?? '');
 $device_filter = $_GET['device'] ?? 'any';
 $status_filter = $_GET['status'] ?? 'any';
+$active_tab = $_GET['tab'] ?? 'home';
+if (!in_array($active_tab, ['home', 'video', 'reels', 'fixed'])) {
+    $active_tab = 'home';
+}
+
+function get_placement_tab(string $key): string {
+    $k = strtolower($key);
+    if ($k === 'home_mobile_top') {
+        return 'fixed';
+    }
+    if (str_starts_with($k, 'reels_')) {
+        return 'reels';
+    }
+    if (str_starts_with($k, 'landing_') || str_starts_with($k, 'home_')) {
+        return 'home';
+    }
+    if (str_starts_with($k, 'watch_') || str_starts_with($k, 'video_') || str_contains($k, 'player') || str_contains($k, 'overlay')) {
+        return 'video';
+    }
+    return 'fixed';
+}
+
+function get_tab_url(string $tab_name): string {
+    $params = $_GET;
+    $params['tab'] = $tab_name;
+    return '?' . http_build_query($params);
+}
 
 $where = "1";
 $params = [];
@@ -133,13 +160,29 @@ if ($status_filter === 'assigned') {
     $where .= " AND ap.assigned_ad_id IS NULL";
 }
 
-$placements = db_fetchAll("
+$all_placements = db_fetchAll("
     SELECT ap.*, a.title AS ad_title, a.content_type AS ad_type, a.is_active AS ad_active
     FROM ad_placements ap
     LEFT JOIN ads a ON ap.assigned_ad_id = a.id
     WHERE $where
     ORDER BY ap.id ASC
 ", $params);
+
+// Calculate counts per tab based on the active search/filters
+$tab_counts = ['home' => 0, 'video' => 0, 'reels' => 0, 'fixed' => 0];
+$tab_active_counts = ['home' => 0, 'video' => 0, 'reels' => 0, 'fixed' => 0];
+$grouped_placements = ['home' => [], 'video' => [], 'reels' => [], 'fixed' => []];
+
+foreach ($all_placements as $p) {
+    $tab = get_placement_tab($p['key_name']);
+    $tab_counts[$tab]++;
+    if (!empty($p['assigned_ad_id']) && $p['ad_active']) {
+        $tab_active_counts[$tab]++;
+    }
+    $grouped_placements[$tab][] = $p;
+}
+
+$placements = $grouped_placements[$active_tab] ?? [];
 
 // Fetch active ads for assignment dropdown
 $active_ads = db_fetchAll("SELECT id, title, content_type FROM ads WHERE is_active = 1 ORDER BY title ASC");
@@ -274,176 +317,406 @@ require_once __DIR__ . '/partials/admin_head.php';
   display: inline-block;
   line-height: 1;
 }
+
+/* Premium Sidebar Layout */
+.ad-placements-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 992px) {
+  .ad-placements-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.sidebar-menu-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar-menu-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.sidebar-menu-header h3 {
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  margin: 0;
+}
+
+.sidebar-menu-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 4px;
+}
+
+.sidebar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text2);
+  text-decoration: none;
+  transition: all 0.2s ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-menu-item:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+.sidebar-menu-item.active {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: var(--accent);
+}
+
+.sidebar-menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  height: 70%;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 0 4px 4px 0;
+  transform: scaleY(0);
+  transition: transform 0.2s ease;
+}
+
+.sidebar-menu-item.active::before {
+  transform: scaleY(1);
+}
+
+.menu-item-icon-bg {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--bg3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  border: 1px solid var(--border);
+}
+
+.sidebar-menu-item:hover .menu-item-icon-bg {
+  background: var(--bg2);
+}
+
+.sidebar-menu-item.active .menu-item-icon-bg {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.menu-item-emoji {
+  font-size: 1rem;
+}
+
+.menu-item-content {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.menu-item-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.menu-item-desc {
+  font-size: 0.7rem;
+  color: var(--text3);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-menu-item:hover .menu-item-desc {
+  color: var(--text2);
+}
+
+.sidebar-menu-item.active .menu-item-desc {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.menu-item-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-family: monospace;
+}
+
+.sidebar-menu-item.active .menu-item-badge {
+  border-color: rgba(99, 102, 241, 0.3);
+  color: var(--accent);
+}
+
+.menu-item-badge.badge-has-active {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  color: #10b981 !important;
+}
+
+.sidebar-menu-item.active .menu-item-badge.badge-has-active {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #10b981 !important;
+}
 </style>
 <div class="admin-content">
 
-  
   <?php foreach(get_flash() as $f): ?>
     <div class="alert alert-<?= $f['type'] === 'error' ? 'danger' : $f['type'] ?>"><?= e($f['msg']) ?></div>
   <?php endforeach; ?>
 
-  <!-- Advanced Filters Form -->
-  <form method="GET" class="card" style="margin-bottom:24px; padding:18px; background:var(--bg2); border:1px solid var(--border)">
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; align-items:flex-end;">
-      
-      <!-- Search Input -->
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label" style="font-size:0.75rem; font-weight:700;">Search Placements</label>
-        <input type="text" name="search" value="<?= e($search) ?>" placeholder="Name or key..." class="form-input" style="height:38px; border-radius:6px;">
+  <div class="ad-placements-layout">
+    
+    <!-- Left Sidebar Menu -->
+    <div class="ad-placements-sidebar">
+      <div class="sidebar-menu-card">
+        <div class="sidebar-menu-header">
+          <h3>Placement Categories</h3>
+        </div>
+        <nav class="sidebar-menu-nav">
+          <a href="<?= get_tab_url('home') ?>" class="sidebar-menu-item <?= $active_tab === 'home' ? 'active' : '' ?>">
+            <div class="menu-item-icon-bg"><span class="menu-item-emoji">🏠</span></div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Home Page</span>
+              <span class="menu-item-desc">Landing & home page ads</span>
+            </div>
+            <span class="menu-item-badge <?= $tab_active_counts['home'] > 0 ? 'badge-has-active' : '' ?>">
+              <?= $tab_active_counts['home'] ?>/<?= $tab_counts['home'] ?>
+            </span>
+          </a>
+          
+          <a href="<?= get_tab_url('video') ?>" class="sidebar-menu-item <?= $active_tab === 'video' ? 'active' : '' ?>">
+            <div class="menu-item-icon-bg"><span class="menu-item-emoji">📹</span></div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Video Page</span>
+              <span class="menu-item-desc">Watch page & player overlay</span>
+            </div>
+            <span class="menu-item-badge <?= $tab_active_counts['video'] > 0 ? 'badge-has-active' : '' ?>">
+              <?= $tab_active_counts['video'] ?>/<?= $tab_counts['video'] ?>
+            </span>
+          </a>
+          
+          <a href="<?= get_tab_url('reels') ?>" class="sidebar-menu-item <?= $active_tab === 'reels' ? 'active' : '' ?>">
+            <div class="menu-item-icon-bg"><span class="menu-item-emoji">🎬</span></div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Reels Page</span>
+              <span class="menu-item-desc">Short-form vertical ads</span>
+            </div>
+            <span class="menu-item-badge <?= $tab_active_counts['reels'] > 0 ? 'badge-has-active' : '' ?>">
+              <?= $tab_active_counts['reels'] ?>/<?= $tab_counts['reels'] ?>
+            </span>
+          </a>
+          
+          <a href="<?= get_tab_url('fixed') ?>" class="sidebar-menu-item <?= $active_tab === 'fixed' ? 'active' : '' ?>">
+            <div class="menu-item-icon-bg"><span class="menu-item-emoji">📌</span></div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Fixed Ads</span>
+              <span class="menu-item-desc">Search, category, footer</span>
+            </div>
+            <span class="menu-item-badge <?= $tab_active_counts['fixed'] > 0 ? 'badge-has-active' : '' ?>">
+              <?= $tab_active_counts['fixed'] ?>/<?= $tab_counts['fixed'] ?>
+            </span>
+          </a>
+        </nav>
       </div>
-
-      <!-- Device Targeting Filter -->
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label" style="font-size:0.75rem; font-weight:700;">Device Target</label>
-        <select class="form-input form-select" name="device" style="height:38px; border-radius:6px; background:var(--bg); color:var(--text); border:1px solid var(--border);">
-          <option value="any" <?= $device_filter === 'any' ? 'selected' : '' ?>>Any Device</option>
-          <option value="all" <?= $device_filter === 'all' ? 'selected' : '' ?>>All Devices</option>
-          <option value="desktop" <?= $device_filter === 'desktop' ? 'selected' : '' ?>>Desktop Only</option>
-          <option value="mobile" <?= $device_filter === 'mobile' ? 'selected' : '' ?>>Mobile Only</option>
-        </select>
-      </div>
-
-      <!-- Assigned Ad Filter -->
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label" style="font-size:0.75rem; font-weight:700;">Assignment Status</label>
-        <select class="form-input form-select" name="status" style="height:38px; border-radius:6px; background:var(--bg); color:var(--text); border:1px solid var(--border);">
-          <option value="any" <?= $status_filter === 'any' ? 'selected' : '' ?>>Any Status</option>
-          <option value="assigned" <?= $status_filter === 'assigned' ? 'selected' : '' ?>>Assigned Only</option>
-          <option value="unassigned" <?= $status_filter === 'unassigned' ? 'selected' : '' ?>>Unassigned Only</option>
-        </select>
-      </div>
-
-      <!-- Action Buttons -->
-      <div class="flex gap-2" style="margin-bottom:0">
-        <button type="submit" class="btn btn-primary" style="flex:1; justify-content:center; height:38px; border-radius:6px;">Filter</button>
-        <a href="?" class="btn btn-outline" style="flex:1; justify-content:center; height:38px; border-radius:6px; display:inline-flex; align-items:center;">Reset</a>
-      </div>
-
     </div>
-  </form>
 
-  <!-- Placements List Form (Table) -->
-  <div class="card card-sm">
-    <div class="table-wrap admin-table-scroll">
-      <table class="admin-categories-table" style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr style="border-bottom: 1px solid var(--border); text-align: left;">
-            <th>ID</th>
-            <th>Name</th>
-            <th>Key Name</th>
-            <th>Device Target</th>
-            <th>Placement Size</th>
-            <th>Assigned Ad</th>
-            <th style="text-align: right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($placements as $p): ?>
-            <tr style="border-bottom: 1px solid var(--border);">
-              <td style="font-size: 0.85rem; font-weight: bold; color: var(--text2);"><?= (int)$p['id'] ?></td>
-              <td>
-                <div style="font-weight: 700; font-size: 0.9rem; color: var(--text);"><?= e($p['name']) ?></div>
-              </td>
-              <td>
-                <code><?= e($p['key_name']) ?></code>
-              </td>
-              <td>
-                <span class="badge badge-<?= $p['device_target'] === 'all' ? 'blue' : ($p['device_target'] === 'desktop' ? 'cyan' : 'purple') ?>">
-                   <?= $p['device_target'] === 'all' ? 'All Devices' : e($p['device_target']) ?>
-                 </span>
-              </td>
-              <td>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                  <?php if ($p['ad_width'] || $p['ad_height']): ?>
-                    <code style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-weight: bold; color: var(--text2); display: inline-block;">
-                      <?= $p['ad_width'] ? (int)$p['ad_width'] . 'px' : 'Auto' ?> × <?= $p['ad_height'] ? (int)$p['ad_height'] . 'px' : 'Auto' ?>
-                    </code>
-                  <?php else: ?>
-                    <span class="text-muted text-xs" style="font-style: italic; color: var(--text3);">Auto / Responsive</span>
-                  <?php endif; ?>
-                  
-                  <?php if ($p['reload_interval']): ?>
-                    <div style="font-size: 0.72rem; color: var(--accent); font-weight: bold; display: flex; align-items: center; gap: 3px;">
-                      <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="stroke: var(--accent);"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l.73-.73"/></svg>
-                      <?= (int)$p['reload_interval'] ?>s reload
-                    </div>
-                  <?php else: ?>
-                    <div style="font-size: 0.72rem; color: var(--text3); font-style: italic;">No reload</div>
-                  <?php endif; ?>
-                  
-                  <?php if ($p['ad_display_duration']): ?>
-                    <div style="font-size: 0.72rem; color: var(--green); font-weight: bold; display: flex; align-items: center; gap: 3px; margin-top: 4px;">
-                      ⏱️ <?= (int)$p['ad_display_duration'] ?>s duration
-                    </div>
-                  <?php endif; ?>
-                  
-                  <?php if ($p['ad_trigger_count']): ?>
-                    <div style="font-size: 0.72rem; color: #3b82f6; font-weight: bold; display: flex; align-items: center; gap: 3px; margin-top: 4px;">
-                      🔄 <?= (int)$p['ad_trigger_count'] ?> triggers
-                    </div>
-                  <?php endif; ?>
-                </div>
-              </td>
-              <td>
-                <?php if ($p['assigned_ad_id']): ?>
-                  <div class="flex gap-2" style="align-items: center; flex-wrap: wrap;">
-                    <span style="font-weight: 700; font-size: 0.88rem; color: var(--text);"><?= e($p['ad_title']) ?></span>
-                    <span class="badge badge-blue"><?= e($p['ad_type']) ?></span>
-                    <span class="badge badge-<?= $p['ad_active'] ? 'green' : 'gray' ?>"><?= $p['ad_active'] ? 'Active' : 'Inactive' ?></span>
-                  </div>
-                <?php else: ?>
-                  <span class="text-muted text-xs" style="font-style: italic; color: var(--text3);">Unassigned</span>
-                <?php endif; ?>
-              </td>
-              <td style="text-align: right;">
-                <div style="display: inline-flex; gap: 6px; align-items: center;">
-                  <!-- Edit/Assign Button -->
-                  <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>', '<?= $p['ad_width'] ?: '' ?>', '<?= $p['ad_height'] ?: '' ?>', '<?= $p['reload_interval'] ?: '' ?>', '<?= $p['ad_display_duration'] ?: '' ?>', '<?= $p['ad_trigger_count'] ?: '' ?>')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                    Edit
-                  </button>
+    <!-- Right Main Column -->
+    <div class="ad-placements-main">
+      <!-- Advanced Filters Form -->
+      <form method="GET" class="card" style="margin-bottom:24px; padding:18px; background:var(--bg2); border:1px solid var(--border)">
+        <input type="hidden" name="tab" value="<?= e($active_tab) ?>">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; align-items:flex-end;">
+          
+          <!-- Search Input -->
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:0.75rem; font-weight:700;">Search Placements</label>
+            <input type="text" name="search" value="<?= e($search) ?>" placeholder="Name or key..." class="form-input" style="height:38px; border-radius:6px;">
+          </div>
 
-                  <!-- Duplicate Action Form -->
-                  <form method="POST" style="display:inline-block; margin: 0;">
-                    <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
-                    <input type="hidden" name="placement_id" value="<?= $p['id'] ?>">
-                    <button name="action" value="duplicate" class="btn-action btn-duplicate" title="Duplicate this placement">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                      Duplicate
-                    </button>
-                  </form>
+          <!-- Device Targeting Filter -->
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:0.75rem; font-weight:700;">Device Target</label>
+            <select class="form-input form-select" name="device" style="height:38px; border-radius:6px; background:var(--bg); color:var(--text); border:1px solid var(--border);">
+              <option value="any" <?= $device_filter === 'any' ? 'selected' : '' ?>>Any Device</option>
+              <option value="all" <?= $device_filter === 'all' ? 'selected' : '' ?>>All Devices</option>
+              <option value="desktop" <?= $device_filter === 'desktop' ? 'selected' : '' ?>>Desktop Only</option>
+              <option value="mobile" <?= $device_filter === 'mobile' ? 'selected' : '' ?>>Mobile Only</option>
+            </select>
+          </div>
 
-                  <!-- Delete Action Form (only for duplicated items) -->
-                  <?php 
-                  $protected_keys = [
-                      'landing_trending', 'landing_latest', 'search_grid', 'category_grid',
-                      'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay', 'watch_up_next',
-                      'reels_mobile_top', 'reels_left', 'reels_right', 'reels_bottom'
-                  ];
-                  if (!in_array($p['key_name'], $protected_keys)): 
-                  ?>
-                    <form method="POST" style="display:inline-block; margin: 0;" onsubmit="return confirm('Are you sure you want to delete this duplicated placement?');">
-                      <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
-                      <input type="hidden" name="placement_id" value="<?= $p['id'] ?>">
-                      <button name="action" value="delete" class="btn-action btn-delete" title="Delete duplicated placement">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        Delete
+          <!-- Assigned Ad Filter -->
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:0.75rem; font-weight:700;">Assignment Status</label>
+            <select class="form-input form-select" name="status" style="height:38px; border-radius:6px; background:var(--bg); color:var(--text); border:1px solid var(--border);">
+              <option value="any" <?= $status_filter === 'any' ? 'selected' : '' ?>>Any Status</option>
+              <option value="assigned" <?= $status_filter === 'assigned' ? 'selected' : '' ?>>Assigned Only</option>
+              <option value="unassigned" <?= $status_filter === 'unassigned' ? 'selected' : '' ?>>Unassigned Only</option>
+            </select>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex gap-2" style="margin-bottom:0">
+            <button type="submit" class="btn btn-primary" style="flex:1; justify-content:center; height:38px; border-radius:6px;">Filter</button>
+            <a href="?tab=<?= e($active_tab) ?>" class="btn btn-outline" style="flex:1; justify-content:center; height:38px; border-radius:6px; display:inline-flex; align-items:center;">Reset</a>
+          </div>
+
+        </div>
+      </form>
+
+      <!-- Placements List Form (Table) -->
+      <div class="card card-sm">
+        <div class="table-wrap admin-table-scroll">
+          <table class="admin-categories-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--border); text-align: left;">
+                <th>ID</th>
+                <th>Name</th>
+                <th>Key Name</th>
+                <th>Device Target</th>
+                <th>Placement Size</th>
+                <th>Assigned Ad</th>
+                <th style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($placements as $p): ?>
+                <tr style="border-bottom: 1px solid var(--border);">
+                  <td style="font-size: 0.85rem; font-weight: bold; color: var(--text2);"><?= (int)$p['id'] ?></td>
+                  <td>
+                    <div style="font-weight: 700; font-size: 0.9rem; color: var(--text);"><?= e($p['name']) ?></div>
+                  </td>
+                  <td>
+                    <code><?= e($p['key_name']) ?></code>
+                  </td>
+                  <td>
+                    <span class="badge badge-<?= $p['device_target'] === 'all' ? 'blue' : ($p['device_target'] === 'desktop' ? 'cyan' : 'purple') ?>">
+                       <?= $p['device_target'] === 'all' ? 'All Devices' : e($p['device_target']) ?>
+                     </span>
+                  </td>
+                  <td>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                      <?php if ($p['ad_width'] || $p['ad_height']): ?>
+                        <code style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-weight: bold; color: var(--text2); display: inline-block;">
+                          <?= $p['ad_width'] ? (int)$p['ad_width'] . 'px' : 'Auto' ?> × <?= $p['ad_height'] ? (int)$p['ad_height'] . 'px' : 'Auto' ?>
+                        </code>
+                      <?php else: ?>
+                        <span class="text-muted text-xs" style="font-style: italic; color: var(--text3);">Auto / Responsive</span>
+                      <?php endif; ?>
+                      
+                      <?php if ($p['reload_interval']): ?>
+                        <div style="font-size: 0.72rem; color: var(--accent); font-weight: bold; display: flex; align-items: center; gap: 3px;">
+                           <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="stroke: var(--accent);"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l.73-.73"/></svg>
+                          <?= (int)$p['reload_interval'] ?>s reload
+                        </div>
+                      <?php else: ?>
+                        <div style="font-size: 0.72rem; color: var(--text3); font-style: italic;">No reload</div>
+                      <?php endif; ?>
+                      
+                      <?php if ($p['ad_display_duration']): ?>
+                        <div style="font-size: 0.72rem; color: var(--green); font-weight: bold; display: flex; align-items: center; gap: 3px; margin-top: 4px;">
+                          ⏱️ <?= (int)$p['ad_display_duration'] ?>s duration
+                        </div>
+                      <?php endif; ?>
+                      
+                      <?php if ($p['ad_trigger_count']): ?>
+                        <div style="font-size: 0.72rem; color: #3b82f6; font-weight: bold; display: flex; align-items: center; gap: 3px; margin-top: 4px;">
+                          🔄 <?= (int)$p['ad_trigger_count'] ?> triggers
+                        </div>
+                      <?php endif; ?>
+                    </div>
+                  </td>
+                  <td>
+                    <?php if ($p['assigned_ad_id']): ?>
+                      <div class="flex gap-2" style="align-items: center; flex-wrap: wrap;">
+                        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text);"><?= e($p['ad_title']) ?></span>
+                        <span class="badge badge-blue"><?= e($p['ad_type']) ?></span>
+                        <span class="badge badge-<?= $p['ad_active'] ? 'green' : 'gray' ?>"><?= $p['ad_active'] ? 'Active' : 'Inactive' ?></span>
+                      </div>
+                    <?php else: ?>
+                      <span class="text-muted text-xs" style="font-style: italic; color: var(--text3);">Unassigned</span>
+                    <?php endif; ?>
+                  </td>
+                  <td style="text-align: right;">
+                    <div style="display: inline-flex; gap: 6px; align-items: center;">
+                      <!-- Edit/Assign Button -->
+                      <button type="button" class="btn-action btn-edit" onclick="openPlacementModal(<?= (int)$p['id'] ?>, '<?= e(addslashes($p['name'])) ?>', '<?= e(addslashes($p['key_name'])) ?>', '<?= e($p['device_target']) ?>', '<?= $p['assigned_ad_id'] ?: '' ?>', '<?= $p['ad_width'] ?: '' ?>', '<?= $p['ad_height'] ?: '' ?>', '<?= $p['reload_interval'] ?: '' ?>', '<?= $p['ad_display_duration'] ?: '' ?>', '<?= $p['ad_trigger_count'] ?: '' ?>')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        Edit
                       </button>
-                    </form>
-                  <?php endif; ?>
-                </div>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-          <?php if (!$placements): ?>
-            <tr>
-              <td colspan="6" style="text-align: center; padding: 24px; color: var(--text3); font-style: italic;">
-                No placement areas found matching the filter criteria.
-              </td>
-            </tr>
-          <?php endif; ?>
-        </tbody>
-      </table>
+
+                      <!-- Duplicate Action Form -->
+                      <form method="POST" style="display:inline-block; margin: 0;">
+                        <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+                        <input type="hidden" name="placement_id" value="<?= $p['id'] ?>">
+                        <button name="action" value="duplicate" class="btn-action btn-duplicate" title="Duplicate this placement">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                          Duplicate
+                        </button>
+                      </form>
+
+                      <!-- Delete Action Form (only for duplicated items) -->
+                      <?php 
+                      $protected_keys = [
+                          'search_grid', 'category_grid',
+                          'home_mobile_top', 'watch_sidebar', 'watch_below_player', 'video_player_overlay', 'watch_up_next',
+                          'reels_mobile_top', 'reels_left', 'reels_right', 'reels_bottom'
+                      ];
+                      if (!in_array($p['key_name'], $protected_keys)): 
+                      ?>
+                        <form method="POST" style="display:inline-block; margin: 0;" onsubmit="return confirm('Are you sure you want to delete this duplicated placement?');">
+                          <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+                          <input type="hidden" name="placement_id" value="<?= $p['id'] ?>">
+                          <button name="action" value="delete" class="btn-action btn-delete" title="Delete duplicated placement">
+                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            Delete
+                          </button>
+                        </form>
+                      <?php endif; ?>
+                    </div>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              <?php if (!$placements): ?>
+                <tr>
+                  <td colspan="7" style="text-align: center; padding: 24px; color: var(--text3); font-style: italic;">
+                    No placement areas found matching the filter criteria.
+                  </td>
+                </tr>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -552,12 +825,14 @@ require_once __DIR__ . '/partials/admin_head.php';
             <label class="form-label" style="font-size: 0.8rem; font-weight: bold; color: var(--text2);">Key Name *</label>
             <select class="form-input form-select" name="key_name" id="add_key_name" required style="width: 100%; height: 38px; border-radius: 6px; padding: 0 10px; background: var(--bg); color: var(--accent); border: 1px solid var(--border); font-family: monospace; font-size: 0.85rem; font-weight: 700;">
               <option value="">-- Select Key Name --</option>
-              <?php foreach ($all_key_names as $kn): ?>
+              <?php foreach ($all_key_names as $kn): 
+                if (get_placement_tab($kn['key_name']) !== $active_tab) continue;
+              ?>
                 <option value="<?= e($kn['key_name']) ?>"><?= e($kn['key_name']) ?></option>
               <?php endforeach; ?>
             </select>
             <div style="font-size: 0.72rem; color: var(--text3); margin-top: 4px; line-height: 1.3;">
-              Select an existing placement key used in the project.
+              Select an existing placement key matching the current category.
             </div>
           </div>
 

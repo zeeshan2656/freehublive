@@ -100,7 +100,7 @@ if (!empty($placements)) {
     </div>
     <div class="stat-value" style="color:var(--accent);font-size:1.35rem;font-weight:800;letter-spacing:-.02em"><?= e(fh_format_money($cpm_earnings, $ws_currency)) ?></div>
     <div class="text-xs text-muted" style="margin-top:4px">
-      Rate: <?= $is_creator ? fh_format_money(setting('creator_cpm', '1.00'), 'USD') : fh_format_money(setting('viewer_cpm', '0.50'), 'USD') ?> / 1K Imps
+      Rate: <?= $is_creator ? fh_format_money((float)setting('creator_cpm', '1.00'), $ws_currency) : fh_format_money((float)setting('viewer_cpm', '0.50'), $ws_currency) ?> / 1K Imps
     </div>
   </div>
 
@@ -113,7 +113,7 @@ if (!empty($placements)) {
     </div>
     <div class="stat-value" style="color:var(--accent);font-size:1.35rem;font-weight:800;letter-spacing:-.02em"><?= e(fh_format_money($cpc_earnings, $ws_currency)) ?></div>
     <div class="text-xs text-muted" style="margin-top:4px">
-      Rate: <?= $is_creator ? fh_format_money(setting('creator_cpc', '5.00'), 'USD') : fh_format_money(setting('viewer_cpc', '2.00'), 'USD') ?> / 1K Clicks
+      Rate: <?= $is_creator ? fh_format_money((float)setting('creator_cpc', '5.00'), $ws_currency) : fh_format_money((float)setting('viewer_cpc', '2.00'), $ws_currency) ?> / 1K Clicks
     </div>
   </div>
 

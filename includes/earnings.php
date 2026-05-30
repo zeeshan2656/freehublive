@@ -562,7 +562,7 @@ function fh_user_watch_stats(int $userId): array {
         'balance_formatted'     => fh_format_money((float)($user['balance'] ?? 0), $currency),
         'currency'              => $currency,
         'rate_usd'              => $rate,
-        'rate_formatted'        => fh_format_money($rate, 'USD') . '/hr',
+        'rate_formatted'        => fh_format_money($rate, $currency) . '/hr',
     ];
 }
 

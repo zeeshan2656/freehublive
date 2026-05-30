@@ -116,9 +116,9 @@ require_once __DIR__ . '/../includes/header.php';
             </td>
             <td class="text-sm" style="text-align:right"><?= format_number($v_stats['impressions']) ?></td>
             <td class="text-sm" style="text-align:right"><?= format_number($v_stats['clicks']) ?></td>
-            <td class="text-xs text-muted" style="text-align:right">$<?= number_format($creator_cpm, 2) ?></td>
-            <td class="text-xs text-muted" style="text-align:right">$<?= number_format($creator_cpc, 2) ?></td>
-            <td class="text-sm font-semibold" style="text-align:right;color:var(--green)">$<?= number_format($earned, 4) ?></td>
+            <td class="text-xs text-muted" style="text-align:right"><?= e(fh_format_money($creator_cpm, fh_user_currency(), 2)) ?></td>
+            <td class="text-xs text-muted" style="text-align:right"><?= e(fh_format_money($creator_cpc, fh_user_currency(), 2)) ?></td>
+            <td class="text-sm font-semibold" style="text-align:right;color:var(--green)"><?= e(fh_format_money($earned, fh_user_currency(), 4)) ?></td>
           </tr>
           <?php endforeach; ?>
           </tbody>

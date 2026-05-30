@@ -833,6 +833,110 @@ body {
   color: var(--text2);
   font-size: 0.85rem;
 }
+
+/* Dynamic search overlay styling */
+.reels-search-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(10, 10, 12, 0.85);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  z-index: 150;
+  padding: 12px 16px;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  transform: translateY(-100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reels-search-overlay.active {
+  display: flex;
+  transform: translateY(0);
+}
+.search-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+#reels-search-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 24px;
+  padding: 10px 40px 10px 42px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: all 0.2s;
+}
+#reels-search-input:focus {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+}
+.clear-search-btn {
+  position: absolute;
+  right: 14px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+.clear-search-btn:hover {
+  color: #fff;
+}
+.close-search-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 4px;
+  white-space: nowrap;
+}
+.close-search-btn:hover {
+  opacity: 0.8;
+}
+
+/* No search results overlay block */
+.no-search-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  text-align: center;
+  color: var(--text2);
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  background: #0a0a0c;
+}
+.no-search-results svg {
+  color: var(--accent);
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
 </style>
 
 <div class="reels-container">
@@ -846,7 +950,22 @@ body {
   <?php else: ?>
     <!-- Mobile top floating header removed -->
 
+    <!-- Global Reels Search Overlay (Dynamic Search) -->
+    <div class="reels-search-overlay" id="reels-search-overlay">
+      <div class="search-input-wrapper">
+        <svg class="search-icon" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="reels-search-input" placeholder="Search by title or creator name..." autocomplete="off">
+        <button class="clear-search-btn" id="clear-search-btn" aria-label="Clear search">&times;</button>
+      </div>
+      <button class="close-search-btn" id="close-search-btn">Cancel</button>
+    </div>
 
+    <!-- No Search Results Block -->
+    <div class="no-search-results" id="no-search-results" style="display: none;">
+      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path stroke-linecap="round" d="M8 15h6"/></svg>
+      <h3>No matching Reels found</h3>
+      <p>Try searching for a different title or creator.</p>
+    </div>
 
     <div class="reels-feed" id="reels-feed">
       <?php foreach ($reels as $index => $r):
@@ -920,6 +1039,14 @@ body {
 
               <!-- Mobile actions overlay -->
               <div class="reel-mobile-actions">
+                <!-- Search Button -->
+                <button class="action-btn search-trigger-btn" onclick="event.stopPropagation();" title="Search Reels">
+                  <div class="icon-wrap">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </div>
+                  <span class="count-label">Search</span>
+                </button>
+
                 <!-- Sound Toggle -->
                 <button class="action-btn sound-toggle-btn" onclick="event.stopPropagation();" title="Toggle sound">
                   <div class="icon-wrap">
@@ -998,11 +1125,17 @@ body {
                   <button class="btn btn-outline btn-sm share-trigger-btn" data-url="<?= BASE_URL ?>/reels.php?v=<?= $r['id'] ?>">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:6px"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> Share
                   </button>
+
+                  <button class="btn btn-outline btn-sm sound-toggle-btn" title="Toggle sound" onclick="event.stopPropagation();">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" class="sound-mute-icon" viewBox="0 0 24 24" style="display: none; margin-right:6px;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" class="sound-unmute-icon" viewBox="0 0 24 24" style="display: inline-block; margin-right:6px;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    <span class="sound-label">Sound</span>
+                  </button>
                 </div>
               </div>
 
               <div class="panel-comments-section">
-                <h3>Comments</h3>
+                <h3>Comments (<span class="comments-count-label" data-id="<?= $r['id'] ?>"><?= format_number($comments_count) ?></span>)</h3>
                 <div class="panel-comments-list" data-id="<?= $r['id'] ?>">
                   <div class="comments-loading">Loading comments...</div>
                 </div>
@@ -1069,6 +1202,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const backdrop = mobileCommentsPanel ? mobileCommentsPanel.querySelector('.panel-backdrop') : null;
 
   if (!feed || slides.length === 0) return;
+
+  const searchOverlay = document.getElementById('reels-search-overlay');
+  const searchInput = document.getElementById('reels-search-input');
+  const clearSearchBtn = document.getElementById('clear-search-btn');
+  const closeSearchBtn = document.getElementById('close-search-btn');
+  const noSearchResults = document.getElementById('no-search-results');
 
   let activeIndex = 0;
   let mutedGlobal = false; // default to normal mode (unmuted)
@@ -1215,14 +1354,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Desktop navigation arrows click handlers
   function updateNavArrows() {
-    if (prevBtn) prevBtn.style.opacity = activeIndex === 0 ? '0.3' : '1';
-    if (nextBtn) nextBtn.style.opacity = activeIndex === slides.length - 1 ? '0.3' : '1';
+    let hasPrev = false;
+    let hasNext = false;
+    for (let i = activeIndex - 1; i >= 0; i--) {
+      if (!slides[i].classList.contains('filtered-out')) {
+        hasPrev = true;
+        break;
+      }
+    }
+    for (let i = activeIndex + 1; i < slides.length; i++) {
+      if (!slides[i].classList.contains('filtered-out')) {
+        hasNext = true;
+        break;
+      }
+    }
+    if (prevBtn) prevBtn.style.opacity = hasPrev ? '1' : '0.3';
+    if (nextBtn) nextBtn.style.opacity = hasNext ? '1' : '0.3';
   }
 
   if (prevBtn) {
     prevBtn.addEventListener('click', () => {
-      if (activeIndex > 0) {
-        activeIndex--;
+      let prevIndex = -1;
+      for (let i = activeIndex - 1; i >= 0; i--) {
+        if (!slides[i].classList.contains('filtered-out')) {
+          prevIndex = i;
+          break;
+        }
+      }
+      if (prevIndex !== -1) {
+        activeIndex = prevIndex;
         scrollToReel(activeIndex);
       }
     });
@@ -1230,8 +1390,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (nextBtn) {
     nextBtn.addEventListener('click', () => {
-      if (activeIndex < slides.length - 1) {
-        activeIndex++;
+      let nextIndex = -1;
+      for (let i = activeIndex + 1; i < slides.length; i++) {
+        if (!slides[i].classList.contains('filtered-out')) {
+          nextIndex = i;
+          break;
+        }
+      }
+      if (nextIndex !== -1) {
+        activeIndex = nextIndex;
         scrollToReel(activeIndex);
       }
     });
@@ -1255,16 +1422,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Keyboard navigation
   document.addEventListener('keydown', (e) => {
+    // Skip if user is typing in form elements to avoid conflicts
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      return;
+    }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (activeIndex > 0) {
-        activeIndex--;
+      let prevIndex = -1;
+      for (let i = activeIndex - 1; i >= 0; i--) {
+        if (!slides[i].classList.contains('filtered-out')) {
+          prevIndex = i;
+          break;
+        }
+      }
+      if (prevIndex !== -1) {
+        activeIndex = prevIndex;
         scrollToReel(activeIndex);
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (activeIndex < slides.length - 1) {
-        activeIndex++;
+      let nextIndex = -1;
+      for (let i = activeIndex + 1; i < slides.length; i++) {
+        if (!slides[i].classList.contains('filtered-out')) {
+          nextIndex = i;
+          break;
+        }
+      }
+      if (nextIndex !== -1) {
+        activeIndex = nextIndex;
         scrollToReel(activeIndex);
       }
     } else if (e.key === ' ') {
@@ -1308,22 +1493,22 @@ document.addEventListener('DOMContentLoaded', function() {
   // Sound Buttons Sync function
   function syncSoundButtonsState() {
     slides.forEach(slide => {
-      const sBtn = slide.querySelector('.sound-toggle-btn');
-      if (sBtn) {
+      const sBtns = slide.querySelectorAll('.sound-toggle-btn');
+      sBtns.forEach(sBtn => {
         const muteIcon = sBtn.querySelector('.sound-mute-icon');
         const unmuteIcon = sBtn.querySelector('.sound-unmute-icon');
         const label = sBtn.querySelector('.sound-label');
         
         if (mutedGlobal) {
-          if (muteIcon) muteIcon.style.display = 'block';
+          if (muteIcon) muteIcon.style.display = 'inline-block';
           if (unmuteIcon) unmuteIcon.style.display = 'none';
           if (label) label.textContent = 'Muted';
         } else {
           if (muteIcon) muteIcon.style.display = 'none';
-          if (unmuteIcon) unmuteIcon.style.display = 'block';
+          if (unmuteIcon) unmuteIcon.style.display = 'inline-block';
           if (label) label.textContent = 'Sound';
         }
-      }
+      });
     });
   }
 
@@ -1503,6 +1688,10 @@ document.addEventListener('DOMContentLoaded', function() {
           let count = parseInt(lbl.textContent) || 0;
           lbl.textContent = count + 1;
         });
+        document.querySelectorAll(`.comments-count-label[data-id="${videoId}"]`).forEach(lbl => {
+          let count = parseInt(lbl.textContent) || 0;
+          lbl.textContent = count + 1;
+        });
       } else {
         if (confirm("Please login to comment. Login now?")) {
           window.location.href = '<?= BASE_URL ?>/auth/login.php';
@@ -1557,6 +1746,10 @@ document.addEventListener('DOMContentLoaded', function() {
           let count = parseInt(lbl.textContent) || 0;
           lbl.textContent = count + 1;
         });
+        document.querySelectorAll(`.comments-count-label[data-id="${videoId}"]`).forEach(lbl => {
+          let count = parseInt(lbl.textContent) || 0;
+          lbl.textContent = count + 1;
+        });
       } else {
         if (confirm("Please login to comment. Login now?")) {
           window.location.href = '<?= BASE_URL ?>/auth/login.php';
@@ -1590,6 +1783,82 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
   });
+
+  // Dynamic Search Functionality
+  function filterReels() {
+    const query = searchInput.value.toLowerCase().trim();
+    if (clearSearchBtn) clearSearchBtn.style.display = query ? 'flex' : 'none';
+
+    let firstVisibleIndex = -1;
+    let visibleSlidesCount = 0;
+
+    slides.forEach((slide, idx) => {
+      const titleEl = slide.querySelector('.reel-mobile-top-title');
+      const creatorEl = slide.querySelector('.creator-name');
+      const titleText = titleEl ? titleEl.textContent.toLowerCase() : '';
+      const creatorText = creatorEl ? creatorEl.textContent.toLowerCase() : '';
+
+      const isMatch = titleText.includes(query) || creatorText.includes(query);
+
+      if (isMatch) {
+        slide.style.display = '';
+        slide.classList.remove('filtered-out');
+        visibleSlidesCount++;
+        if (firstVisibleIndex === -1) {
+          firstVisibleIndex = idx;
+        }
+      } else {
+        slide.style.display = 'none';
+        slide.classList.add('filtered-out');
+        const video = slide.querySelector('.reel-video');
+        if (video) video.pause();
+      }
+    });
+
+    if (noSearchResults) {
+      noSearchResults.style.display = (visibleSlidesCount === 0 && query !== '') ? 'flex' : 'none';
+    }
+
+    if (firstVisibleIndex !== -1 && slides[activeIndex].classList.contains('filtered-out')) {
+      activeIndex = firstVisibleIndex;
+      scrollToReel(activeIndex);
+      playVideo(activeIndex);
+    }
+    updateNavArrows();
+  }
+
+  // Search event listeners
+  const searchTriggers = document.querySelectorAll('.search-trigger-btn');
+  searchTriggers.forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (searchOverlay) {
+        searchOverlay.classList.add('active');
+        searchInput.focus();
+      }
+    });
+  });
+
+  if (closeSearchBtn) {
+    closeSearchBtn.addEventListener('click', () => {
+      if (searchOverlay) searchOverlay.classList.remove('active');
+      searchInput.value = '';
+      filterReels();
+    });
+  }
+
+  if (clearSearchBtn) {
+    clearSearchBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      searchInput.focus();
+      filterReels();
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', filterReels);
+  }
 
   // Initialize first video play
   updateNavArrows();

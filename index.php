@@ -79,10 +79,18 @@ if ($creatorId) {
       <div class="grid grid-4" id="video-grid">
         <?php 
         $latest_subset = array_slice($latest, 0, 51);
+        $i = 0;
         foreach ($latest_subset as $v) {
+            $i++;
             echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
+            if ($i % 10 === 0) {
+                $ad_key = ($sel_cat > 0) ? 'category_grid_' . $i : 'landing_latest_' . $i;
+                echo render_ad_card($ad_key);
+            }
         }
-        echo render_ad_card('landing_latest');
+        if ($i < 10) {
+            echo render_ad_card(($sel_cat > 0) ? 'category_grid' : 'landing_latest');
+        }
         ?>
       </div>
       <?php if (count($latest) >= 51): ?>

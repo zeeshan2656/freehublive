@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.05.30.3';
+    $migration_version = '2026.05.30.5';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -654,6 +654,41 @@ function fh_run_migrations(): void {
                 db_query("INSERT INTO ad_placements (key_name, name, device_target) VALUES (?, ?, ?)", [$rp[0], $rp[1], $rp[2]]);
             }
         }
+    }
+
+    // ── Grid Interstitial Ad Placements (2026.05.30.4) ────
+    if (fh_table_exists('ad_placements')) {
+        $grid_placements = [
+            // Home / Landing Page
+            ['landing_latest_10', 'Landing Page - After 10th Video', 'all'],
+            ['landing_latest_20', 'Landing Page - After 20th Video', 'all'],
+            ['landing_latest_30', 'Landing Page - After 30th Video', 'all'],
+            ['landing_latest_40', 'Landing Page - After 40th Video', 'all'],
+            ['landing_latest_50', 'Landing Page - After 50th Video', 'all'],
+            // Search Page
+            ['search_grid_10', 'Search Results Grid - After 10th Video', 'all'],
+            ['search_grid_20', 'Search Results Grid - After 20th Video', 'all'],
+            ['search_grid_30', 'Search Results Grid - After 30th Video', 'all'],
+            ['search_grid_40', 'Search Results Grid - After 40th Video', 'all'],
+            ['search_grid_50', 'Search Results Grid - After 50th Video', 'all'],
+            // Category Page
+            ['category_grid_10', 'Category Grid - After 10th Video', 'all'],
+            ['category_grid_20', 'Category Grid - After 20th Video', 'all'],
+            ['category_grid_30', 'Category Grid - After 30th Video', 'all'],
+            ['category_grid_40', 'Category Grid - After 40th Video', 'all'],
+            ['category_grid_50', 'Category Grid - After 50th Video', 'all']
+        ];
+        foreach ($grid_placements as $gp) {
+            $check = db_fetch("SELECT COUNT(*) AS c FROM ad_placements WHERE key_name = ?", [$gp[0]]);
+            if ((int)$check['c'] === 0) {
+                db_query("INSERT INTO ad_placements (key_name, name, device_target) VALUES (?, ?, ?)", [$gp[0], $gp[1], $gp[2]]);
+            }
+        }
+    }
+
+    // ── Remove legacy ad placements (2026.05.30.5) ────
+    if (fh_table_exists('ad_placements')) {
+        db_query("DELETE FROM ad_placements WHERE key_name IN ('landing_trending', 'landing_latest')");
     }
 
     // ── All migrations passed — write flag to skip on next request ──

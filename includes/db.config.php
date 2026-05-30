@@ -1,5 +1,3 @@
-
-
 <?php
 /**
  * Copy this file to db.config.php and fill in your Hostinger MySQL details.

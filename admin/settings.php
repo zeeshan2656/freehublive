@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
         'withdrawal_days','withdrawal_approval_mode',
         'referral_bonus_usd',
         'ad_revenue_per_click','currency_rates_json',
-        'allow_register','maintenance',
+        'allow_register','maintenance','maintenance_message',
         'video_approval_mode',
         'user_approval_mode',
         'creator_approval_mode',
@@ -105,7 +105,7 @@ $themes = [
     </div>
 
     <!-- Main Content -->
-    <form method="POST" enctype="multipart/form-data">
+    <form method="POST" enctype="multipart/form-data" novalidate>
       <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
       
       <!-- General Slice -->
@@ -131,11 +131,17 @@ $themes = [
         </div>
         <div class="form-group">
           <label class="form-label">Maintenance Mode</label>
-          <select class="form-input form-select" name="maintenance">
+          <select class="form-input form-select" name="maintenance" id="maintenance-toggle">
             <option value="0" <?= setting('maintenance','0')==='0'?'selected':'' ?>>Off</option>
             <option value="1" <?= setting('maintenance','0')==='1'?'selected':'' ?>>On</option>
           </select>
         </div>
+        <div class="form-group" id="maintenance-msg-group" style="<?= setting('maintenance','0')==='0'?'display:none':'' ?>">
+          <label class="form-label">Maintenance Message <small class="text-muted">(shown to visitors when maintenance is on)</small></label>
+          <textarea class="form-input" name="maintenance_message" rows="4" placeholder="Leave blank to use the default message..." style="resize:vertical;line-height:1.6"><?= e(setting('maintenance_message','')) ?></textarea>
+          <small class="text-muted text-xs" style="display:block;margin-top:4px">If left empty, a default message will be displayed. You can write any custom message you want visitors to see.</small>
+        </div>
+        <script>document.getElementById('maintenance-toggle').addEventListener('change',function(){document.getElementById('maintenance-msg-group').style.display=this.value==='1'?'':'none';});</script>
         <div class="form-group">
           <label class="form-label">Enable Reels Feature</label>
           <select class="form-input form-select" name="reels_enabled">
@@ -539,8 +545,6 @@ $themes = [
 
       </div>
 
-      </div>
-
       <!-- Ad Code Slice -->
       <div id="slice-adcode" class="slice-section" style="display:none">
       <div class="card">
@@ -564,7 +568,7 @@ $themes = [
             <div id="ad-code-header-ace" class="adcode-ace-editor" style="display:none; height:200px; border:1px solid var(--border); border-radius:4px; font-size:12px;"></div>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px">
-            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('header')">⚡ Save Header Code</button>
+            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('header', this)">⚡ Save Header Code</button>
           </div>
         </div>
 
@@ -589,7 +593,7 @@ $themes = [
             <div id="ad-code-body-ace" class="adcode-ace-editor" style="display:none; height:200px; border:1px solid var(--border); border-radius:4px; font-size:12px;"></div>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px">
-            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('body')">⚡ Save Body Code</button>
+            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('body', this)">⚡ Save Body Code</button>
           </div>
         </div>
 
@@ -608,7 +612,7 @@ $themes = [
             <div id="ad-code-footer-ace" class="adcode-ace-editor" style="display:none; height:200px; border:1px solid var(--border); border-radius:4px; font-size:12px;"></div>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px">
-            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('footer')">⚡ Save Footer Code</button>
+            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:4px 12px; height:30px;" onclick="instantSaveAdcode('footer', this)">⚡ Save Footer Code</button>
           </div>
         </div>
       </div>
@@ -672,7 +676,10 @@ function initAceEditor(textareaId, editorDivId) {
   aceInstances[textareaId] = editor;
 }
 
-function instantSaveAdcode(area) {
+function instantSaveAdcode(area, btn) {
+  if (!btn) {
+    btn = window.event ? (window.event.currentTarget || window.event.srcElement) : null;
+  }
   const csrf = document.querySelector('input[name="csrf"]').value;
   const formData = new FormData();
   formData.append('csrf', csrf);
@@ -688,10 +695,11 @@ function instantSaveAdcode(area) {
   formData.append('ad_code_footer_enabled', document.querySelector('select[name="ad_code_footer_enabled"]').value);
 
   // Show status inside button
-  const btn = event.currentTarget;
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '⏳ Saving...';
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+  }
 
   fetch('', {
     method: 'POST',
@@ -699,19 +707,23 @@ function instantSaveAdcode(area) {
   })
   .then(res => res.json())
   .then(data => {
-    btn.textContent = '✅ Saved!';
-    setTimeout(() => {
-      btn.disabled = false;
-      btn.textContent = originalText;
-    }, 2000);
+    if (btn) {
+      btn.textContent = '✅ Saved!';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }, 2000);
+    }
   })
   .catch(err => {
     console.error(err);
-    btn.textContent = '✗ Error';
-    setTimeout(() => {
-      btn.disabled = false;
-      btn.textContent = originalText;
-    }, 2000);
+    if (btn) {
+      btn.textContent = '✗ Error';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }, 2000);
+    }
   });
 }
 

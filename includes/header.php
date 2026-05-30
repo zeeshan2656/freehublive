@@ -13,6 +13,190 @@ $primary     = setting('primary_color', '#6366f1');
 $ref_code    = get_ref_code();
 if ($ref_code) track_affiliate_click($ref_code, (int)($_GET['v'] ?? 0));
 
+// Maintenance Mode Guard
+if (setting('maintenance', '0') === '1') {
+    $is_admin = is_logged_in() && is_admin();
+    $is_auth_page = str_contains($_SERVER['PHP_SELF'], '/auth/') || str_contains($_SERVER['PHP_SELF'], 'login.php') || str_contains($_SERVER['PHP_SELF'], 'logout.php');
+    if (!$is_admin && !$is_auth_page) {
+        $is_api = str_contains($_SERVER['REQUEST_URI'] ?? '', '/api/') || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json');
+        if ($is_api) {
+            header('Content-Type: application/json');
+            http_response_code(503);
+            echo json_encode(['error' => 'Maintenance Mode is active']);
+            exit;
+        }
+        ?>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Under Maintenance - <?= htmlspecialchars($site_name) ?></title>
+            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+            <style>
+                * {
+                    box-sizing: border-box;
+                    margin: 0;
+                    padding: 0;
+                }
+                body {
+                    font-family: 'Outfit', sans-serif;
+                    background: radial-gradient(circle at 50% 50%, #0f172a 0%, #020617 100%);
+                    color: #f8fafc;
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 24px;
+                    overflow: hidden;
+                    position: relative;
+                }
+                body::before, body::after {
+                    content: '';
+                    position: absolute;
+                    width: 350px;
+                    height: 350px;
+                    border-radius: 50%;
+                    background: #6366f1;
+                    filter: blur(120px);
+                    opacity: 0.15;
+                    z-index: 1;
+                    animation: pulseGlow 8s infinite alternate;
+                }
+                body::before {
+                    top: -50px;
+                    left: -50px;
+                }
+                body::after {
+                    bottom: -50px;
+                    right: -50px;
+                    background: #ec4899;
+                }
+                @keyframes pulseGlow {
+                    0% { transform: scale(1); opacity: 0.12; }
+                    100% { transform: scale(1.2); opacity: 0.2; }
+                }
+                .maintenance-card {
+                    background: rgba(15, 23, 42, 0.45);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    backdrop-filter: blur(24px);
+                    -webkit-backdrop-filter: blur(24px);
+                    border-radius: 28px;
+                    padding: 48px 40px;
+                    max-width: 620px;
+                    width: 100%;
+                    text-align: center;
+                    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), 
+                                0 0 100px rgba(99, 102, 241, 0.1);
+                    z-index: 10;
+                    position: relative;
+                    transform: translateY(0);
+                    animation: float 6s ease-in-out infinite;
+                }
+                @keyframes float {
+                    0%, 100% { transform: translateY(0px); }
+                    50% { transform: translateY(-10px); }
+                }
+                .icon-container {
+                    width: 96px;
+                    height: 96px;
+                    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
+                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    border-radius: 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 32px;
+                    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
+                    position: relative;
+                }
+                .icon-container::after {
+                    content: '';
+                    position: absolute;
+                    inset: -4px;
+                    border-radius: 28px;
+                    background: linear-gradient(135deg, #6366f1, #ec4899);
+                    z-index: -1;
+                    opacity: 0.4;
+                    filter: blur(8px);
+                }
+                .icon-svg {
+                    width: 48px;
+                    height: 48px;
+                    color: #6366f1;
+                    animation: spin 10s linear infinite;
+                }
+                @keyframes spin {
+                    100% { transform: rotate(360deg); }
+                }
+                h1 {
+                    font-size: 2.2rem;
+                    font-weight: 800;
+                    letter-spacing: 0.1em;
+                    background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #4338ca 100%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                    margin-bottom: 24px;
+                    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+                }
+                p {
+                    font-size: 1.15rem;
+                    line-height: 1.8;
+                    color: #94a3b8;
+                    font-weight: 400;
+                    margin-bottom: 32px;
+                }
+                .brand-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    background: rgba(255, 255, 255, 0.04);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    padding: 8px 18px;
+                    border-radius: 99px;
+                    font-size: 0.85rem;
+                    font-weight: 600;
+                    color: #cbd5e1;
+                    letter-spacing: 0.05em;
+                }
+                .pulse-dot {
+                    width: 8px;
+                    height: 8px;
+                    background-color: #10b981;
+                    border-radius: 50%;
+                    box-shadow: 0 0 10px #10b981;
+                    animation: pulse-ring 1.5s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+                }
+                @keyframes pulse-ring {
+                    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+                    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+                    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="maintenance-card">
+                <div class="icon-container">
+                    <svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.43l-1.003.828c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.43l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.991l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.645-.869L9.594 3.94z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </div>
+                <h1>PLEASE WAIT</h1>
+                <p><?= htmlspecialchars(trim(setting('maintenance_message', '')) ?: 'MAINTANCE MODE IS ON , I THINK ADMINSTRATOR OR MANAGEMENT TEAM IS MAINTANING SOME, I THINK SOMETHING AMAZING IS COMMING OVER THE SITE') ?></p>
+                <div class="brand-badge">
+                    <span class="pulse-dot"></span>
+                    <span><?= htmlspecialchars($site_name) ?> System Update</span>
+                </div>
+            </div>
+        </body>
+        </html>
+        <?php
+        exit;
+    }
+}
+
 $nav_cat_limit = (int)setting('dropdown_cat_limit', 8);
 $is_search_page = basename($_SERVER['PHP_SELF'] ?? '') === 'search.php';
 
@@ -57,6 +241,7 @@ $meta_image  = $meta_image  ?? BASE_URL . '/assets/img/og-default.jpg';
 $is_dashboard_page = (
     str_contains($_SERVER['PHP_SELF'], '/admin/') ||
     str_contains($_SERVER['PHP_SELF'], '/creator/') ||
+    str_contains($_SERVER['PHP_SELF'], '/affiliate/') ||
     basename($_SERVER['PHP_SELF']) === 'dashboard.php' ||
     basename($_SERVER['PHP_SELF']) === 'withdrawal.php' ||
     basename($_SERVER['PHP_SELF']) === 'settings.php' ||
@@ -287,6 +472,7 @@ input,select,textarea{font-family:inherit;outline:none}
   flex-direction: column;
   z-index: 101;
   overflow-y: auto;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .dashboard-main-viewport {
   flex: 1;
@@ -383,6 +569,21 @@ input,select,textarea{font-family:inherit;outline:none}
   .dashboard-layout {
     min-height: 100vh;
   }
+}
+
+/* Desktop sidebar collapsed rules */
+@media (min-width: 769px) {
+  body.sidebar-collapsed .dashboard-sidebar-container {
+    margin-left: -240px;
+  }
+}
+
+#dashboard-sidebar-toggle {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+#dashboard-sidebar-toggle:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
 }
 </style>
 <?php
@@ -515,12 +716,10 @@ endif;
 
 $header_ad_html = '';
 $header_ad_height = 55; // Default fallback
-$script_name = $_SERVER['SCRIPT_NAME'] ?? '';
-$is_dashboard = str_contains($script_name, '/admin/') || 
-                str_contains($script_name, '/creator/') || 
-                str_contains($script_name, '/affiliate/');
+$is_mobile = function_exists('detect_device') ? (detect_device() === 'mobile') : false;
+$show_header_ad = !$is_reels && (!$is_dashboard_page || $is_mobile);
 
-if (!$is_dashboard && !$is_reels && function_exists('render_ad_placeholder')) {
+if ($show_header_ad && function_exists('render_ad_placeholder')) {
     $header_ad_html = render_ad_placeholder('home_mobile_top');
     if (!empty($header_ad_html)) {
         $now = date('Y-m-d');
@@ -544,6 +743,13 @@ $sidebar_path = get_sidebar_path();
 ?>
 
 <body class="<?= $is_dashboard_page ? 'dashboard-page' : 'public-page' ?><?= $_fh_show_age_gate ? ' age-unverified' : '' ?><?= isset($is_watch) && $is_watch ? ' watch-page' : '' ?><?= !empty($header_ad_html) ? ' has-header-ad' : '' ?>" style="--ad-h: <?= (int)$header_ad_height ?>px;">
+<?php if ($is_dashboard_page): ?>
+<script>
+  if (localStorage.getItem('sidebar_collapsed') === '1' && window.innerWidth > 768) {
+    document.body.classList.add('sidebar-collapsed');
+  }
+</script>
+<?php endif; ?>
 <?php
 if (!$is_admin_page && setting('ad_code_body_enabled', '0') === '1' && setting('ad_code_body_placement', 'bottom') === 'top' && !empty($ad_code_b = setting('ad_code_body'))):
     echo $ad_code_b . "\n";
@@ -643,39 +849,14 @@ endif;
         <a href="<?= BASE_URL ?>/admin/index.php" class="studio-nav-item <?= str_contains($_SERVER['PHP_SELF'], '/admin/') && $current_page === 'index.php' ? 'active' : '' ?>">
           <span>🏠 Dashboard</span>
         </a>
-        <a href="<?= BASE_URL ?>/admin/videos.php?filter=pending" class="studio-nav-item <?= $current_page === 'videos.php' ? 'active' : '' ?>">
+        <a href="<?= BASE_URL ?>/admin/videos.php" class="studio-nav-item <?= $current_page === 'videos.php' && ($_GET['filter'] ?? '') !== 'pending' ? 'active' : '' ?>">
           <span>📹 Videos</span>
-          <?php if (($admin_pending_videos = db_count('videos', "status='pending'")) > 0): ?>
-            <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.65rem; padding:2px 6px; border-radius:10px; margin-left:auto"><?= $admin_pending_videos ?></span>
-          <?php endif; ?>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/users.php" class="studio-nav-item <?= $current_page === 'users.php' && !isset($_GET['role']) ? 'active' : '' ?>">
-          <span>👥 Users</span>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/creators.php?filter=pending" class="studio-nav-item <?= $current_page === 'creators.php' ? 'active' : '' ?>">
-          <span>🎬 Creators</span>
-          <?php if (($admin_pending_creators = db_count('users', "role='creator' AND status='pending'")) > 0): ?>
-            <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.65rem; padding:2px 6px; border-radius:10px; margin-left:auto"><?= $admin_pending_creators ?></span>
-          <?php endif; ?>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/users.php?role=viewer" class="studio-nav-item <?= $current_page === 'users.php' && ($_GET['role'] ?? '') === 'viewer' ? 'active' : '' ?>">
-          <span>👁️ Viewers</span>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/earnings.php" class="studio-nav-item <?= $current_page === 'earnings.php' ? 'active' : '' ?>">
-          <span>💰 Earnings</span>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/withdrawals.php?status=pending" class="studio-nav-item <?= $current_page === 'withdrawals.php' ? 'active' : '' ?>">
-          <span>💳 Withdrawals</span>
-          <?php if (($admin_pending_withdrawals = (fh_table_exists('withdrawal_requests') ? db_count('withdrawal_requests', "status='pending'") : 0)) > 0): ?>
-            <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.65rem; padding:2px 6px; border-radius:10px; margin-left:auto"><?= $admin_pending_withdrawals ?></span>
-          <?php endif; ?>
         </a>
         <a href="<?= BASE_URL ?>/admin/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">
           <span>📈 Analytics</span>
         </a>
-        <a href="<?= BASE_URL ?>/admin/categories.php" class="studio-nav-item <?= $current_page === 'categories.php' ? 'active' : '' ?>">
-          <span>📁 Categories</span>
-        </a>
+
+        <!-- Ads Dropdown -->
         <div class="studio-nav-group-ads" style="margin-bottom: 6px;">
           <a href="#" class="studio-nav-item <?= ($current_page === 'ads.php' || $current_page === 'ad_placements.php') ? 'active' : '' ?>" id="ads-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
             <span>📺 Ads</span>
@@ -690,57 +871,163 @@ endif;
             </a>
           </div>
         </div>
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          const toggle = document.getElementById('ads-menu-toggle');
-          const sub = document.getElementById('ads-submenu');
-          if (toggle && sub) {
-            toggle.addEventListener('click', function(e) {
-              e.preventDefault();
-              const arrow = this.querySelector('.ads-arrow');
-              if (sub.style.display === 'none' || sub.style.display === '') {
-                sub.style.display = 'flex';
-                arrow.style.transform = 'rotate(90deg)';
-              } else {
-                sub.style.display = 'none';
-                arrow.style.transform = 'rotate(0deg)';
-              }
-            });
-          }
-        });
-        </script>
-        <a href="<?= BASE_URL ?>/admin/pages.php" class="studio-nav-item <?= $current_page === 'pages.php' || $current_page === 'page_edit.php' ? 'active' : '' ?>">
-          <span>📄 Pages</span>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/approvals.php" class="studio-nav-item <?= $current_page === 'approvals.php' ? 'active' : '' ?>">
-          <span>🛡️ Approvals</span>
+
+        <!-- Users Dropdown (Users, Viewers, Creators) -->
+        <div class="studio-nav-group-users" style="margin-bottom: 6px;">
+          <?php
+          $admin_pending_creators = db_count('users', "role='creator' AND status='pending'");
+          ?>
+          <a href="#" class="studio-nav-item <?= ($current_page === 'users.php' || $current_page === 'creators.php') ? 'active' : '' ?>" id="users-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
+            <span>👥 Users</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <?php if ($admin_pending_creators > 0): ?>
+                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px; font-weight:850;"><?= $admin_pending_creators ?></span>
+              <?php endif; ?>
+              <span class="users-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'users.php' || $current_page === 'creators.php') ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
+            </div>
+          </a>
+          <div id="users-submenu" style="margin-left: 20px; display: <?= ($current_page === 'users.php' || $current_page === 'creators.php') ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
+            <a href="<?= BASE_URL ?>/admin/users.php" class="studio-nav-item <?= $current_page === 'users.php' && !isset($_GET['role']) ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
+              <span>• All Users</span>
+            </a>
+            <a href="<?= BASE_URL ?>/admin/users.php?role=viewer" class="studio-nav-item <?= $current_page === 'users.php' && ($_GET['role'] ?? '') === 'viewer' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
+              <span>• Viewers</span>
+            </a>
+            <a href="<?= BASE_URL ?>/admin/creators.php?filter=pending" class="studio-nav-item <?= $current_page === 'creators.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto; display:flex; justify-content:space-between; align-items:center;">
+              <span>• Creators</span>
+              <?php if ($admin_pending_creators > 0): ?>
+                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px;"><?= $admin_pending_creators ?></span>
+              <?php endif; ?>
+            </a>
+          </div>
+        </div>
+
+        <!-- Finances Dropdown (Earnings, Withdrawals) -->
+        <div class="studio-nav-group-finances" style="margin-bottom: 6px;">
+          <?php
+          $admin_pending_withdrawals = (fh_table_exists('withdrawal_requests') ? db_count('withdrawal_requests', "status='pending'") : 0);
+          ?>
+          <a href="#" class="studio-nav-item <?= ($current_page === 'earnings.php' || $current_page === 'withdrawals.php') ? 'active' : '' ?>" id="finances-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
+            <span>💰 Finances</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <?php if ($admin_pending_withdrawals > 0): ?>
+                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px; font-weight:850;"><?= $admin_pending_withdrawals ?></span>
+              <?php endif; ?>
+              <span class="finances-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'earnings.php' || $current_page === 'withdrawals.php') ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
+            </div>
+          </a>
+          <div id="finances-submenu" style="margin-left: 20px; display: <?= ($current_page === 'earnings.php' || $current_page === 'withdrawals.php') ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
+            <a href="<?= BASE_URL ?>/admin/earnings.php" class="studio-nav-item <?= $current_page === 'earnings.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
+              <span>• Earnings</span>
+            </a>
+            <a href="<?= BASE_URL ?>/admin/withdrawals.php?status=pending" class="studio-nav-item <?= $current_page === 'withdrawals.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto; display:flex; justify-content:space-between; align-items:center;">
+              <span>• Withdrawals</span>
+              <?php if ($admin_pending_withdrawals > 0): ?>
+                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px;"><?= $admin_pending_withdrawals ?></span>
+              <?php endif; ?>
+            </a>
+          </div>
+        </div>
+
+        <!-- Categories & Pages Dropdown -->
+        <div class="studio-nav-group-content" style="margin-bottom: 6px;">
+          <a href="#" class="studio-nav-item <?= ($current_page === 'categories.php' || $current_page === 'pages.php' || $current_page === 'page_edit.php') ? 'active' : '' ?>" id="content-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
+            <span>📁 Content</span>
+            <span class="content-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'categories.php' || $current_page === 'pages.php' || $current_page === 'page_edit.php') ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
+          </a>
+          <div id="content-submenu" style="margin-left: 20px; display: <?= ($current_page === 'categories.php' || $current_page === 'pages.php' || $current_page === 'page_edit.php') ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
+            <a href="<?= BASE_URL ?>/admin/categories.php" class="studio-nav-item <?= $current_page === 'categories.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
+              <span>• Categories</span>
+            </a>
+            <a href="<?= BASE_URL ?>/admin/pages.php" class="studio-nav-item <?= $current_page === 'pages.php' || $current_page === 'page_edit.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
+              <span>• Pages</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- SEO & Approvals Dropdown -->
+        <div class="studio-nav-group-system" style="margin-bottom: 6px;">
           <?php
           $pending_users = db_count('users', "status='pending' AND role!='creator'");
           $pending_creators = db_count('users', "status='pending' AND role='creator'");
           $pending_vids = db_count('videos', "status='pending'");
           $total_pending = $pending_users + $pending_creators + $pending_vids;
-          if ($total_pending > 0): ?>
-            <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.65rem; padding:2px 6px; border-radius:10px; margin-left:auto"><?= $total_pending ?></span>
-          <?php endif; ?>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/seo.php" class="studio-nav-item <?= $current_page === 'seo.php' ? 'active' : '' ?>">
-          <span>🔍 SEO</span>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/settings.php" class="studio-nav-item <?= $current_page === 'settings.php' && str_contains($_SERVER['PHP_SELF'], '/admin/') && ($_GET['tab'] ?? '') !== 'adcode' ? 'active' : '' ?>">
-          <span>⚙️ Settings</span>
-        </a>
-        <a href="<?= BASE_URL ?>/admin/settings.php?tab=adcode" class="studio-nav-item <?= $current_page === 'settings.php' && ($_GET['tab'] ?? '') === 'adcode' ? 'active' : '' ?>">
-          <span>📢 Ad Code</span>
-        </a>
-        <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
-          <span>📥 Saved Videos</span>
-        </a>
-        <a href="<?= BASE_URL ?>/dashboard.php?tab=subscriptions" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'subscriptions' ? 'active' : '' ?>">
-          <span>🔔 Subscribed Channels</span>
-        </a>
+          ?>
+          <a href="#" class="studio-nav-item <?= ($current_page === 'seo.php' || $current_page === 'approvals.php') ? 'active' : '' ?>" id="system-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
+            <span>🛡️ System</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <?php if ($total_pending > 0): ?>
+                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px; font-weight:850;"><?= $total_pending ?></span>
+              <?php endif; ?>
+              <span class="system-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'seo.php' || $current_page === 'approvals.php') ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
+            </div>
+          </a>
+          <div id="system-submenu" style="margin-left: 20px; display: <?= ($current_page === 'seo.php' || $current_page === 'approvals.php') ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
+            <a href="<?= BASE_URL ?>/admin/approvals.php" class="studio-nav-item <?= $current_page === 'approvals.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto; display:flex; justify-content:space-between; align-items:center;">
+              <span>• Approvals</span>
+              <?php if ($total_pending > 0): ?>
+                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px;"><?= $total_pending ?></span>
+              <?php endif; ?>
+            </a>
+            <a href="<?= BASE_URL ?>/admin/seo.php" class="studio-nav-item <?= $current_page === 'seo.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
+              <span>• SEO</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Library Dropdown (Saved Videos, Subscriptions) -->
+        <div class="studio-nav-group-library" style="margin-bottom: 6px;">
+          <a href="#" class="studio-nav-item <?= ($current_page === 'dashboard.php' && ($current_tab === 'saved' || $current_tab === 'subscriptions')) ? 'active' : '' ?>" id="library-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
+            <span>📥 Library</span>
+            <span class="library-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'dashboard.php' && ($current_tab === 'saved' || $current_tab === 'subscriptions')) ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
+          </a>
+          <div id="library-submenu" style="margin-left: 20px; display: <?= ($current_page === 'dashboard.php' && ($current_tab === 'saved' || $current_tab === 'subscriptions')) ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
+            <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && $current_tab === 'saved' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
+              <span>• Saved Videos</span>
+            </a>
+            <a href="<?= BASE_URL ?>/dashboard.php?tab=subscriptions" class="studio-nav-item <?= $current_page === 'dashboard.php' && $current_tab === 'subscriptions' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
+              <span>• Subscriptions</span>
+            </a>
+          </div>
+        </div>
+
         <a href="<?= BASE_URL ?>/profile.php" class="studio-nav-item <?= $current_page === 'profile.php' ? 'active' : '' ?>">
           <span>👤 Profile</span>
         </a>
+        <a href="<?= BASE_URL ?>/admin/settings.php" class="studio-nav-item <?= $current_page === 'settings.php' && str_contains($_SERVER['PHP_SELF'], '/admin/') ? 'active' : '' ?>">
+          <span>⚙️ Settings</span>
+        </a>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          const dropdowns = [
+            { toggleId: 'ads-menu-toggle', subId: 'ads-submenu', arrowClass: 'ads-arrow' },
+            { toggleId: 'users-menu-toggle', subId: 'users-submenu', arrowClass: 'users-arrow' },
+            { toggleId: 'finances-menu-toggle', subId: 'finances-submenu', arrowClass: 'finances-arrow' },
+            { toggleId: 'content-menu-toggle', subId: 'content-submenu', arrowClass: 'content-arrow' },
+            { toggleId: 'system-menu-toggle', subId: 'system-submenu', arrowClass: 'system-arrow' },
+            { toggleId: 'library-menu-toggle', subId: 'library-submenu', arrowClass: 'library-arrow' }
+          ];
+          
+          dropdowns.forEach(function(item) {
+            const toggle = document.getElementById(item.toggleId);
+            const sub = document.getElementById(item.subId);
+            if (toggle && sub) {
+              toggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                const arrow = this.querySelector('.' + item.arrowClass);
+                if (sub.style.display === 'none' || sub.style.display === '') {
+                  sub.style.display = 'flex';
+                  if (arrow) arrow.style.transform = 'rotate(90deg)';
+                } else {
+                  sub.style.display = 'none';
+                  if (arrow) arrow.style.transform = 'rotate(0deg)';
+                }
+              });
+            }
+          });
+        });
+        </script>
 
       <?php elseif ($db_role === 'creator'): ?>
         <!-- Creator Menu -->
@@ -818,8 +1105,8 @@ endif;
     <!-- Sticky Page Header / Action Bar -->
     <section class="sticky-action-bar">
       <div style="display:flex; align-items:center; gap:12px">
-        <!-- Mobile sidebar toggle (hidden on desktop) -->
-        <button class="btn-icon mobile-only" id="dashboard-sidebar-toggle" aria-label="Toggle Sidebar"
+        <!-- Sidebar toggle (collapses on desktop, overlay on mobile) -->
+        <button class="btn-icon" id="dashboard-sidebar-toggle" aria-label="Toggle Sidebar"
                 style="background:none; border:none; color:var(--text); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; margin-right:4px">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>

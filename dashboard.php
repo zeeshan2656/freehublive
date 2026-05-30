@@ -251,7 +251,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
         <div class="stat-card" style="padding:16px;background:linear-gradient(135deg,rgba(34,197,94,.05),transparent);border-color:rgba(34,197,94,.2)">
           <div class="stat-label" style="font-size:.75rem;color:var(--green);margin-bottom:4px">Referral Earnings</div>
-          <div class="stat-value" style="color:var(--green);font-size:1.4rem;font-weight:800">$<?= number_format((float)$referral_earnings, 4) ?></div>
+          <div class="stat-value" style="color:var(--green);font-size:1.4rem;font-weight:800"><?= e(fh_format_money((float)$referral_earnings, $currency, 4)) ?></div>
         </div>
       </div>
 

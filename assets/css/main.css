@@ -1569,11 +1569,17 @@ tbody tr:hover{background:var(--bg3)}
     grid-template-columns: 1fr;
     gap: 16px;
   }
+  .stat-grid-2 {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 576px) {
-  .stat-grid-4, .stat-grid-3, .stat-grid-2 {
+  .stat-grid-4, .stat-grid-3 {
     grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .stat-grid-2 {
     gap: 10px;
   }
 }
@@ -1656,7 +1662,7 @@ tbody tr:hover{background:var(--bg3)}
     position: sticky !important;
     top: var(--nav-h) !important;
     z-index: 99 !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     border-bottom: none !important;
     box-shadow: none !important;
   }

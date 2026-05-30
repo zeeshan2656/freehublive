@@ -786,6 +786,24 @@ HTML;
 }
 
 function render_ad_placeholder(string $placement_key): string {
+    // Forbidden all ads inside dashboard pages, except home_mobile_top on mobile
+    $is_dashboard = (
+        str_contains($_SERVER['PHP_SELF'] ?? '', '/admin/') ||
+        str_contains($_SERVER['PHP_SELF'] ?? '', '/creator/') ||
+        str_contains($_SERVER['PHP_SELF'] ?? '', '/affiliate/') ||
+        basename($_SERVER['PHP_SELF'] ?? '') === 'dashboard.php' ||
+        basename($_SERVER['PHP_SELF'] ?? '') === 'withdrawal.php' ||
+        basename($_SERVER['PHP_SELF'] ?? '') === 'settings.php' ||
+        basename($_SERVER['PHP_SELF'] ?? '') === 'profile.php'
+    );
+    
+    if ($is_dashboard) {
+        $is_mobile_top_on_mobile = ($placement_key === 'home_mobile_top' && detect_device() === 'mobile');
+        if (!$is_mobile_top_on_mobile) {
+            return '';
+        }
+    }
+
     global $vid;
     $now = date('Y-m-d');
     $placements = db_fetchAll(

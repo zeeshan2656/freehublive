@@ -25,6 +25,7 @@ if (empty($ref_code)) {
 
 $ref_link  = BASE_URL . '/?ref=' . urlencode($ref_code);
 $ref_bonus = (float)setting('referral_bonus_usd', '0.00');
+$currency  = fh_user_currency();
 
 // Stats
 $total_clicks = fh_table_exists('affiliate_clicks')
@@ -91,7 +92,7 @@ require_once __DIR__ . '/includes/header.php';
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
           <span style="font-size:.8rem;color:var(--text2)">Your referral code: <code style="color:var(--accent);font-weight:700;background:rgba(99,102,241,.1);padding:2px 8px;border-radius:4px"><?= e($ref_code) ?></code></span>
           <?php if ($ref_bonus > 0): ?>
-          <span class="badge badge-green">+$<?= number_format($ref_bonus, 2) ?> per signup</span>
+          <span class="badge badge-green">+<?= e(fh_format_money($ref_bonus, $currency, 2)) ?> per signup</span>
           <?php endif; ?>
         </div>
       </div>
@@ -107,7 +108,7 @@ require_once __DIR__ . '/includes/header.php';
           <div class="stat-label">Signups via Referral</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">$<?= number_format($referral_earnings, 2) ?></div>
+          <div class="stat-value"><?= e(fh_format_money($referral_earnings, $currency, 2)) ?></div>
           <div class="stat-label">Referral Earnings</div>
         </div>
       </div>
@@ -199,7 +200,7 @@ require_once __DIR__ . '/includes/header.php';
             <div style="font-weight:700;font-size:.9rem;margin-bottom:4px">Earn Rewards</div>
             <div class="text-sm text-muted">
               <?php if ($ref_bonus > 0): ?>
-                Earn $<?= number_format($ref_bonus, 2) ?> for every confirmed signup
+                Earn <?= e(fh_format_money($ref_bonus, $currency, 2)) ?> for every confirmed signup
               <?php else: ?>
                 Track your referrals and grow your network
               <?php endif; ?>
