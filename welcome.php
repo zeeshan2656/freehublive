@@ -11,13 +11,44 @@ if (is_logged_in()) {
     redirect(BASE_URL . '/');
 }
 
+// ── Performance: HTTP Cache Headers ──
+header('Cache-Control: public, max-age=300, s-maxage=600'); // 5 min browser, 10 min CDN
+header('Vary: Accept-Encoding');
+header('X-Content-Type-Options: nosniff');
+
+// ── Performance: Enable output buffering with gzip ──
+if (!ob_get_level()) {
+    if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
+        ob_start('ob_gzhandler');
+    } else {
+        ob_start();
+    }
+}
+
 $site_name = setting('site_name', 'FreeHub');
 $site_theme = setting('active_theme', 'dark-minimal');
 $primary    = setting('primary_color', '#6366f1');
 
-// Fetch some active stats for credibility
-$total_users = (int)db_fetch("SELECT COUNT(id) as c FROM users")['c'];
-$total_videos = (int)db_fetch("SELECT COUNT(id) as c FROM videos WHERE status='published'")['c'];
+// ── Performance: Cache stats counts (file-based, 5 min TTL) ──
+$cache_file = __DIR__ . '/cache/welcome_stats.cache';
+$cache_ttl = 300; // 5 minutes
+$stats_cached = false;
+
+if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $cache_ttl) {
+    $cached = @unserialize(file_get_contents($cache_file));
+    if ($cached && isset($cached['users'], $cached['videos'])) {
+        $total_users = $cached['users'];
+        $total_videos = $cached['videos'];
+        $stats_cached = true;
+    }
+}
+
+if (!$stats_cached) {
+    $total_users = (int)db_fetch("SELECT COUNT(id) as c FROM users")['c'];
+    $total_videos = (int)db_fetch("SELECT COUNT(id) as c FROM videos WHERE status='published'")['c'];
+    @file_put_contents($cache_file, serialize(['users' => $total_users, 'videos' => $total_videos]));
+}
+
 // Format stats beautifully
 $users_formatted = $total_users > 1000 ? number_format($total_users / 1000, 1) . 'K+' : number_format($total_users) . '+';
 $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1) . 'K+' : number_format($total_videos) . '+';
@@ -29,8 +60,23 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Welcome to <?= e($site_name) ?> — Members-Only Video Platform</title>
   <meta name="description" content="Watch premium videos, discover amazing creators, and earn rewards on <?= e($site_name) ?>. Join free today!">
-  <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Resource Hints -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+
+  <!-- Preload LCP image -->
+  <link rel="preload" as="image" href="<?= BASE_URL ?>/assets/img/welcome_hero.webp" fetchpriority="high" type="image/webp">
+
+  <!-- Non-render-blocking CSS -->
+  <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css"></noscript>
+
+  <!-- Async Google Fonts -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&display=swap" onload="this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&display=swap"></noscript>
+
   <style>
     /* Styling overrides/extensions for a jaw-dropping landing experience */
     :root {
@@ -46,8 +92,10 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
         radial-gradient(circle at 90% 80%, rgba(236, 72, 153, 0.05) 0%, transparent 40%),
         radial-gradient(circle at 50% 50%, rgba(6, 8, 19, 1) 0%, rgba(2, 3, 8, 1) 100%);
       color: #f3f4f6;
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeSpeed;
     }
     
     /* Sleek Navbar */
@@ -239,16 +287,12 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       width: 100%;
       max-width: 480px;
       height: auto;
+      aspect-ratio: 1/1;
       object-fit: contain;
       z-index: 2;
       filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.5));
-      animation: floatHero 6s ease-in-out infinite;
       border-radius: 24px;
-    }
-    
-    @keyframes floatHero {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-12px); }
+      contain: layout style;
     }
     
     /* Warnings Banner (VPN & AdBlock) */
@@ -834,7 +878,10 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       </div>
       
       <div class="welcome-hero-visual">
-        <img class="welcome-hero-img" src="<?= BASE_URL ?>/assets/img/welcome_hero.png" alt="FreeHub Platform Illustration">
+        <picture>
+          <source srcset="<?= BASE_URL ?>/assets/img/welcome_hero.webp" type="image/webp">
+          <img class="welcome-hero-img" src="<?= BASE_URL ?>/assets/img/welcome_hero.png" alt="FreeHub Platform Illustration" width="480" height="480" fetchpriority="high" decoding="async">
+        </picture>
       </div>
     </div>
   </section>
@@ -1043,5 +1090,29 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
     </div>
   </footer>
 
+<!-- Deferred non-critical: reveal below-fold sections with fade-in -->
+<script>
+(function(){
+  // Intersection Observer for lazy fade-in of below-fold sections
+  if ('IntersectionObserver' in window) {
+    var sections = document.querySelectorAll('.welcome-section, .trust-section, .welcome-footer');
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting) {
+          e.target.style.opacity = '1';
+          e.target.style.transform = 'translateY(0)';
+          io.unobserve(e.target);
+        }
+      });
+    }, { rootMargin: '100px' });
+    sections.forEach(function(s) {
+      s.style.opacity = '0';
+      s.style.transform = 'translateY(20px)';
+      s.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+      io.observe(s);
+    });
+  }
+})();
+</script>
 </body>
 </html>
