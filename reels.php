@@ -1034,11 +1034,13 @@ document.addEventListener('DOMContentLoaded', function() {
   let activeIndex = 0;
   let mutedGlobal = true; // initially muted for autoplay compliance
 
-  // Lazy load ads associated with a specific slide
-  function lazyLoadAdsForSlide(slide) {
-    const lazyAds = slide.querySelectorAll('.ad-sponsored-container[data-lazy="true"]');
-    lazyAds.forEach(container => {
-      if (window.loadLazyAd) {
+  // Reload all ads associated with a specific slide
+  function reloadAdsForSlide(slide) {
+    const ads = slide.querySelectorAll('.ad-sponsored-container');
+    ads.forEach(container => {
+      if (window.reloadAd) {
+        window.reloadAd(container);
+      } else if (window.loadLazyAd) {
         window.loadLazyAd(container);
       }
     });
@@ -1074,8 +1076,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load comments for this active reel
         loadComments(slide.dataset.id);
 
-        // Lazy load ad placements for this active reel slide
-        lazyLoadAdsForSlide(slide);
+        // Reload ad placements for this active reel slide
+        reloadAdsForSlide(slide);
 
         // Adjust marquee scroll for title
         adjustTitleScroll(slide);

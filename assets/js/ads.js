@@ -380,4 +380,10 @@
       processAdContainer(container);
     }
   };
+  window.reloadAd = function(container) {
+    if (container && container.classList.contains('ad-sponsored-container')) {
+      delete container.dataset.lazy;
+      loadAd(container);
+    }
+  };
 })();
