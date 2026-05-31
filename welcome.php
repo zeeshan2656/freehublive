@@ -141,7 +141,13 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       color: #fff;
     }
     
-    /* Premium Buttons (kept for hero CTAs) */
+    .welcome-nav-ctas {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    /* Premium Buttons */
     .btn-premium {
       font-family: 'Outfit', sans-serif;
       font-weight: 600;
@@ -735,23 +741,6 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       color: #9ca3af;
     }
     
-    /* Mobile Menu Button */
-    .mobile-menu-toggle {
-      display: none;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      padding: 8px;
-      cursor: pointer;
-      color: #fff;
-      transition: all 0.2s ease;
-      align-items: center;
-      justify-content: center;
-    }
-    .mobile-menu-toggle:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-    
     /* Responsive Queries */
     @media (max-width: 1024px) {
       .welcome-hero-container {
@@ -786,92 +775,201 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
     }
     
     @media (max-width: 768px) {
-      .welcome-hero-title {
-        font-size: 2.5rem;
-      }
-      .features-grid {
-        grid-template-columns: 1fr;
-      }
-      .how-it-works-grid {
-        grid-template-columns: 1fr;
-        gap: 40px;
-      }
-      .welcome-nav-container {
-        padding: 0 16px;
-      }
-      
-      .mobile-menu-toggle {
-        display: flex;
-        margin-left: auto; /* push toggle to the right */
-      }
-      
-      .welcome-nav-links {
-        position: fixed;
-        top: 72px;
-        left: 0;
-        right: 0;
-        background: rgba(6, 8, 19, 0.95);
-        backdrop-filter: blur(16px);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        flex-direction: column;
-        align-items: center;
-        gap: 0;
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        z-index: 999;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
-      }
-      
-      .welcome-nav-links.open {
-        max-height: 320px;
-        padding: 16px 0;
-      }
-      
-      .welcome-nav-link {
-        display: block;
-        width: 100%;
-        text-align: center;
-        padding: 12px 24px;
-        font-size: 1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      
-      .welcome-nav-link:last-child {
-        border-bottom: none;
-      }
-      
-      .welcome-hero {
-        padding-top: 110px;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .welcome-nav-link {
-        font-size: 0.9rem;
-        padding: 10px 16px;
-      }
-    }
+
+  /* ==========================
+     NAVBAR MOBILE
+     ========================== */
+
+  .welcome-nav {
+    height: 80px;
+  }
+
+  .welcome-nav-container {
+    justify-content: center;
+    padding: 0 16px;
+  }
+
+  /* Hide desktop navigation links */
+  .welcome-nav-links {
+    display: none !important;
+  }
+
+  /* Hide Sign In + Join Free buttons */
+  .welcome-nav-ctas {
+    display: none !important;
+  }
+
+  /* Bigger centered logo */
+  .welcome-nav-brand {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .welcome-nav-brand img,
+  .welcome-nav-brand svg {
+    height: 56px !important;
+    width: auto !important;
+    max-width: 100%;
+  }
+
+  /* ==========================
+     HERO SECTION
+     ========================== */
+
+  .welcome-hero {
+    padding: 120px 0 60px;
+    min-height: auto;
+  }
+
+  .welcome-hero-container {
+    grid-template-columns: 1fr;
+    text-align: center;
+    gap: 32px;
+    padding: 0 18px;
+  }
+
+  .welcome-hero-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .welcome-hero-title {
+    font-size: 2.3rem;
+    line-height: 1.15;
+  }
+
+  .welcome-hero-subtitle {
+    font-size: 1rem;
+    max-width: 100%;
+  }
+
+  .welcome-badge-glow {
+    margin-bottom: 18px;
+  }
+
+  .warning-banner {
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .welcome-hero-ctas {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .welcome-hero-ctas .btn-premium {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .welcome-hero-img {
+    max-width: 320px;
+  }
+
+  /* ==========================
+     STATS
+     ========================== */
+
+  .welcome-stats-row {
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .welcome-stat-num {
+    font-size: 1.5rem;
+  }
+
+  /* ==========================
+     FEATURES
+     ========================== */
+
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 0 18px;
+  }
+
+  .feature-card {
+    padding: 24px;
+  }
+
+  /* ==========================
+     HOW IT WORKS
+     ========================== */
+
+  .how-it-works-grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 0 18px;
+  }
+
+  /* ==========================
+     TRUST SECTION
+     ========================== */
+
+  .trust-grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 0 18px;
+  }
+
+  .welcome-section-title {
+    font-size: 1.9rem;
+  }
+
+  .welcome-section-desc {
+    font-size: 0.95rem;
+  }
+
+  /* ==========================
+     CTA BANNER
+     ========================== */
+
+  .cta-banner-box {
+    padding: 40px 24px;
+  }
+
+  .cta-banner-title {
+    font-size: 2rem;
+  }
+
+  .cta-banner-subtitle {
+    font-size: 0.95rem;
+  }
+
+  /* ==========================
+     FOOTER
+     ========================== */
+
+  .welcome-footer-top {
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .welcome-footer-bottom {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .footer-bottom-links {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
   </style>
 </head>
 <body class="welcome-body">
 
-  <!-- ── Dynamic Navbar with Mobile Toggle (Sign In/Join removed) ── -->
+  <!-- ── Dynamic Navbar ── -->
   <header class="welcome-nav">
     <div class="welcome-nav-container">
       <div class="welcome-nav-brand">
         <?= render_site_logo('nav') ?>
       </div>
-      
-      <!-- Mobile menu toggle button -->
-      <button class="mobile-menu-toggle" aria-label="Menu" aria-expanded="false">
-        <svg class="menu-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-        <svg class="close-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display: none;">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
       
       <nav class="welcome-nav-links">
         <a href="<?= BASE_URL ?>/page.php?slug=about-us" class="welcome-nav-link">About</a>
@@ -880,7 +978,10 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
         <a href="<?= BASE_URL ?>/page.php?slug=terms-conditions" class="welcome-nav-link">Terms</a>
       </nav>
       
-      <!-- Sign In and Join buttons have been removed from header -->
+      <div class="welcome-nav-ctas">
+        <a href="<?= BASE_URL ?>/auth/login.php" class="btn-premium btn-premium-secondary">Sign In</a>
+        <a href="<?= BASE_URL ?>/auth/register.php" class="btn-premium btn-premium-primary">Join Free</a>
+      </div>
     </div>
   </header>
 
@@ -1153,7 +1254,7 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
     </div>
   </footer>
 
-<!-- Deferred non-critical: reveal below-fold sections with fade-in & mobile menu -->
+<!-- Deferred non-critical: reveal below-fold sections with fade-in -->
 <script>
 (function(){
   // Intersection Observer for lazy fade-in of below-fold sections
@@ -1173,40 +1274,6 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       s.style.transform = 'translateY(20px)';
       s.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
       io.observe(s);
-    });
-  }
-
-  // Mobile menu toggle
-  var toggleBtn = document.querySelector('.mobile-menu-toggle');
-  var navLinks = document.querySelector('.welcome-nav-links');
-  if (toggleBtn && navLinks) {
-    var menuIcon = toggleBtn.querySelector('.menu-icon');
-    var closeIcon = toggleBtn.querySelector('.close-icon');
-    var toggleMenu = function() {
-      var isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-      toggleBtn.setAttribute('aria-expanded', !isExpanded);
-      navLinks.classList.toggle('open');
-      if (menuIcon && closeIcon) {
-        menuIcon.style.display = isExpanded ? 'block' : 'none';
-        closeIcon.style.display = isExpanded ? 'none' : 'block';
-      }
-    };
-    toggleBtn.addEventListener('click', toggleMenu);
-    // Close menu when a link is clicked
-    navLinks.querySelectorAll('.welcome-nav-link').forEach(function(link) {
-      link.addEventListener('click', function() {
-        if (navLinks.classList.contains('open')) {
-          toggleMenu();
-        }
-      });
-    });
-    // Close menu when clicking outside
-    document.addEventListener('click', function(e) {
-      if (navLinks.classList.contains('open') && 
-          !toggleBtn.contains(e.target) && 
-          !navLinks.contains(e.target)) {
-        toggleMenu();
-      }
     });
   }
 })();
