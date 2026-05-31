@@ -741,6 +741,23 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       color: #9ca3af;
     }
     
+    /* Mobile Menu Button */
+    .mobile-menu-toggle {
+      display: none;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px;
+      cursor: pointer;
+      color: #fff;
+      transition: all 0.2s ease;
+      align-items: center;
+      justify-content: center;
+    }
+    .mobile-menu-toggle:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    
     /* Responsive Queries */
     @media (max-width: 1024px) {
       .welcome-hero-container {
@@ -785,27 +802,97 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
         grid-template-columns: 1fr;
         gap: 40px;
       }
+      .welcome-nav-container {
+        padding: 0 16px;
+      }
+      
+      .mobile-menu-toggle {
+        display: flex;
+        order: 2;
+      }
+      
       .welcome-nav-links {
-        display: none;
-      }
-      .welcome-footer-top {
+        position: fixed;
+        top: 72px;
+        left: 0;
+        right: 0;
+        background: rgba(6, 8, 19, 0.95);
+        backdrop-filter: blur(16px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         flex-direction: column;
+        align-items: center;
+        gap: 0;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 999;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
       }
-      .welcome-footer-bottom {
-        flex-direction: column;
+      
+      .welcome-nav-links.open {
+        max-height: 320px; /* Enough for 4 links */
+        padding: 16px 0;
+      }
+      
+      .welcome-nav-link {
+        display: block;
+        width: 100%;
         text-align: center;
+        padding: 12px 24px;
+        font-size: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      
+      .welcome-nav-link:last-child {
+        border-bottom: none;
+      }
+      
+      .welcome-nav-ctas {
+        order: 3;
+        gap: 8px;
+      }
+      
+      .welcome-nav-ctas .btn-premium {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+      }
+      
+      /* Adjust hero top padding for fixed header spacing */
+      .welcome-hero {
+        padding-top: 110px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .welcome-nav-ctas .btn-premium {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+      }
+      .welcome-nav-link {
+        font-size: 0.9rem;
+        padding: 10px 16px;
       }
     }
   </style>
 </head>
 <body class="welcome-body">
 
-  <!-- ── Dynamic Navbar ── -->
+  <!-- ── Dynamic Navbar with Mobile Toggle ── -->
   <header class="welcome-nav">
     <div class="welcome-nav-container">
       <div class="welcome-nav-brand">
         <?= render_site_logo('nav') ?>
       </div>
+      
+      <!-- Mobile menu toggle button -->
+      <button class="mobile-menu-toggle" aria-label="Menu" aria-expanded="false">
+        <svg class="menu-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+        <svg class="close-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display: none;">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
       
       <nav class="welcome-nav-links">
         <a href="<?= BASE_URL ?>/page.php?slug=about-us" class="welcome-nav-link">About</a>
@@ -1090,7 +1177,7 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
     </div>
   </footer>
 
-<!-- Deferred non-critical: reveal below-fold sections with fade-in -->
+<!-- Deferred non-critical: reveal below-fold sections with fade-in & mobile menu -->
 <script>
 (function(){
   // Intersection Observer for lazy fade-in of below-fold sections
@@ -1110,6 +1197,40 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       s.style.transform = 'translateY(20px)';
       s.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
       io.observe(s);
+    });
+  }
+
+  // Mobile menu toggle
+  var toggleBtn = document.querySelector('.mobile-menu-toggle');
+  var navLinks = document.querySelector('.welcome-nav-links');
+  if (toggleBtn && navLinks) {
+    var menuIcon = toggleBtn.querySelector('.menu-icon');
+    var closeIcon = toggleBtn.querySelector('.close-icon');
+    var toggleMenu = function() {
+      var isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+      toggleBtn.setAttribute('aria-expanded', !isExpanded);
+      navLinks.classList.toggle('open');
+      if (menuIcon && closeIcon) {
+        menuIcon.style.display = isExpanded ? 'block' : 'none';
+        closeIcon.style.display = isExpanded ? 'none' : 'block';
+      }
+    };
+    toggleBtn.addEventListener('click', toggleMenu);
+    // Close menu when a link is clicked
+    navLinks.querySelectorAll('.welcome-nav-link').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (navLinks.classList.contains('open')) {
+          toggleMenu();
+        }
+      });
+    });
+    // Close menu when clicking outside
+    document.addEventListener('click', function(e) {
+      if (navLinks.classList.contains('open') && 
+          !toggleBtn.contains(e.target) && 
+          !navLinks.contains(e.target)) {
+        toggleMenu();
+      }
     });
   }
 })();
