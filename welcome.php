@@ -741,10 +741,6 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       color: #9ca3af;
     }
     
-    .welcome-mobile-user-icon {
-      display: none;
-    }
-    
     /* Responsive Queries */
     @media (max-width: 1024px) {
       .welcome-hero-container {
@@ -792,23 +788,6 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       .welcome-nav-links {
         display: none;
       }
-      .welcome-desktop-only {
-        display: none !important;
-      }
-      .welcome-mobile-user-icon {
-        display: inline-flex !important;
-        align-items: center;
-        justify-content: center;
-        width: 38px;
-        height: 38px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        transition: background 0.2s;
-      }
-      .welcome-mobile-user-icon:hover {
-        background: rgba(255, 255, 255, 0.1);
-      }
       .welcome-footer-top {
         flex-direction: column;
       }
@@ -836,14 +815,8 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       </nav>
       
       <div class="welcome-nav-ctas">
-        <a href="<?= BASE_URL ?>/auth/login.php" class="btn-premium btn-premium-secondary welcome-desktop-only">Sign In</a>
-        <a href="<?= BASE_URL ?>/auth/register.php" class="btn-premium btn-premium-primary welcome-desktop-only">Join Free</a>
-        <a href="<?= BASE_URL ?>/auth/login.php" class="welcome-mobile-user-icon" aria-label="Sign In">
-          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" style="color:#fff">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-        </a>
+        <a href="<?= BASE_URL ?>/auth/login.php" class="btn-premium btn-premium-secondary">Sign In</a>
+        <a href="<?= BASE_URL ?>/auth/register.php" class="btn-premium btn-premium-primary">Join Free</a>
       </div>
     </div>
   </header>
