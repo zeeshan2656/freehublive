@@ -141,13 +141,7 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       color: #fff;
     }
     
-    .welcome-nav-ctas {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    /* Premium Buttons */
+    /* Premium Buttons (kept for hero CTAs) */
     .btn-premium {
       font-family: 'Outfit', sans-serif;
       font-weight: 600;
@@ -808,7 +802,7 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       
       .mobile-menu-toggle {
         display: flex;
-        order: 2;
+        margin-left: auto; /* push toggle to the right */
       }
       
       .welcome-nav-links {
@@ -830,7 +824,7 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
       }
       
       .welcome-nav-links.open {
-        max-height: 320px; /* Enough for 4 links */
+        max-height: 320px;
         padding: 16px 0;
       }
       
@@ -847,27 +841,12 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
         border-bottom: none;
       }
       
-      .welcome-nav-ctas {
-        order: 3;
-        gap: 8px;
-      }
-      
-      .welcome-nav-ctas .btn-premium {
-        padding: 6px 12px;
-        font-size: 0.85rem;
-      }
-      
-      /* Adjust hero top padding for fixed header spacing */
       .welcome-hero {
         padding-top: 110px;
       }
     }
     
     @media (max-width: 480px) {
-      .welcome-nav-ctas .btn-premium {
-        padding: 6px 10px;
-        font-size: 0.75rem;
-      }
       .welcome-nav-link {
         font-size: 0.9rem;
         padding: 10px 16px;
@@ -877,7 +856,7 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
 </head>
 <body class="welcome-body">
 
-  <!-- ── Dynamic Navbar with Mobile Toggle ── -->
+  <!-- ── Dynamic Navbar with Mobile Toggle (Sign In/Join removed) ── -->
   <header class="welcome-nav">
     <div class="welcome-nav-container">
       <div class="welcome-nav-brand">
@@ -901,10 +880,7 @@ $videos_formatted = $total_videos > 1000 ? number_format($total_videos / 1000, 1
         <a href="<?= BASE_URL ?>/page.php?slug=terms-conditions" class="welcome-nav-link">Terms</a>
       </nav>
       
-      <div class="welcome-nav-ctas">
-        <a href="<?= BASE_URL ?>/auth/login.php" class="btn-premium btn-premium-secondary">Sign In</a>
-        <a href="<?= BASE_URL ?>/auth/register.php" class="btn-premium btn-premium-primary">Join Free</a>
-      </div>
+      <!-- Sign In and Join buttons have been removed from header -->
     </div>
   </header>
 
