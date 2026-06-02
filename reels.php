@@ -937,6 +937,37 @@ body {
   margin-bottom: 16px;
   opacity: 0.6;
 }
+
+/* Loading spinner overlay */
+.video-overlay-loading-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.5);
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 12;
+  pointer-events: none;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.reel-spinner {
+  width: 32px;
+  height: 32px;
+  border: 4px solid rgba(255,255,255,0.1);
+  border-left-color: var(--accent, #6366f1);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 </style>
 
 <div class="reels-container">
@@ -1003,6 +1034,11 @@ body {
             <!-- Video element container -->
             <div class="reel-player-container">
               <video class="reel-video" src="<?= $video_src ?>" loop playsinline webkit-playsinline preload="<?= ($index === 0) ? 'auto' : 'none' ?>" poster="<?= $thumb ?>"></video>
+              
+              <!-- Loading spinner overlay -->
+              <div class="video-overlay-loading-spinner" style="display:none;">
+                <div class="reel-spinner"></div>
+              </div>
               
               <!-- Tap/Play/Volume overlays -->
               <div class="video-overlay-play-btn">
@@ -1211,6 +1247,78 @@ document.addEventListener('DOMContentLoaded', function() {
 
   let activeIndex = 0;
   let mutedGlobal = false; // default to normal mode (unmuted)
+
+  // ── Reels Diagnostics & Buffering Loader Control ──
+  console.log("Reels Diagnostics: Initializing event listeners for", slides.length, "slides");
+  slides.forEach((slide, idx) => {
+    const video = slide.querySelector('.reel-video');
+    const loader = slide.querySelector('.video-overlay-loading-spinner');
+    if (!video) {
+      console.warn(`Reels Diagnostics [Slide ${idx}]: No video element found!`);
+      return;
+    }
+    
+    console.log(`Reels Diagnostics [Slide ${idx}]: Video URL is "${video.src}"`);
+
+    video.addEventListener('loadstart', () => {
+      console.log(`Reels Diagnostics [Slide ${idx}]: Browser started loading video from "${video.src}"`);
+      if (loader) loader.style.display = 'flex';
+    });
+
+    video.addEventListener('waiting', () => {
+      console.warn(`Reels Diagnostics [Slide ${idx}]: Playback waiting for data (buffering)...`);
+      if (loader) loader.style.display = 'flex';
+    });
+
+    video.addEventListener('loadedmetadata', () => {
+      console.log(`Reels Diagnostics [Slide ${idx}]: Metadata loaded. Duration: ${video.duration}s, Dimensions: ${video.videoWidth}x${video.videoHeight}`);
+      if (loader) loader.style.display = 'none';
+    });
+
+    video.addEventListener('canplay', () => {
+      console.log(`Reels Diagnostics [Slide ${idx}]: Enough data available to start playing.`);
+      if (loader) loader.style.display = 'none';
+    });
+
+    video.addEventListener('playing', () => {
+      console.log(`Reels Diagnostics [Slide ${idx}]: Playback started/resumed successfully.`);
+      if (loader) loader.style.display = 'none';
+    });
+
+    video.addEventListener('pause', () => {
+      console.log(`Reels Diagnostics [Slide ${idx}]: Playback paused.`);
+      if (loader) loader.style.display = 'none';
+    });
+
+    video.addEventListener('stalled', () => {
+      console.warn(`Reels Diagnostics [Slide ${idx}]: Media data download stalled.`);
+    });
+
+    video.addEventListener('error', (e) => {
+      if (loader) loader.style.display = 'none';
+      const err = video.error;
+      let errMsg = "Unknown media error";
+      if (err) {
+        switch (err.code) {
+          case 1: errMsg = "MEDIA_ERR_ABORTED - Fetching process aborted by user decision."; break;
+          case 2: errMsg = "MEDIA_ERR_NETWORK - Network error occurred during download."; break;
+          case 3: errMsg = "MEDIA_ERR_DECODE - Media decoding failed (possibly corrupt file or unsupported format)."; break;
+          case 4: errMsg = "MEDIA_ERR_SRC_NOT_SUPPORTED - Video format or MIME type is not supported by this browser."; break;
+        }
+      }
+      console.error(`Reels Diagnostics [Slide ${idx} - Video ID ${slide.dataset.id}]: Playback error!`, errMsg, err);
+      
+      // Perform a CORS-safe HEAD request probe to diagnose HTTP errors (404, 403, 500, etc.)
+      fetch(video.src, { method: 'HEAD' })
+        .then(res => {
+          console.log(`Reels Diagnostics [Slide ${idx} - Network Probe]: HTTP Status: ${res.status} ${res.statusText}`);
+          console.log(`Reels Diagnostics [Slide ${idx} - Network Probe]: Content-Type: ${res.headers.get('Content-Type')}`);
+        })
+        .catch(fetchErr => {
+          console.error(`Reels Diagnostics [Slide ${idx} - Network Probe]: Connection check failed. Possible CORS block or server offline.`, fetchErr);
+        });
+    });
+  });
 
   // Reload all ads associated with a specific slide
   function reloadAdsForSlide(slide) {
