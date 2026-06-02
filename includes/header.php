@@ -872,108 +872,21 @@ endif;
           </div>
         </div>
 
-        <!-- Users Dropdown (Users, Viewers, Creators) -->
-        <div class="studio-nav-group-users" style="margin-bottom: 6px;">
-          <?php
-          $admin_pending_creators = db_count('users', "role='creator' AND status='pending'");
-          ?>
-          <a href="#" class="studio-nav-item <?= ($current_page === 'users.php' || $current_page === 'creators.php') ? 'active' : '' ?>" id="users-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
-            <span>👥 Users</span>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <?php if ($admin_pending_creators > 0): ?>
-                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px; font-weight:850;"><?= $admin_pending_creators ?></span>
-              <?php endif; ?>
-              <span class="users-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'users.php' || $current_page === 'creators.php') ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
-            </div>
-          </a>
-          <div id="users-submenu" style="margin-left: 20px; display: <?= ($current_page === 'users.php' || $current_page === 'creators.php') ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
-            <a href="<?= BASE_URL ?>/admin/users.php" class="studio-nav-item <?= $current_page === 'users.php' && !isset($_GET['role']) ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
-              <span>• All Users</span>
-            </a>
-            <a href="<?= BASE_URL ?>/admin/users.php?role=viewer" class="studio-nav-item <?= $current_page === 'users.php' && ($_GET['role'] ?? '') === 'viewer' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
-              <span>• Viewers</span>
-            </a>
-            <a href="<?= BASE_URL ?>/admin/creators.php?filter=pending" class="studio-nav-item <?= $current_page === 'creators.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto; display:flex; justify-content:space-between; align-items:center;">
-              <span>• Creators</span>
-              <?php if ($admin_pending_creators > 0): ?>
-                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px;"><?= $admin_pending_creators ?></span>
-              <?php endif; ?>
-            </a>
-          </div>
-        </div>
+        <!-- Users Link -->
+        <a href="<?= BASE_URL ?>/admin/users.php" class="studio-nav-item <?= $current_page === 'users.php' ? 'active' : '' ?>" style="margin-bottom: 6px;">
+          <span>👥 Users</span>
+        </a>
 
-        <!-- Finances Dropdown (Earnings, Withdrawals) -->
-        <div class="studio-nav-group-finances" style="margin-bottom: 6px;">
-          <?php
-          $admin_pending_withdrawals = (fh_table_exists('withdrawal_requests') ? db_count('withdrawal_requests', "status='pending'") : 0);
-          ?>
-          <a href="#" class="studio-nav-item <?= ($current_page === 'earnings.php' || $current_page === 'withdrawals.php') ? 'active' : '' ?>" id="finances-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
-            <span>💰 Finances</span>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <?php if ($admin_pending_withdrawals > 0): ?>
-                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px; font-weight:850;"><?= $admin_pending_withdrawals ?></span>
-              <?php endif; ?>
-              <span class="finances-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'earnings.php' || $current_page === 'withdrawals.php') ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
-            </div>
-          </a>
-          <div id="finances-submenu" style="margin-left: 20px; display: <?= ($current_page === 'earnings.php' || $current_page === 'withdrawals.php') ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
-            <a href="<?= BASE_URL ?>/admin/earnings.php" class="studio-nav-item <?= $current_page === 'earnings.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
-              <span>• Earnings</span>
-            </a>
-            <a href="<?= BASE_URL ?>/admin/withdrawals.php?status=pending" class="studio-nav-item <?= $current_page === 'withdrawals.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto; display:flex; justify-content:space-between; align-items:center;">
-              <span>• Withdrawals</span>
-              <?php if ($admin_pending_withdrawals > 0): ?>
-                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px;"><?= $admin_pending_withdrawals ?></span>
-              <?php endif; ?>
-            </a>
-          </div>
-        </div>
+        <!-- Categories Link -->
+        <a href="<?= BASE_URL ?>/admin/categories.php" class="studio-nav-item <?= $current_page === 'categories.php' ? 'active' : '' ?>" style="margin-bottom: 6px;">
+          <span>📁 Categories</span>
+        </a>
 
-        <!-- Categories & Pages Dropdown -->
-        <div class="studio-nav-group-content" style="margin-bottom: 6px;">
-          <a href="#" class="studio-nav-item <?= ($current_page === 'categories.php' || $current_page === 'pages.php' || $current_page === 'page_edit.php') ? 'active' : '' ?>" id="content-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
-            <span>📁 Content</span>
-            <span class="content-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'categories.php' || $current_page === 'pages.php' || $current_page === 'page_edit.php') ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
-          </a>
-          <div id="content-submenu" style="margin-left: 20px; display: <?= ($current_page === 'categories.php' || $current_page === 'pages.php' || $current_page === 'page_edit.php') ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
-            <a href="<?= BASE_URL ?>/admin/categories.php" class="studio-nav-item <?= $current_page === 'categories.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
-              <span>• Categories</span>
-            </a>
-            <a href="<?= BASE_URL ?>/admin/pages.php" class="studio-nav-item <?= $current_page === 'pages.php' || $current_page === 'page_edit.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
-              <span>• Pages</span>
-            </a>
-          </div>
-        </div>
+        <!-- Creator Studio Link -->
+        <a href="<?= BASE_URL ?>/creator/" class="studio-nav-item" style="margin-bottom: 6px;">
+          <span>🎨 Creator Studio</span>
+        </a>
 
-        <!-- SEO & Approvals Dropdown -->
-        <div class="studio-nav-group-system" style="margin-bottom: 6px;">
-          <?php
-          $pending_users = db_count('users', "status='pending' AND role!='creator'");
-          $pending_creators = db_count('users', "status='pending' AND role='creator'");
-          $pending_vids = db_count('videos', "status='pending'");
-          $total_pending = $pending_users + $pending_creators + $pending_vids;
-          ?>
-          <a href="#" class="studio-nav-item <?= ($current_page === 'seo.php' || $current_page === 'approvals.php') ? 'active' : '' ?>" id="system-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
-            <span>🛡️ System</span>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <?php if ($total_pending > 0): ?>
-                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px; font-weight:850;"><?= $total_pending ?></span>
-              <?php endif; ?>
-              <span class="system-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'seo.php' || $current_page === 'approvals.php') ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
-            </div>
-          </a>
-          <div id="system-submenu" style="margin-left: 20px; display: <?= ($current_page === 'seo.php' || $current_page === 'approvals.php') ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
-            <a href="<?= BASE_URL ?>/admin/approvals.php" class="studio-nav-item <?= $current_page === 'approvals.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto; display:flex; justify-content:space-between; align-items:center;">
-              <span>• Approvals</span>
-              <?php if ($total_pending > 0): ?>
-                <span class="admin-nav-badge" style="background:var(--yellow); color:#1a1000; font-size:.6rem; padding:1px 5px; border-radius:10px;"><?= $total_pending ?></span>
-              <?php endif; ?>
-            </a>
-            <a href="<?= BASE_URL ?>/admin/seo.php" class="studio-nav-item <?= $current_page === 'seo.php' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
-              <span>• SEO</span>
-            </a>
-          </div>
-        </div>
 
         <!-- Library Dropdown (Saved Videos, Subscriptions) -->
         <div class="studio-nav-group-library" style="margin-bottom: 6px;">

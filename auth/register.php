@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $country_code = trim($_POST['country_code'] ?? '');
         $phone_raw    = trim($_POST['phone'] ?? '');
         $phone        = $country_code . $phone_raw;
-        $role     = in_array($_POST['role'] ?? '', ['viewer','creator']) ? $_POST['role'] : 'viewer';
+        $role     = 'viewer';
         if (strlen($username) < 3 || strlen($username) > 30) $error = 'Username must be 3-30 chars.';
         elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) $error = 'Invalid email.';
         elseif (empty($phone_raw) || !preg_match('/^[0-9]{6,15}$/', $phone_raw)) $error = 'Enter a valid phone number (digits only, 6-15 digits).';
@@ -34,13 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $ref_by = $refUser['id'] ?? null;
                 }
                 $user_approval = setting('user_approval_mode', 'auto');
-                $creator_approval = setting('creator_approval_mode', 'manual');
-                $status = 'active';
-                if ($role === 'creator') {
-                    $status = ($creator_approval === 'auto') ? 'active' : 'pending';
-                } else {
-                    $status = ($user_approval === 'auto') ? 'active' : 'pending';
-                }
+                $status = ($user_approval === 'auto') ? 'active' : 'pending';
 
                 $id = db_insert('users', [
                     'username'           => $username,
@@ -110,14 +104,6 @@ $primary    = setting('primary_color', '#6366f1');
 .auth-box{width:100%;max-width:460px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px}
 .auth-title{font-size:1.4rem;font-weight:800;text-align:center;margin-bottom:4px;font-family:var(--font2)}
 .auth-sub{text-align:center;color:var(--text2);font-size:.875rem;margin-bottom:24px}
-.role-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px}
-.role-card{border:2px solid var(--border);border-radius:var(--radius);padding:12px 8px;text-align:center;cursor:pointer;transition:all .15s}
-.role-card:hover{border-color:var(--accent)}
-.role-card input{display:none}
-.role-card.selected{border-color:var(--accent);background:rgba(99,102,241,.1)}
-.role-card .role-icon{font-size:1.4rem;margin-bottom:4px}
-.role-card .role-name{font-size:.8rem;font-weight:600}
-.role-card .role-desc{font-size:.7rem;color:var(--text2);margin-top:2px}
 </style>
 </head><body>
 <div class="auth-wrap">
@@ -131,20 +117,7 @@ $primary    = setting('primary_color', '#6366f1');
     <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php else: ?>
     <form method="POST" id="reg-form">
       <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
-      <input type="hidden" name="role" id="role-field" value="viewer">
-      <p style="font-size:.85rem;font-weight:600;margin-bottom:8px">I want to…</p>
-      <div class="role-cards" style="grid-template-columns:repeat(2,1fr)">
-        <label class="role-card selected" id="role-viewer" onclick="selectRole('viewer','role-viewer')">
-          <div class="role-icon">&#128250;</div>
-          <div class="role-name">Watch &amp; Earn</div>
-          <div class="role-desc">Watch videos &amp; earn</div>
-        </label>
-        <label class="role-card" id="role-creator" onclick="selectRole('creator','role-creator')">
-          <div class="role-icon">&#127916;</div>
-          <div class="role-name">Creator</div>
-          <div class="role-desc">Upload videos</div>
-        </label>
-      </div>
+
       <div style="display:flex;gap:12px">
         <div class="form-group" style="flex:1">
           <label class="form-label" for="first_name">First Name</label>
@@ -237,10 +210,5 @@ $primary    = setting('primary_color', '#6366f1');
     <?php endif; ?>
   </div>
 </div>
-<script>
-function selectRole(r,id){
-  document.getElementById('role-field').value=r;
-  document.querySelectorAll('.role-card').forEach(c=>c.classList.remove('selected'));
-  document.getElementById(id).classList.add('selected');
-}</script>
+
 </body></html>

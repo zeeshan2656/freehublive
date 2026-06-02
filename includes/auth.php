@@ -61,7 +61,7 @@ function has_role(string|array $roles): bool {
  * Legacy 'affiliate' role is treated as 'viewer' for backward-compat.
  */
 function is_admin(): bool    { return has_role('admin'); }
-function is_creator(): bool  { return has_role(['creator', 'admin']); }
+function is_creator(): bool  { return has_role('admin'); }
 // All logged-in non-admin users are considered affiliates (they all get referral links)
 function is_affiliate(): bool{ return has_role(['viewer', 'creator', 'affiliate', 'admin']); }
 // Strict viewer-only check

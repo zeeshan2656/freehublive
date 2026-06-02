@@ -5,7 +5,7 @@
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_role(['creator','admin']);
+require_role(['admin']);
 
 $site_theme = setting('active_theme', 'dark-minimal');
 $primary    = setting('primary_color', '#6366f1');

@@ -5,7 +5,7 @@
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_role(['creator', 'admin']);
+require_role(['admin']);
 
 if (setting('reels_enabled', '1') !== '1') {
     redirect(BASE_URL . '/');
