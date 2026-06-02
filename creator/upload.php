@@ -455,6 +455,87 @@ require_once __DIR__ . '/../includes/header.php';
   const uploads = {}; // Map of uploadId -> uploadObject
   let selectedUploadId = null;
   let sourceType = 'file'; // file or embed
+  const MAX_CONCURRENT_UPLOADS = 1;
+
+  // ── IndexedDB Helper Class for persistent queues ──
+  class UploadDB {
+    static dbName = 'FreeHubUploadManager';
+    static storeName = 'videoQueue';
+
+    static open() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(this.dbName, 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            db.createObjectStore(this.storeName, { keyPath: 'id' });
+          }
+        };
+      });
+    }
+
+    static async save(session) {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(this.storeName, 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        
+        const serialized = {
+          id: session.id,
+          isEmbed: session.isEmbed,
+          embedUrl: session.embedUrl,
+          file: session.file,
+          title: session.title,
+          description: session.description,
+          tags: session.tags,
+          visibility: session.visibility,
+          categoryIds: session.categoryIds,
+          playlistIds: session.playlistIds,
+          progress: session.progress,
+          speed: session.speed,
+          eta: session.eta,
+          status: session.status,
+          videoId: session.videoId,
+          token: session.token,
+          uploadedBytes: session.uploadedBytes,
+          videoUrl: session.videoUrl,
+          isReel: session.isReel,
+          thumbnails: session.thumbnails,
+          selectedThumbDataUrl: session.selectedThumbDataUrl,
+          retries: session.retries || 0,
+          createdAt: session.createdAt || Date.now()
+        };
+        
+        const req = store.put(serialized);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    static async delete(id) {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(this.storeName, 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    static async getAll() {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(this.storeName, 'readonly');
+        const store = tx.objectStore(this.storeName);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+  }
 
   // DOM Elements
   const dropZone = document.getElementById('drop-zone');
@@ -551,7 +632,7 @@ require_once __DIR__ . '/../includes/header.php';
   };
 
   // Create an embed upload item session
-  function createEmbedSession(url) {
+  async function createEmbedSession(url) {
     const uploadId = 'up_' + Math.random().toString(36).substr(2, 9);
     const ytId = getYoutubeId(url);
     const defaultTitle = ytId ? 'YouTube Import #' + ytId : 'External Import #' + Math.floor(Math.random() * 10000);
@@ -560,7 +641,7 @@ require_once __DIR__ . '/../includes/header.php';
       id: uploadId,
       isEmbed: true,
       embedUrl: url,
-      file: { name: defaultTitle, size: 0 },
+      file: null,
       title: defaultTitle,
       description: 'Imported external video link.',
       tags: 'import, embed',
@@ -570,27 +651,32 @@ require_once __DIR__ . '/../includes/header.php';
       progress: 0,
       speed: 0,
       eta: 0,
-      status: 'uploading',
+      status: 'queued',
       videoId: null,
       token: null,
       thumbnails: [],
       selectedThumbDataUrl: null,
-      localBlobUrl: null
+      localBlobUrl: null,
+      createdAt: Date.now(),
+      activeLoopRunning: false
     };
 
     uploads[uploadId] = session;
     renderQueueCard(session);
     updateQueueCount();
 
+    await UploadDB.save(session);
+
     if (!selectedUploadId) {
       selectUpload(uploadId);
     }
 
-    startEmbedProcess(session);
+    refreshQueueUI();
+    processQueue();
   }
 
   // Start background upload session
-  function createUploadSession(file) {
+  async function createUploadSession(file) {
     const uploadId = 'up_' + Math.random().toString(36).substr(2, 9);
     const cleanTitle = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
 
@@ -607,25 +693,30 @@ require_once __DIR__ . '/../includes/header.php';
       progress: 0,
       speed: 0,
       eta: 0,
-      status: 'uploading',
+      status: 'queued',
       videoId: null,
       token: null,
       uploadedBytes: 0,
       thumbnails: [],
       selectedThumbDataUrl: null,
       localBlobUrl: URL.createObjectURL(file),
-      abortController: new AbortController()
+      abortController: new AbortController(),
+      createdAt: Date.now(),
+      activeLoopRunning: false
     };
 
     uploads[uploadId] = session;
     renderQueueCard(session);
     updateQueueCount();
 
+    await UploadDB.save(session);
+
     if (!selectedUploadId) {
       selectUpload(uploadId);
     }
 
-    startFileProgressiveUpload(session);
+    refreshQueueUI();
+    processQueue();
   }
 
   // Render a nice queue list item card
@@ -643,15 +734,23 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
           <div style="min-width:0; flex:1;">
             <div class="card-title-lbl" style="font-size:0.8rem; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;" id="lbl_title_${session.id}">${escapeHtml(session.title)}</div>
-            <div style="font-size:0.7rem; color:var(--text2); display:flex; gap:6px; align-items:center;" id="lbl_meta_${session.id}">
+            <div style="font-size:0.7rem; color:var(--text2); display:flex; gap:6px; align-items:center; flex-wrap:wrap;" id="lbl_meta_${session.id}">
               <span id="lbl_status_${session.id}">Initializing...</span>
               <span id="lbl_pct_${session.id}">0%</span>
             </div>
           </div>
         </div>
-        <button class="cancel-upload-btn" onclick="cancelUploadSession(event, '${session.id}')" title="Cancel/Remove Upload">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+        <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+          <button type="button" class="queue-action-btn pause-resume-btn" id="btn_pause_${session.id}" onclick="pauseUploadSession(event, '${session.id}')" title="Pause Upload" style="display:none; color:var(--text2); padding:4px;">
+            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="4" height="16"/><rect x="16" y="4" width="4" height="16"/></svg>
+          </button>
+          <button type="button" class="queue-action-btn pause-resume-btn" id="btn_resume_${session.id}" onclick="resumeUploadSession(event, '${session.id}')" title="Resume Upload" style="display:none; color:var(--accent); padding:4px;">
+            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><polygon points="5,4 19,12 5,20"/></svg>
+          </button>
+          <button type="button" class="cancel-upload-btn" onclick="cancelUploadSession(event, '${session.id}')" title="Cancel/Remove Upload">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       </div>
       <div class="progress-mini-bar">
         <div class="progress-mini-fill" id="fill_${session.id}"></div>
@@ -675,7 +774,7 @@ require_once __DIR__ . '/../includes/header.php';
     const session = uploads[id];
     if (!session) return;
 
-    if (session.status === 'uploading' || session.status === 'processing') {
+    if (session.status === 'uploading' || session.status === 'processing' || session.status === 'retrying') {
       if (!confirm(`Cancel and abort upload for "${session.title}"?`)) return;
     }
 
@@ -703,6 +802,9 @@ require_once __DIR__ . '/../includes/header.php';
       } catch (err) {}
     }
 
+    // Delete from IndexedDB
+    await UploadDB.delete(id);
+
     // Delete from memory and DOM
     delete uploads[id];
     const card = document.getElementById(`card_${id}`);
@@ -717,7 +819,84 @@ require_once __DIR__ . '/../includes/header.php';
     }
 
     showToast(`Upload removed.`, 'yellow');
+
+    refreshQueueUI();
+    processQueue();
   };
+
+  // Pause session uploader
+  window.pauseUploadSession = async function(e, id) {
+    if (e) e.stopPropagation();
+    const session = uploads[id];
+    if (!session) return;
+
+    session.status = 'paused';
+    session.activeLoopRunning = false;
+    if (session.abortController) {
+      session.abortController.abort();
+      session.abortController = new AbortController(); // recreate for next resume
+    }
+    
+    await UploadDB.save(session);
+    updateCardProgress(session, 'Paused', 'paused');
+    updateSelectedEditorState(session);
+    
+    refreshQueueUI();
+    processQueue();
+  };
+
+  // Resume session uploader
+  window.resumeUploadSession = async function(e, id) {
+    if (e) e.stopPropagation();
+    const session = uploads[id];
+    if (!session) return;
+
+    session.status = 'queued';
+    session.retries = 0;
+    session.activeLoopRunning = false;
+    
+    await UploadDB.save(session);
+    updateCardProgress(session, 'Queued...', 'uploading');
+    updateSelectedEditorState(session);
+    
+    refreshQueueUI();
+    processQueue();
+  };
+
+  // Get active uploading/processing counts
+  function getActiveUploadsCount() {
+    return Object.values(uploads).filter(u => u.status === 'uploading' || u.status === 'processing').length;
+  }
+
+  // Pick next items and process sequential queueing
+  async function processQueue() {
+    const activeCount = getActiveUploadsCount();
+    if (activeCount >= MAX_CONCURRENT_UPLOADS) return;
+
+    const list = Object.values(uploads).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    const next = list.find(u => (u.status === 'queued' || u.status === 'retrying') && !u.activeLoopRunning);
+    if (!next) return;
+
+    if (next.isEmbed) {
+      startEmbedProcess(next);
+    } else {
+      startFileProgressiveUpload(next);
+    }
+  }
+
+  // Refresh dynamic queue UI position counters
+  function refreshQueueUI() {
+    Object.values(uploads).forEach(session => {
+      const fillState = session.status === 'published' ? 'published' : (session.status === 'failed' ? 'failed' : (session.status === 'processing' ? 'processing' : 'uploading'));
+      let text = 'Queued...';
+      if (session.status === 'paused') text = 'Paused';
+      if (session.status === 'failed') text = 'Failed';
+      if (session.status === 'published') text = 'Published';
+      if (session.status === 'processing') text = 'Processing...';
+      
+      updateCardProgress(session, text, fillState);
+    });
+  }
 
   // Select an upload from the queue list to edit details
   function selectUpload(id) {
@@ -922,6 +1101,10 @@ require_once __DIR__ . '/../includes/header.php';
   // Start background upload loop for standard video files
   async function startFileProgressiveUpload(session) {
     const file = session.file;
+    session.activeLoopRunning = true;
+    session.status = 'uploading';
+    await UploadDB.save(session);
+
     try {
       const meta = {
         title: session.title,
@@ -931,26 +1114,35 @@ require_once __DIR__ . '/../includes/header.php';
         category_ids: session.categoryIds
       };
 
-      // 1. Init placeholder
-      const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({meta}),
-        signal: session.abortController.signal
-      });
-      const initData = await initRes.json();
-      if (!initData.success) {
-        setUploadFailed(session, 'Initialization failed.');
-        return;
+      // 1. Init placeholder if not already initialized
+      if (!session.videoId || !session.token) {
+        updateCardProgress(session, 'Initializing...', 'uploading');
+        const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({meta}),
+          signal: session.abortController.signal
+        });
+        const initData = await initRes.json();
+        if (!initData.success) {
+          setUploadFailed(session, 'Initialization failed.');
+          return;
+        }
+
+        session.videoId = initData.data.video_id;
+        session.token = initData.data.upload_token;
+        await UploadDB.save(session);
+
+        // Extract client-side thumbnails in the background
+        extractThumbnailsInBackground(session);
+      } else {
+        // Resume frame extraction if interrupted
+        if (!session.thumbnails || session.thumbnails.length === 0) {
+          extractThumbnailsInBackground(session);
+        }
       }
 
-      session.videoId = initData.data.video_id;
-      session.token = initData.data.upload_token;
-
-      // Extract client-side thumbnails in the background
-      extractThumbnailsInBackground(session);
-
-      // Check resumability status
+      // Check resumability status from the server
       let uploadedBytes = 0;
       try {
         const checkRes = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&video_id=${session.videoId}&token=${session.token}`, {
@@ -963,6 +1155,7 @@ require_once __DIR__ . '/../includes/header.php';
       } catch (e) {}
 
       session.uploadedBytes = uploadedBytes;
+      await UploadDB.save(session);
 
       // 2. Progressive chunked upload loop (5MB Chunks)
       const CHUNK_SIZE = 5 * 1024 * 1024;
@@ -971,43 +1164,56 @@ require_once __DIR__ . '/../includes/header.php';
       let lastTime = Date.now();
       let lastBytes = uploadedBytes;
 
-      updateCardProgress(session, 'Uploading chunks...');
+      updateCardProgress(session, 'Uploading...');
 
       for (let start = uploadedBytes; start < totalSize; start += CHUNK_SIZE) {
+        if (session.status !== 'uploading' && session.status !== 'retrying') {
+          session.activeLoopRunning = false;
+          return; // Paused or Cancelled
+        }
+
         const end = Math.min(start + CHUNK_SIZE, totalSize);
         const chunkBlob = file.slice(start, end);
         const formData = new FormData();
         formData.append('chunk', chunkBlob, file.name);
 
-        let attempt = 0;
         let success = false;
-
-        while (attempt < 5 && !success) {
-          try {
-            const uploadRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}`, {
-              method: 'POST',
-              body: formData,
-              signal: session.abortController.signal
-            });
-            const uploadData = await uploadRes.json();
-            if (uploadData.success) {
-              success = true;
-              session.uploadedBytes = uploadData.data.uploaded || end;
-            } else {
-              attempt++;
-              await new Promise(r => setTimeout(r, 1500));
-            }
-          } catch (e) {
-            if (e.name === 'AbortError') return; // Cancelled
-            attempt++;
-            updateCardProgress(session, `Flicker - retrying (${attempt}/5)...`);
-            await new Promise(r => setTimeout(r, 2000));
+        try {
+          const uploadRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}`, {
+            method: 'POST',
+            body: formData,
+            signal: session.abortController.signal
+          });
+          const uploadData = await uploadRes.json();
+          if (uploadData.success) {
+            success = true;
+            session.uploadedBytes = uploadData.data.uploaded || end;
+            session.retries = 0; // reset retries
+            await UploadDB.save(session);
+          } else {
+            throw new Error('Upload failed');
           }
-        }
+        } catch (e) {
+          if (e.name === 'AbortError' || session.status === 'paused') {
+            session.activeLoopRunning = false;
+            return; // Interrupted
+          }
 
-        if (!success) {
-          setUploadFailed(session, 'Chunk upload failed.');
-          return;
+          session.retries = (session.retries || 0) + 1;
+          if (session.retries > 10) {
+            setUploadFailed(session, 'Too many chunk failures.');
+            return;
+          }
+
+          // Exponential backoff
+          const delay = Math.min(30000, 1000 * Math.pow(2, session.retries)) + Math.random() * 1000;
+          session.status = 'retrying';
+          updateCardProgress(session, `Flicker - retrying...`);
+          await UploadDB.save(session);
+          
+          await new Promise(r => setTimeout(r, delay));
+          start -= CHUNK_SIZE; // retry chunk
+          continue;
         }
 
         // Speed and ETA calculations
@@ -1025,7 +1231,9 @@ require_once __DIR__ . '/../includes/header.php';
         const remainSec = speed > 0 ? Math.max(0, Math.round((totalSize - session.uploadedBytes) / speed)) : null;
         session.eta = remainSec;
 
+        session.status = 'uploading';
         updateCardProgress(session, 'Uploading...');
+        await UploadDB.save(session);
       }
 
       // 3. Finalize upload
@@ -1033,6 +1241,7 @@ require_once __DIR__ . '/../includes/header.php';
         updateCardProgress(session, 'Finalizing file...', 'processing');
         session.status = 'processing';
         updateSelectedEditorState(session);
+        await UploadDB.save(session);
 
         const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(file.name)}`, {
           method: 'POST',
@@ -1043,6 +1252,7 @@ require_once __DIR__ . '/../includes/header.php';
         if (finalizeData.success) {
           session.status = 'published';
           session.videoUrl = finalizeData.data.video_url;
+          session.activeLoopRunning = false;
 
           // Save duration
           await saveVideoDuration(session);
@@ -1054,20 +1264,30 @@ require_once __DIR__ . '/../includes/header.php';
 
           updateCardProgress(session, 'Published', 'published');
           updateSelectedEditorState(session);
+
+          // Clear completed upload from IndexedDB
+          await UploadDB.delete(session.id);
+          
           showToast(`🟢 <strong>"${escapeHtml(session.title)}"</strong> published successfully!`);
+          
+          processQueue();
         } else {
           setUploadFailed(session, 'Finalization failed.');
         }
       }
 
     } catch (err) {
-      if (err.name === 'AbortError') return; // Cancelled
+      if (err.name === 'AbortError') return;
       setUploadFailed(session, 'Connection error.');
     }
   }
 
   // Start background upload loop for external embeds
   async function startEmbedProcess(session) {
+    session.activeLoopRunning = true;
+    session.status = 'uploading';
+    await UploadDB.save(session);
+
     try {
       const meta = {
         title: session.title,
@@ -1077,41 +1297,47 @@ require_once __DIR__ . '/../includes/header.php';
         category_ids: session.categoryIds
       };
 
-      // 1. Init placeholder
-      const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({meta})
-      });
-      const initData = await initRes.json();
-      if (!initData.success) {
-        setUploadFailed(session, 'Import initialization failed.');
-        return;
-      }
+      // 1. Init placeholder if not already initialized
+      if (!session.videoId || !session.token) {
+        updateCardProgress(session, 'Initializing import...', 'uploading');
+        const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({meta})
+        });
+        const initData = await initRes.json();
+        if (!initData.success) {
+          setUploadFailed(session, 'Import initialization failed.');
+          return;
+        }
 
-      session.videoId = initData.data.video_id;
-      session.token = initData.data.upload_token;
+        session.videoId = initData.data.video_id;
+        session.token = initData.data.upload_token;
+        await UploadDB.save(session);
 
-      // Import thumbnails from YouTube if applicable
-      const ytId = getYoutubeId(session.embedUrl);
-      if (ytId) {
-        const ytMaxThumb = `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`;
-        session.thumbnails = [
-          ytMaxThumb,
-          `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`,
-          `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`
-        ];
-        session.selectedThumbDataUrl = ytMaxThumb;
-        
-        // Save thumb instantly
-        convertAndSaveYtThumbnail(session.videoId, ytMaxThumb);
-        
-        if (selectedUploadId === session.id) {
-          renderThumbnailsGrid(session);
+        // Import thumbnails from YouTube if applicable
+        const ytId = getYoutubeId(session.embedUrl);
+        if (ytId) {
+          const ytMaxThumb = `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`;
+          session.thumbnails = [
+            ytMaxThumb,
+            `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`,
+            `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`
+          ];
+          session.selectedThumbDataUrl = ytMaxThumb;
+          
+          // Save thumb instantly
+          convertAndSaveYtThumbnail(session.videoId, ytMaxThumb);
+          
+          if (selectedUploadId === session.id) {
+            renderThumbnailsGrid(session);
+          }
         }
       }
 
       updateCardProgress(session, 'Processing import...', 'processing');
+      session.status = 'processing';
+      await UploadDB.save(session);
 
       // 2. Finalize direct embed URL on backend
       const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(session.embedUrl)}`, {
@@ -1122,9 +1348,14 @@ require_once __DIR__ . '/../includes/header.php';
       if (finalizeData.success) {
         session.status = 'published';
         session.videoUrl = finalizeData.data.video_url;
+        session.activeLoopRunning = false;
         updateCardProgress(session, 'Published', 'published');
         updateSelectedEditorState(session);
+
+        await UploadDB.delete(session.id);
         showToast(`🟢 <strong>"${escapeHtml(session.title)}"</strong> imported successfully!`);
+        
+        processQueue();
       } else {
         setUploadFailed(session, 'Import finalization failed.');
       }
@@ -1174,6 +1405,7 @@ require_once __DIR__ . '/../includes/header.php';
       const vHeight = helperVideo.videoHeight || 360;
       const isPortrait = vHeight > vWidth;
       session.isReel = isPortrait ? 1 : 0;
+      await UploadDB.save(session);
 
       // Save video orientation to backend database asynchronously
       if (session.videoId) {
@@ -1201,11 +1433,6 @@ require_once __DIR__ . '/../includes/header.php';
           const dataUrl = await seekAndCapture(helperVideo, canvas, ctx, time);
           session.thumbnails.push(dataUrl);
 
-          // Update grid dynamically if current video is selected
-          if (selectedUploadId === session.id) {
-            renderThumbnailsGrid(session);
-          }
-
           // Auto-select first frame as default
           if (i === 0 && !session.selectedThumbDataUrl) {
             session.selectedThumbDataUrl = dataUrl;
@@ -1214,9 +1441,13 @@ require_once __DIR__ . '/../includes/header.php';
             if (miniThumb) {
               miniThumb.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;background:#000">`;
             }
-            if (selectedUploadId === session.id) {
-              renderThumbnailsGrid(session);
-            }
+          }
+
+          await UploadDB.save(session);
+
+          // Update grid dynamically if current video is selected
+          if (selectedUploadId === session.id) {
+            renderThumbnailsGrid(session);
           }
         } catch (e) {}
       }
@@ -1257,22 +1488,51 @@ require_once __DIR__ . '/../includes/header.php';
   // Update card progress bar and label text
   function updateCardProgress(session, text, fillState = 'uploading') {
     const cardStatus = document.getElementById(`lbl_status_${session.id}`);
+    const pctLabel = document.getElementById(`lbl_pct_${session.id}`);
+    const fill = document.getElementById(`fill_${session.id}`);
+    const pauseBtn = document.getElementById(`btn_pause_${session.id}`);
+    const resumeBtn = document.getElementById(`btn_resume_${session.id}`);
+
+    // Update buttons visibility based on status
+    if (pauseBtn && resumeBtn) {
+      if (session.status === 'uploading' || session.status === 'retrying') {
+        pauseBtn.style.display = 'inline-block';
+        resumeBtn.style.display = 'none';
+      } else if (session.status === 'paused' || session.status === 'failed') {
+        pauseBtn.style.display = 'none';
+        resumeBtn.style.display = 'inline-block';
+      } else {
+        pauseBtn.style.display = 'none';
+        resumeBtn.style.display = 'none';
+      }
+    }
+
+    // Determine Queue Position if status is queued
+    let statusText = text;
+    if (session.status === 'queued') {
+      const sortedQueue = Object.values(uploads)
+        .filter(u => u.status === 'queued')
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      const pos = sortedQueue.findIndex(u => u.id === session.id) + 1;
+      statusText = `Queued (Pos ${pos})`;
+    }
+
     if (cardStatus) {
       if (session.status === 'uploading' && session.progress > 0) {
         const speedFmt = session.speed > 0 ? formatBytes(session.speed) + '/s' : '';
         const etaFmt = session.eta !== null ? formatETA(session.eta) + ' remaining' : '';
         cardStatus.innerHTML = `<span style="color:var(--accent)">📤 ${session.progress}%</span> · ${speedFmt} · ${etaFmt}`;
+      } else if (session.status === 'retrying' && session.retries > 0) {
+        cardStatus.innerHTML = `<span style="color:var(--yellow)">⚠️ Retrying (${session.retries}/10)</span>`;
       } else {
-        cardStatus.textContent = text;
+        cardStatus.textContent = statusText;
       }
     }
 
-    const pctLabel = document.getElementById(`lbl_pct_${session.id}`);
     if (pctLabel) {
-      pctLabel.textContent = session.status === 'uploading' ? session.progress + '%' : '';
+      pctLabel.textContent = (session.status === 'uploading' || session.status === 'processing') ? session.progress + '%' : '';
     }
 
-    const fill = document.getElementById(`fill_${session.id}`);
     if (fill) {
       fill.className = `progress-mini-fill ${fillState}`;
       fill.style.width = (session.status === 'uploading' ? session.progress : 100) + '%';
@@ -1282,9 +1542,12 @@ require_once __DIR__ . '/../includes/header.php';
   // Mark session upload as failed
   function setUploadFailed(session, reason) {
     session.status = 'failed';
+    session.activeLoopRunning = false;
+    UploadDB.save(session);
     updateCardProgress(session, `❌ Failed: ${reason}`, 'failed');
     updateSelectedEditorState(session);
     showToast(`❌ <strong>"${escapeHtml(session.title)}"</strong> upload failed.`, 'danger');
+    processQueue();
   }
 
   // Update selected details form header states
@@ -1468,6 +1731,95 @@ require_once __DIR__ . '/../includes/header.php';
     } catch (e) {}
   }
 
+  // Queue Restoration initialization from IndexedDB
+  async function initQueue() {
+    try {
+      const stored = await UploadDB.getAll();
+      if (stored && stored.length > 0) {
+        document.getElementById('welcome-dropzone').style.display = 'none';
+        document.getElementById('top-dropzone').style.display = 'block';
+        document.getElementById('studio-dashboard').style.display = 'block';
+
+        for (const item of stored) {
+          const session = {
+            id: item.id,
+            isEmbed: item.isEmbed,
+            embedUrl: item.embedUrl,
+            file: item.file,
+            title: item.title,
+            description: item.description,
+            tags: item.tags,
+            visibility: item.visibility,
+            categoryIds: item.categoryIds,
+            playlistIds: item.playlistIds,
+            progress: item.progress || 0,
+            speed: item.speed || 0,
+            eta: item.eta || null,
+            status: item.status,
+            videoId: item.videoId,
+            token: item.token,
+            uploadedBytes: item.uploadedBytes || 0,
+            videoUrl: item.videoUrl || null,
+            isReel: item.isReel || 0,
+            thumbnails: item.thumbnails || [],
+            selectedThumbDataUrl: item.selectedThumbDataUrl || null,
+            retries: item.retries || 0,
+            createdAt: item.createdAt || Date.now(),
+            abortController: new AbortController(),
+            activeLoopRunning: false
+          };
+
+          if (!session.isEmbed && session.file) {
+            session.localBlobUrl = URL.createObjectURL(session.file);
+          }
+
+          if (session.status === 'uploading' || session.status === 'retrying') {
+            session.status = 'queued';
+          }
+
+          uploads[session.id] = session;
+          renderQueueCard(session);
+          
+          if (session.selectedThumbDataUrl) {
+            const miniThumb = document.getElementById(`thumb_${session.id}`);
+            if (miniThumb) {
+              miniThumb.innerHTML = `<img src="${session.selectedThumbDataUrl}" style="width:100%;height:100%;object-fit:contain;background:#000">`;
+            }
+          }
+        }
+        updateQueueCount();
+
+        const list = Object.keys(uploads);
+        if (list.length > 0) {
+          selectUpload(list[0]);
+        }
+
+        refreshQueueUI();
+        processQueue();
+      }
+    } catch (err) {
+      console.error('Failed to initialize queue:', err);
+    }
+  }
+
+  // Handle connection events
+  window.addEventListener('online', () => {
+    Object.values(uploads).forEach(session => {
+      if (session.status === 'retrying' || session.status === 'failed') {
+        session.status = 'queued';
+        session.retries = 0;
+        updateCardProgress(session, 'Reconnected. Resuming...', 'uploading');
+      }
+    });
+    processQueue();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      processQueue();
+    }
+  });
+
   // Utilities
   function getYoutubeId(url) {
     if (!url) return null;
@@ -1498,6 +1850,9 @@ require_once __DIR__ . '/../includes/header.php';
   function escapeHtml(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
+
+  // Run queue initialization
+  initQueue();
 
 })();
 </script>
