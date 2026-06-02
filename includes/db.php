@@ -1,4 +1,10 @@
 <?php
+// Enable GZIP compression at PHP level for maximum performance on Hostinger
+if (!headers_sent() && !ini_get('zlib.output_compression') && ob_get_level() == 0) {
+    ini_set('zlib.output_compression', 'On');
+    ini_set('zlib.output_compression_level', '6');
+}
+
 // ============================================================
 // FreeHub.Live — Database Connection
 // ============================================================
