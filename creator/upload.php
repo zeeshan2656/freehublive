@@ -361,6 +361,110 @@ require_once __DIR__ . '/../includes/header.php';
 
 /* Layout switches */
 #details-view, #success-view { display: none; }
+
+/* Segmented Tab Selector styling */
+.upload-tab-header {
+  display: flex;
+  background: var(--bg3);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  gap: 4px;
+}
+.upload-tab-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text2);
+  background: transparent;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+}
+.upload-tab-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.02);
+}
+.upload-tab-btn.active {
+  background: var(--bg2);
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive design */
+@media (max-width: 900px) {
+  .wizard-layout-cols {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .wizard-preview-panel {
+    position: static;
+  }
+  .wizard-main-panel {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .upload-wizard {
+    padding: 8px 0px 32px;
+  }
+  .upload-tab-header {
+    flex-direction: column;
+    background: transparent;
+    border: none;
+    padding: 0;
+    gap: 8px;
+  }
+  .upload-tab-btn {
+    width: 100%;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .upload-tab-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .upload-dropzone {
+    padding: 48px 16px;
+  }
+  .upload-title {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .step-progress-bar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+  .step-connector {
+    display: none;
+  }
+  .wizard-step {
+    width: 100%;
+  }
+  .thumb-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .success-screen-card {
+    padding: 24px 16px;
+    margin: 20px auto;
+  }
+  .success-title {
+    font-size: 1.3rem;
+  }
+}
 </style>
 
 <div class="upload-wizard">
