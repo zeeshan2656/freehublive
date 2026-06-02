@@ -1,6 +1,6 @@
 <?php
 // ============================================================
-// FreeHub.Live — Modern Background Video Upload System (SPA)
+// FreeHub.Live — Parallel Background Video Upload System (SPA Studio)
 // ============================================================
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -11,210 +11,388 @@ $site_theme = setting('active_theme', 'dark-minimal');
 $primary    = setting('primary_color', '#6366f1');
 
 $uid     = auth_user()['id'];
-$error   = '';
-$success = '';
-
 $categories = db_fetchAll("SELECT * FROM categories WHERE is_active=1 ORDER BY sort_order");
 $user_playlists = db_fetchAll("SELECT id, title FROM playlists WHERE user_id = ? ORDER BY title ASC", [$uid]);
-$meta_title = 'Upload Video';
+$meta_title = 'Upload Studio';
 require_once __DIR__ . '/../includes/header.php';
 ?>
-<script>document.body.classList.add('upload-single-screen');</script>
+
+<div class="container upload-studio-container" style="max-width:1300px; margin:0 auto; padding: 24px 16px 80px;">
+  
+  <!-- Page Header -->
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:16px;">
+    <div>
+      <h1 style="font-size:1.8rem; font-weight:800; background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin:0;">Upload Studio</h1>
+      <p style="color:var(--text2); font-size:0.9rem; margin-top:4px;">Upload and publish multiple videos simultaneously in the background.</p>
+    </div>
+    
+    <!-- Small Top Dropzone (always visible once uploads start) -->
+    <div id="top-dropzone" style="display:none;">
+      <div class="top-upload-bar" onclick="document.getElementById('video-file-input').click()">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="color:var(--accent)"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+        <span>Upload More Videos</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WELCOME VIEW: Large Init Dropzone ── -->
+  <div id="welcome-dropzone" class="fade-in">
+    <!-- Tab selector -->
+    <div class="upload-tab-header" style="margin-bottom:24px; display:flex; gap:12px;">
+      <button type="button" class="upload-tab-btn active" id="tab-file-btn" onclick="switchSourceType('file')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload Video Files
+      </button>
+      <button type="button" class="upload-tab-btn" id="tab-embed-btn" onclick="switchSourceType('embed')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Import Links (YouTube / MP4)
+      </button>
+    </div>
+
+    <!-- Dropzone Block -->
+    <div id="file-drop-container">
+      <div class="upload-dropzone" id="drop-zone" onclick="document.getElementById('video-file-input').click()">
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" style="width:64px; height:64px; color:var(--text3); margin-bottom:20px;"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+        <h2 style="font-size:1.4rem; font-weight:700; margin-bottom:8px;">Drag and drop video files to upload</h2>
+        <p style="color:var(--text2); font-size:0.9rem; margin-bottom:20px;">Upload multiple files in parallel. Max chunk size 5MB. Resumable.</p>
+        <button class="btn btn-primary" style="font-weight:700; padding:10px 24px;">Select Files</button>
+      </div>
+    </div>
+
+    <!-- Embed input block -->
+    <div id="embed-url-container" style="display:none">
+      <div class="upload-dropzone" style="padding:50px 24px; cursor:default;">
+        <div style="max-width:580px; margin:0 auto">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--text3); margin-bottom:16px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:8px">Import Video from External Source</h2>
+          <p style="color:var(--text2); font-size:0.88rem; margin-bottom:24px">Paste a YouTube video URL or a direct link ending in .mp4 / .webm</p>
+          <div style="display:flex; gap:10px">
+            <input class="form-input" type="url" id="embed-link-field" placeholder="https://www.youtube.com/watch?v=..." style="border-radius:8px">
+            <button type="button" class="btn btn-primary" onclick="verifyAndLoadEmbed()" style="border-radius:8px; font-weight:700; white-space:nowrap">Import Video</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input file element supporting multiple selections -->
+  <input type="file" id="video-file-input" accept="video/mp4,video/webm,video/quicktime" multiple style="display:none">
+
+  <!-- ── DASHBOARD VIEW: Dual Column Studio ── -->
+  <div id="studio-dashboard" style="display:none;" class="fade-in">
+    <div class="upload-dashboard-grid">
+      
+      <!-- Left Column: Upload List Queue -->
+      <div class="queue-panel">
+        <h3 style="font-size:1.05rem; font-weight:800; color:#fff; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+          <span>📦 Upload Queue</span>
+          <span id="queue-count-badge" class="badge badge-gray" style="font-size:0.75rem;">0</span>
+        </h3>
+        
+        <!-- List container -->
+        <div id="uploads-queue" style="display:flex; flex-direction:column; gap:12px; max-height:680px; overflow-y:auto; padding-right:4px;">
+          <!-- Upload item templates injected here -->
+        </div>
+      </div>
+      
+      <!-- Right Column: Metadata Form Details Editor -->
+      <div class="editor-panel">
+        <!-- Placeholder when no upload is selected -->
+        <div id="editor-placeholder" style="text-align:center; padding:120px 24px; color:var(--text2); border: 1px dashed var(--border); border-radius:16px; background:var(--bg2);">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 16px; opacity:.4"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+          <h4 style="font-size:1.05rem; color:#fff; margin-bottom:6px;">Select a Video to Edit Details</h4>
+          <p style="font-size:0.85rem;">Click any uploading or completed video on the left queue list to configure its title, description, and categories.</p>
+        </div>
+
+        <!-- The Details Editor Form (hidden when nothing selected) -->
+        <div id="details-editor-form" style="display:none;" class="fade-in">
+          <form id="metadata-editor-form" onsubmit="saveActiveMetadata(event)">
+            <div class="studio-form-layout">
+              
+              <!-- Form inputs -->
+              <div class="studio-form-fields card" style="padding:24px; background:var(--bg2); border:1px solid var(--border); border-radius:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+                  <h3 style="font-size:1.1rem; font-weight:800; color:#fff; margin:0;" id="editor-selected-title">Edit Video Metadata</h3>
+                  <span id="editor-selected-status" class="badge" style="font-size:0.7rem; font-weight:700;">Uploading</span>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Title *</label>
+                  <input class="form-input" type="text" id="details-title" name="title" required placeholder="Add a descriptive title" style="border-radius:8px">
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Description</label>
+                  <textarea class="form-input" id="details-desc" name="description" rows="4" placeholder="Tell viewers what your video is about…" style="resize:vertical; border-radius:8px"></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Tags <span class="text-muted">(comma separated)</span></label>
+                  <input class="form-input" type="text" id="details-tags" name="tags" placeholder="gaming, music, vlog" style="border-radius:8px">
+                </div>
+
+                <!-- Thumbnail Selection Grid -->
+                <div class="thumbnail-box" style="background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px;">
+                  <div style="font-weight:700; font-size:0.92rem; margin-bottom:4px; color:#fff;">Thumbnail Selector</div>
+                  <div style="font-size:0.8rem; color:var(--text2); margin-bottom:16px; line-height:1.4;">Select a frame from the video or upload a custom image.</div>
+                  
+                  <div class="thumb-grid" id="details-thumb-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:12px;">
+                    <!-- Custom upload trigger -->
+                    <div class="custom-thumb-trigger" onclick="document.getElementById('spa-custom-thumb').click()" style="aspect-ratio:16/9; background:var(--bg2); border:2.2px dashed var(--border); border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-size:0.7rem; color:var(--text2); font-weight:600; text-align:center; transition:all 0.2s;">
+                      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                      <span>Custom Image</span>
+                    </div>
+                    <input type="file" id="spa-custom-thumb" accept="image/jpeg,image/png,image/webp" style="display:none">
+                    
+                    <!-- Dynamically extracted frames render here -->
+                  </div>
+                </div>
+
+                <!-- Categories and Playlist lists -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
+                  <div class="form-group">
+                    <label class="form-label">Categories</label>
+                    <div style="display:flex; flex-direction:column; gap:8px; background:var(--bg3); padding:12px; border-radius:8px; border:1px solid var(--border); max-height:140px; overflow-y:auto" id="details-categories-box">
+                      <?php foreach ($categories as $c): ?>
+                      <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
+                        <input type="checkbox" name="category_ids[]" value="<?= $c['id'] ?>" class="category-checkbox">
+                        <span><?= e($c['name']) ?></span>
+                      </label>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Playlists</label>
+                    <div style="display:flex; flex-direction:column; gap:8px; background:var(--bg3); padding:12px; border-radius:8px; border:1px solid var(--border); max-height:140px; overflow-y:auto" id="details-playlists-box">
+                      <?php if (!empty($user_playlists)): ?>
+                        <?php foreach ($user_playlists as $pl): ?>
+                        <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
+                          <input type="checkbox" name="playlist_ids[]" value="<?= $pl['id'] ?>" class="playlist-checkbox">
+                          <span><?= e($pl['title']) ?></span>
+                        </label>
+                        <?php endforeach; ?>
+                      <?php else: ?>
+                        <span class="text-muted text-xs" style="padding:4px">No playlists created.</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Visibility</label>
+                  <select class="form-input form-select" id="details-visibility" name="visibility" style="border-radius: 8px">
+                    <option value="public" selected>Public (Instantly published)</option>
+                    <option value="unlisted">Unlisted (Accessible via link)</option>
+                    <option value="private">Private (Only visible to you)</option>
+                  </select>
+                </div>
+
+                <div style="display:flex; gap:12px; margin-top:28px;">
+                  <button type="submit" class="btn btn-primary" id="save-metadata-btn" style="flex:1; justify-content:center; padding:12px; font-weight:800; border-radius:8px;">
+                    💾 Save Video Details
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Sticky Preview Panel -->
+              <div class="studio-preview-sticky">
+                <div class="preview-card" style="background:var(--bg2); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.18);">
+                  <div class="preview-aspect-ratio" style="position:relative; aspect-ratio:16/9; background:#000; display:flex; align-items:center; justify-content:center; color:var(--text3);">
+                    <video id="spa-player" style="width:100%; height:100%; object-fit:contain" controls></video>
+                    <iframe id="spa-iframe-player" style="display:none; width:100%; height:100%; border:none" allowfullscreen></iframe>
+                  </div>
+                  <div class="preview-details" style="padding:16px;">
+                    <div class="preview-title" id="details-preview-title" style="font-size:0.95rem; font-weight:700; color:#fff; word-break:break-word;">Video Title Preview</div>
+                    <div style="font-size:0.8rem; color:var(--text2); display:flex; align-items:center; gap:8px;">
+                      <span><?= e(auth_user()['channel_name'] ?? auth_user()['username']) ?></span>
+                      <span>·</span>
+                      <span id="details-preview-duration">0:00</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </form>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Hidden Canvas for client-side frame extraction -->
+<canvas id="offscreen-canvas" style="display:none"></canvas>
+
+<!-- Toast notifications layout container -->
+<div id="upload-toasts-container"></div>
 
 <style>
-/* ── YouTube Style Background Upload Redesign ── */
-.upload-wizard {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 16px 8px 48px;
-}
-
-/* Steps progress indicator */
-.step-progress-bar {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 24px;
+/* ── Redesigned Upload Studio Styling ── */
+.top-upload-bar {
   background: var(--bg2);
-  padding: 16px 24px;
-  border-radius: 12px;
+  border: 1px dashed var(--accent);
+  padding: 8px 16px;
+  border-radius: 99px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  transition: all 0.2s;
+}
+.top-upload-bar:hover {
+  background: rgba(99,102,241,0.06);
+  transform: translateY(-1px);
+}
+.upload-tab-header {
+  background: var(--bg2);
   border: 1px solid var(--border);
+  padding: 6px;
+  border-radius: 12px;
+  display: inline-flex;
 }
-.wizard-step {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
-.wizard-step:last-child { flex: none; }
-.step-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--bg3);
-  border: 2px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.upload-tab-btn {
+  background: transparent;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
   font-size: 0.85rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
 }
-.wizard-step.active .step-icon {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 14px rgba(99, 102, 241, 0.45);
-}
-.wizard-step.done .step-icon {
-  background: var(--green);
-  border-color: var(--green);
+.upload-tab-btn.active {
+  background: var(--bg3);
   color: #fff;
 }
-.step-title { font-size: 0.85rem; font-weight: 700; color: var(--text2); }
-.wizard-step.active .step-title { color: var(--text); }
-.step-connector { flex: 1; height: 2px; background: var(--border); margin: 0 16px; }
-.wizard-step.done .step-connector { background: var(--green); }
-
-/* Main Dropzone */
 .upload-dropzone {
-  border: 2.5px dashed var(--border);
+  background: var(--bg2);
+  border: 2px dashed var(--border);
   border-radius: 20px;
   padding: 80px 24px;
   text-align: center;
   cursor: pointer;
-  background: var(--bg2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-  margin-bottom: 24px;
+  transition: all 0.3s;
 }
-.upload-dropzone:hover, .upload-dropzone.drag-over {
+.upload-dropzone:hover {
   border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.04);
-  box-shadow: 0 12px 40px rgba(99, 102, 241, 0.08);
+  background: rgba(99,102,241,0.02);
 }
-.upload-dropzone svg {
-  width: 64px;
-  height: 64px;
-  color: var(--text3);
-  margin-bottom: 20px;
-  transition: transform 0.3s, color 0.3s;
-}
-.upload-dropzone:hover svg {
-  transform: translateY(-6px);
-  color: var(--accent);
-}
-.upload-title {
-  font-family: var(--font2);
-  font-size: 1.25rem;
-  font-weight: 800;
-  margin-bottom: 8px;
-}
-.upload-sub {
-  font-size: 0.85rem;
-  color: var(--text2);
-}
-
-/* Two Column Layout */
-.wizard-layout-cols {
+.upload-dashboard-grid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 24px;
+  grid-template-columns: 360px 1fr;
+  gap: 28px;
   align-items: start;
 }
-.wizard-main-panel {
+@media (max-width: 992px) {
+  .upload-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.queue-panel {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+  padding: 20px;
 }
-.wizard-preview-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  position: sticky;
-  top: 80px;
-}
-
-/* Details Section labels */
-.wizard-section-lbl {
-  font-family: var(--font2);
-  font-size: 0.85rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text2);
-  margin: 24px 0 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wizard-section-lbl::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
-/* Preview Card */
-.preview-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.18);
-}
-.preview-aspect-ratio {
-  position: relative;
-  aspect-ratio: 16/9;
-  background: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text3);
-}
-.preview-details { padding: 16px; }
-.preview-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  line-height: 1.4;
-  margin-bottom: 6px;
-  word-break: break-word;
-  color: #fff;
-}
-.preview-meta {
-  font-size: 0.8rem;
-  color: var(--text2);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Thumbnails Grid */
-.thumbnail-box {
+.upload-item-card {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 24px;
+  padding: 14px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+  user-select: none;
 }
-.thumbnail-header {
-  font-weight: 700;
-  font-size: 0.92rem;
-  margin-bottom: 4px;
-  color: #fff;
+.upload-item-card:hover {
+  border-color: var(--text3);
 }
-.thumbnail-sub {
-  font-size: 0.8rem;
-  color: var(--text2);
-  margin-bottom: 16px;
-  line-height: 1.4;
+.upload-item-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+  background: rgba(99, 102, 241, 0.02);
 }
-.thumb-grid {
+.progress-mini-bar {
+  background: var(--border);
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.progress-mini-fill {
+  background: var(--accent);
+  height: 100%;
+  width: 0%;
+  transition: width 0.3s;
+}
+.progress-mini-fill.processing {
+  background: var(--yellow);
+}
+.progress-mini-fill.published {
+  background: var(--green);
+}
+.progress-mini-fill.failed {
+  background: var(--red);
+}
+.studio-form-layout {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1200px) {
+  .studio-form-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.studio-preview-sticky {
+  position: sticky;
+  top: 90px;
+}
+#upload-toasts-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
+  width: 100%;
+}
+.toast-card {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1.5px solid var(--border);
+  color: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: flex;
   gap: 12px;
+  align-items: start;
+  transform: translateY(20px);
+  opacity: 0;
+  animation: slideInToast 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transition: all 0.3s;
+}
+@keyframes slideInToast {
+  to { transform: translateY(0); opacity: 1; }
+}
+.custom-thumb-trigger:hover {
+  border-color: var(--accent) !important;
+  color: #fff !important;
+  transform: scale(1.02);
 }
 .thumb-option {
   position: relative;
@@ -224,15 +402,15 @@ require_once __DIR__ . '/../includes/header.php';
   border: 2px solid transparent;
   cursor: pointer;
   background: #000;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s;
 }
 .thumb-option:hover {
-  transform: scale(1.03);
+  transform: scale(1.02);
   border-color: var(--text3);
 }
 .thumb-option.selected {
   border-color: var(--accent);
-  box-shadow: 0 0 14px rgba(99, 102, 241, 0.45);
+  box-shadow: 0 0 12px rgba(99,102,241,0.3);
 }
 .thumb-option img {
   width: 100%;
@@ -241,774 +419,555 @@ require_once __DIR__ . '/../includes/header.php';
 }
 .thumb-option .check-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 18px;
-  height: 18px;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
   background: var(--accent);
   border-radius: 50%;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transform: scale(0.7);
-  transition: all 0.2s ease;
 }
 .thumb-option.selected .check-badge {
-  opacity: 1;
-  transform: scale(1);
-}
-.custom-thumb-trigger {
-  aspect-ratio: 16/9;
-  background: rgba(255,255,255,0.02);
-  border: 1.5px dashed var(--border);
-  border-radius: 8px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text2);
-  cursor: pointer;
-  transition: all 0.2s;
-  gap: 6px;
 }
-.custom-thumb-trigger:hover {
-  border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.05);
-  color: #fff;
-}
-.thumb-loading-placeholder {
-  aspect-ratio: 16/9;
-  background: rgba(0,0,0,0.3);
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  color: var(--text3);
-}
-
-/* Diagnostics Upload Progress Widget */
-.upload-diagnostics-card {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%);
-  border: 1.5px solid var(--accent);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.1);
-}
-.progress-bar-wrapper {
-  height: 8px;
-  background: var(--bg3);
-  border-radius: 6px;
-  overflow: hidden;
-  margin: 10px 0;
-}
-.progress-bar-fill {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--accent), #a855f7);
-  transition: width 0.3s ease;
-  border-radius: 6px;
-}
-.diagnostics-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.78rem;
-  color: var(--text2);
-  margin-top: 4px;
-}
-
-/* Success Card */
-.success-screen-card {
-  max-width: 620px;
-  margin: 40px auto;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 40px;
-  text-align: center;
-  box-shadow: 0 12px 50px rgba(0,0,0,0.22);
-}
-.success-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--green);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.2rem;
-  margin: 0 auto 24px;
-  border: 2px solid rgba(34, 197, 94, 0.2);
-}
-.success-title {
-  font-family: var(--font2);
-  font-size: 1.6rem;
-  font-weight: 900;
-  color: #fff;
-  margin-bottom: 8px;
-}
-.success-subtitle {
-  font-size: 0.95rem;
-  color: var(--text2);
-  line-height: 1.5;
-  margin-bottom: 24px;
-}
-
-/* Layout switches */
-#details-view, #success-view { display: none; }
-
-/* Segmented Tab Selector styling */
-.upload-tab-header {
-  display: flex;
-  background: var(--bg3);
-  padding: 4px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  gap: 4px;
-}
-.upload-tab-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--text2);
-  background: transparent;
-  transition: all 0.2s ease;
-  cursor: pointer;
+.cancel-upload-btn {
+  background: none;
   border: none;
+  color: var(--text3);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
 }
-.upload-tab-btn:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.02);
-}
-.upload-tab-btn.active {
-  background: var(--bg2);
-  color: var(--accent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-/* Responsive design */
-@media (max-width: 900px) {
-  .wizard-layout-cols {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-  .wizard-preview-panel {
-    position: static;
-  }
-  .wizard-main-panel {
-    padding: 16px;
-  }
-}
-
-@media (max-width: 768px) {
-  .upload-wizard {
-    padding: 8px 0px 32px;
-  }
-  .upload-tab-header {
-    flex-direction: column;
-    background: transparent;
-    border: none;
-    padding: 0;
-    gap: 8px;
-  }
-  .upload-tab-btn {
-    width: 100%;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-  }
-  .upload-tab-btn.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-  }
-  .upload-dropzone {
-    padding: 48px 16px;
-  }
-  .upload-title {
-    font-size: 1.1rem;
-  }
-}
-
-@media (max-width: 600px) {
-  .step-progress-bar {
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
-  }
-  .step-connector {
-    display: none;
-  }
-  .wizard-step {
-    width: 100%;
-  }
-  .thumb-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-  .success-screen-card {
-    padding: 24px 16px;
-    margin: 20px auto;
-  }
-  .success-title {
-    font-size: 1.3rem;
-  }
+.cancel-upload-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--red);
 }
 </style>
 
-<div class="upload-wizard">
-
-  <!-- Step progress indicator -->
-  <div class="step-progress-bar">
-    <div class="wizard-step active" id="step1-indicator">
-      <div class="step-icon">1</div>
-      <div class="step-title">Select &amp; Import</div>
-      <div class="step-connector"></div>
-    </div>
-    <div class="wizard-step" id="step2-indicator">
-      <div class="step-icon">2</div>
-      <div class="step-title">Details &amp; Metadata</div>
-      <div class="step-connector"></div>
-    </div>
-    <div class="wizard-step" id="step3-indicator">
-      <div class="step-icon">3</div>
-      <div class="step-title">Complete</div>
-    </div>
-  </div>
-
-  <!-- ── VIEW 1: Dropzone ── -->
-  <div id="dropzone-view" class="fade-in">
-    <!-- Tab selector -->
-    <div class="upload-tab-header" style="margin-bottom:24px">
-      <button type="button" class="upload-tab-btn active" id="tab-file-btn" onclick="switchSourceType('file')">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        Upload Video File
-      </button>
-      <button type="button" class="upload-tab-btn" id="tab-embed-btn" onclick="switchSourceType('embed')">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-        Embed Link (YouTube / Direct URL)
-      </button>
-      <?php if (setting('reels_enabled', '1') === '1'): ?>
-      <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="upload-tab-btn" style="text-decoration:none">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-        Upload Reel
-      </a>
-      <?php endif; ?>
-    </div>
-
-    <!-- Dropzone File block -->
-    <div id="file-drop-container">
-      <div class="upload-dropzone" id="drop-zone" onclick="document.getElementById('video-file-input').click()">
-        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        <h2 class="upload-title">Drag and drop video files to upload</h2>
-        <p class="upload-sub">Your videos will be members-only private until published.</p>
-        <button class="btn btn-primary" style="margin-top:20px; font-weight:700">Select File</button>
-      </div>
-      <input type="file" id="video-file-input" accept="video/mp4,video/webm,video/quicktime" style="display:none">
-    </div>
-
-    <!-- Embed input block -->
-    <div id="embed-url-container" style="display:none">
-      <div class="wizard-main-panel" style="padding:40px; text-align:center">
-        <div style="max-width:580px; margin:0 auto">
-          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--text3); margin-bottom:16px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          <h2 class="upload-title" style="margin-bottom:8px">Import Video from External Source</h2>
-          <p class="upload-sub" style="margin-bottom:24px">Paste a YouTube video URL or a direct link ending in .mp4 / .webm</p>
-          <div style="display:flex; gap:10px">
-            <input class="form-input" type="url" id="embed-link-field" placeholder="https://www.youtube.com/watch?v=..." style="border-radius:8px">
-            <button type="button" class="btn btn-primary" onclick="verifyAndLoadEmbed()" style="border-radius:8px; font-weight:700">Verify &amp; Continue</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── VIEW 2: SPA Details Wizard ── -->
-  <div id="details-view" class="fade-in">
-    <form id="spa-upload-form" onsubmit="submitDetailsForm(event)">
-      <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
-      
-      <div class="wizard-layout-cols">
-        
-        <!-- Left details panel -->
-        <div class="wizard-main-panel">
-          <div class="wizard-section-lbl" style="margin-top:0">Video Details</div>
-          
-          <div class="form-group">
-            <label class="form-label">Title *</label>
-            <input class="form-input" type="text" id="details-title" name="title" required placeholder="Catchy video title" style="border-radius:8px">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Description</label>
-            <textarea class="form-input" id="details-desc" name="description" rows="4" placeholder="Tell viewers what your video is about…" style="resize:vertical; border-radius:8px"></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Tags <span class="text-muted">(comma separated)</span></label>
-            <input class="form-input" type="text" id="details-tags" name="tags" placeholder="gaming, music, vlog" style="border-radius:8px">
-          </div>
-
-          <!-- Thumbnail Selection Grid -->
-          <div class="thumbnail-box">
-            <div class="thumbnail-header">Thumbnail Selector</div>
-            <div class="thumbnail-sub">Select one of our instantly extracted frames or upload a custom image.</div>
-            
-            <div class="thumb-grid" id="details-thumb-grid">
-              <!-- Custom upload card -->
-              <div class="custom-thumb-trigger" onclick="document.getElementById('spa-custom-thumb').click()">
-                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                <span>Upload Custom</span>
-              </div>
-              <input type="file" id="spa-custom-thumb" accept="image/jpeg,image/png,image/webp" style="display:none">
-              
-              <!-- Frame placeholders -->
-              <?php for($i=0; $i<7; $i++): ?>
-              <div class="thumb-loading-placeholder" id="placeholder-<?= $i ?>">
-                <span>Frame..</span>
-              </div>
-              <?php endfor; ?>
-            </div>
-          </div>
-
-          <!-- Metas row -->
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px">
-            <div class="form-group">
-              <label class="form-label">Categories (Select one or more)</label>
-              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
-                <?php foreach ($categories as $c): ?>
-                <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
-                  <input type="checkbox" name="category_ids[]" value="<?= $c['id'] ?>">
-                  <span><?= e($c['name']) ?></span>
-                </label>
-                <?php endforeach; ?>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Playlists</label>
-              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; background:var(--bg3); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:120px; overflow-y:auto">
-                <?php if (!empty($user_playlists)): ?>
-                  <?php foreach ($user_playlists as $pl): ?>
-                  <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
-                    <input type="checkbox" name="playlist_ids[]" value="<?= $pl['id'] ?>">
-                    <span><?= e($pl['title']) ?></span>
-                  </label>
-                  <?php endforeach; ?>
-                <?php else: ?>
-                  <span class="text-muted text-xs" style="padding:4px">No playlists available.</span>
-                <?php endif; ?>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Visibility</label>
-              <select class="form-input form-select" id="details-visibility" name="visibility" style="border-radius: 8px">
-                <option value="public" selected>Public</option>
-                <option value="unlisted">Unlisted</option>
-                <option value="private">Private</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right sticky preview & diagnostics panel -->
-        <div class="wizard-preview-panel">
-          <!-- Video Card -->
-          <div class="preview-card">
-            <div class="preview-aspect-ratio" id="details-video-preview">
-              <video id="spa-player" style="width:100%; height:100%; object-fit:cover" controls></video>
-              <iframe id="spa-iframe-player" style="display:none; width:100%; height:100%; border:none" allowfullscreen></iframe>
-            </div>
-            <div class="preview-details">
-              <div class="preview-title" id="details-preview-title">Video Title Preview</div>
-              <div class="preview-meta">
-                <span><?= e(auth_user()['channel_name'] ?? auth_user()['username']) ?></span>
-                <span>·</span>
-                <span id="details-preview-duration">0:00</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Diagnostics Upload Progress widget -->
-          <div class="upload-diagnostics-card" id="spa-diagnostics-widget">
-            <div style="display:flex; justify-content:space-between; align-items:center">
-              <div style="font-size:0.88rem; font-weight:800; color:var(--accent); display:flex; align-items:center; gap:8px" id="spa-status-text">
-                <span style="animation: spin 1.5s linear infinite; display:inline-block" id="spa-status-spinner">🔄</span>
-                Initializing upload...
-              </div>
-              <div style="font-size:0.85rem; font-weight:800; color:#fff" id="spa-percentage-text">0%</div>
-            </div>
-            
-            <div class="progress-bar-wrapper">
-              <div class="progress-bar-fill" id="spa-progress-fill"></div>
-            </div>
-            
-            <div class="diagnostics-meta">
-              <div>Speed: <span id="spa-speed-text">—</span></div>
-              <div>ETA: <span id="spa-eta-text">—</span></div>
-            </div>
-
-            <!-- Retry button (hidden by default) -->
-            <button type="button" class="btn btn-outline btn-sm w-full" id="spa-retry-btn" style="margin-top:12px; display:none; justify-content:center; gap:6px; color:var(--yellow); border-color:rgba(245,158,11,0.3)">
-              🔁 Resume Interrupted Upload
-            </button>
-          </div>
-
-          <button type="submit" class="btn btn-primary w-full" id="spa-submit-btn" style="justify-content:center; padding:14px; border-radius:12px; font-weight:800; box-shadow:0 4px 14px rgba(99,102,241,0.25)">
-            🚀 Publish &amp; Finish
-          </button>
-          <div style="text-align:center; font-size:0.75rem; color:var(--text3); font-weight:500">
-            Upload continues in background — details will update instantly
-          </div>
-        </div>
-
-      </div>
-    </form>
-  </div>
-
-  <!-- ── VIEW 3: Success Completion Page ── -->
-  <div id="success-view" class="fade-in">
-    <div class="success-screen-card">
-      <div class="success-icon">&#10003;</div>
-      <h2 class="success-title">Video Published Successfully!</h2>
-      <p class="success-subtitle" id="success-subtitle-text">
-        Your video metadata and custom thumbnail have been securely saved. The background uploader is finalizing details.
-      </p>
-
-      <div class="preview-card" style="max-width:320px; margin:0 auto 30px">
-        <div class="preview-aspect-ratio">
-          <img id="success-thumb-preview" src="" style="width:100%; height:100%; object-fit:cover">
-        </div>
-        <div class="preview-details" style="text-align:left">
-          <div class="preview-title" id="success-video-title" style="font-size:0.88rem; margin:0">Video Title</div>
-        </div>
-      </div>
-
-      <!-- Keep uploader progress card in the success screen if it hasn't finalized! -->
-      <div class="upload-diagnostics-card" id="success-diagnostics-card" style="text-align:left; margin-bottom:30px">
-        <div style="display:flex; justify-content:space-between; align-items:center">
-          <div style="font-size:0.82rem; font-weight:800; color:var(--accent)" id="success-status-lbl">Background Finalizing...</div>
-          <div style="font-size:0.82rem; font-weight:800; color:#fff" id="success-percent-lbl">100%</div>
-        </div>
-        <div class="progress-bar-wrapper">
-          <div class="progress-bar-fill" id="success-progress-fill" style="width:100%"></div>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap">
-        <a href="<?= BASE_URL ?>/creator/videos.php" class="btn btn-primary" style="font-weight:700; border-radius:8px">
-          📂 Go to Videos
-        </a>
-        <a href="<?= BASE_URL ?>/channel.php?id=<?= $uid ?>" target="_blank" class="btn btn-outline" style="font-weight:600; border-radius:8px">
-          📺 View Channel
-        </a>
-        <button type="button" class="btn btn-outline" onclick="resetUploadWizard()" style="font-weight:600; border-radius:8px">
-          ➕ Upload Another
-        </button>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- Hidden Canvas for local frame extraction -->
-<canvas id="offscreen-canvas" style="display:none"></canvas>
-
-<script data-page-script="true">
+<script>
 (function() {
-  // Global Upload States
-  let activeFile = null;
-  let uploadVideoId = null;
-  let uploadToken = null;
-  let selectedThumbDataUrl = null;
-  let isUploading = false;
-  let uploadProgress = 0;
-  
+  const uploads = {}; // Map of uploadId -> uploadObject
+  let selectedUploadId = null;
+  let sourceType = 'file'; // file or embed
+
   // DOM Elements
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('video-file-input');
+  const uploadsQueue = document.getElementById('uploads-queue');
+  const detailsForm = document.getElementById('details-editor-form');
+  const editorPlaceholder = document.getElementById('editor-placeholder');
   
-  const step1Indicator = document.getElementById('step1-indicator');
-  const step2Indicator = document.getElementById('step2-indicator');
-  const step3Indicator = document.getElementById('step3-indicator');
-  
-  const dropzoneView = document.getElementById('dropzone-view');
-  const detailsView = document.getElementById('details-view');
-  const successView = document.getElementById('success-view');
-  
+  // Form elements
   const detailsTitle = document.getElementById('details-title');
-  const previewTitle = document.getElementById('details-preview-title');
-  const previewDuration = document.getElementById('details-preview-duration');
-  
+  const detailsDesc = document.getElementById('details-desc');
+  const detailsTags = document.getElementById('details-tags');
+  const detailsVisibility = document.getElementById('details-visibility');
+  const saveMetadataBtn = document.getElementById('save-metadata-btn');
   const spaPlayer = document.getElementById('spa-player');
   const spaIframePlayer = document.getElementById('spa-iframe-player');
-  const detailsThumbGrid = document.getElementById('details-thumb-grid');
+  const detailsPreviewTitle = document.getElementById('details-preview-title');
+  const detailsPreviewDuration = document.getElementById('details-preview-duration');
   
-  const statusText = document.getElementById('spa-status-text');
-  const statusSpinner = document.getElementById('spa-status-spinner');
-  const percentageText = document.getElementById('spa-percentage-text');
-  const progressFill = document.getElementById('spa-progress-fill');
-  const speedText = document.getElementById('spa-speed-text');
-  const etaText = document.getElementById('spa-eta-text');
-  const retryBtn = document.getElementById('spa-retry-btn');
-  const submitBtn = document.getElementById('spa-submit-btn');
-
-  // Prevent Navigation Warning
-  window.addEventListener('beforeunload', function(e) {
-    if (isUploading) {
-      e.preventDefault();
-      e.returnValue = 'Your video upload is currently in progress. Leaving this page will cancel the upload. Are you sure you want to exit?';
-      return e.returnValue;
-    }
-  });
-
-  // real-time preview title sync
-  detailsTitle.addEventListener('input', () => {
-    previewTitle.textContent = detailsTitle.value.trim() || 'Video Title Preview';
-  });
+  // Custom thumb file picker
+  const customThumbInput = document.getElementById('spa-custom-thumb');
 
   // Drag & drop handlers
-  if (dropZone && fileInput) {
-    ['dragover','dragenter'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); }));
-    ['dragleave','drop'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('drag-over'); }));
-    dropZone.addEventListener('drop', e => { if(e.dataTransfer.files[0]) handleSelectedFile(e.dataTransfer.files[0]); });
-    fileInput.addEventListener('change', () => { if(fileInput.files[0]) handleSelectedFile(fileInput.files[0]); });
-  }
-
-  // Switch tabs
-  window.switchSourceType = function(type) {
-    document.querySelectorAll('.upload-tab-btn').forEach(btn => btn.classList.remove('active'));
-    if (type === 'file') {
-      document.getElementById('tab-file-btn').classList.add('active');
-      document.getElementById('file-drop-container').style.display = 'block';
-      document.getElementById('embed-url-container').style.display = 'none';
-    } else {
-      document.getElementById('tab-embed-btn').classList.add('active');
-      document.getElementById('file-drop-container').style.display = 'none';
-      document.getElementById('embed-url-container').style.display = 'block';
-    }
-  };
-
-  // Main Handler once local file is selected
-  function handleSelectedFile(file) {
-    activeFile = file;
-    isUploading = true;
-    
-    // Auto-fill Title immediately
-    const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-    detailsTitle.value = nameWithoutExt.substring(0, 100);
-    previewTitle.textContent = detailsTitle.value;
-    
-    // Transition wizard panels instantly (SPA)
-    dropzoneView.style.display = 'none';
-    detailsView.style.display = 'block';
-    
-    step1Indicator.classList.add('done');
-    step1Indicator.classList.remove('active');
-    step2Indicator.classList.add('active');
-    
-    // Render local video playing in player
-    const localBlobUrl = URL.createObjectURL(file);
-    spaPlayer.src = localBlobUrl;
-    spaPlayer.style.display = 'block';
-    spaIframePlayer.style.display = 'none';
-    
-    // Listen for duration
-    spaPlayer.addEventListener('loadedmetadata', () => {
-      const d = Math.max(1, Math.floor(spaPlayer.duration || 0));
-      previewDuration.textContent = formatTime(d);
-      
-      // Auto-extract client-side thumbnails instantly!
-      generateClientThumbnails(file, d);
-    }, {once: true});
-
-    // Start background progressive chunk upload loop (non-blocking)
-    startProgressiveChunkUpload(file);
-  }
-
-  // Auto-generate client-side thumbnails instantly
-  async function generateClientThumbnails(file, duration) {
-    const canvas = document.getElementById('offscreen-canvas');
-    canvas.width = 640;
-    canvas.height = 360;
-    const ctx = canvas.getContext('2d');
-    
-    const count = 7;
-    const step = duration / (count + 1);
-    const times = Array.from({length: count}, (_, i) => step * (i + 1));
-    
-    // Clear frames container and show dynamic frames loading
-    const grid = document.getElementById('details-thumb-grid');
-    // keep custom upload element
-    const customTrigger = grid.querySelector('.custom-thumb-trigger');
-    grid.innerHTML = '';
-    grid.appendChild(customTrigger);
-    
-    // Load a helper video element
-    const helperVideo = document.createElement('video');
-    helperVideo.preload = 'auto';
-    helperVideo.src = URL.createObjectURL(file);
-    helperVideo.muted = true;
-    helperVideo.playsInline = true;
-    
-    helperVideo.addEventListener('loadedmetadata', async () => {
-      for (let i = 0; i < count; i++) {
-        // create temporary placeholder item
-        const placeholder = document.createElement('div');
-        placeholder.className = 'thumb-loading-placeholder';
-        placeholder.textContent = 'Frame..';
-        grid.appendChild(placeholder);
-        
-        const time = times[i];
-        const dataUrl = await seekAndCapture(helperVideo, canvas, ctx, time);
-        
-        // replace placeholder with clickable thumbnail option
-        placeholder.className = 'thumb-option';
-        placeholder.textContent = '';
-        placeholder.innerHTML = `
-          <img src="${dataUrl}">
-          <div class="check-badge"><svg width="10" height="10" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-          <div style="position:absolute;bottom:3px;left:6px;font-size:0.6rem;color:#fff;text-shadow:0 1px 2px #000">${formatTime(time)}</div>
-        `;
-        
-        placeholder.addEventListener('click', () => {
-          grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
-          placeholder.classList.add('selected');
-          selectedThumbDataUrl = dataUrl;
-        });
-        
-        // Auto-select the first generated frame as default thumbnail!
-        if (i === 0) {
-          placeholder.click();
-        }
-      }
-      
-      // Clean up helper Blob
-      URL.revokeObjectURL(helperVideo.src);
-    }, {once: true});
-  }
-
-  function seekAndCapture(video, canvas, ctx, time) {
-    return new Promise(resolve => {
-      video.currentTime = time;
-      video.addEventListener('seeked', function onSeeked() {
-        video.removeEventListener('seeked', onSeeked);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      }, {once: true});
+  if (dropZone) {
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      handleSelectedFiles(files);
     });
   }
 
-  // Handle Custom Thumbnail Select File and Draw
-  const customThumbInput = document.getElementById('spa-custom-thumb');
-  customThumbInput.addEventListener('change', function() {
-    const file = this.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.src = e.target.result;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 1280;
-        canvas.height = 720;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, 1280, 720);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        
-        selectedThumbDataUrl = dataUrl;
-        
-        // Create custom thumbnail card and append to grid
-        const grid = document.getElementById('details-thumb-grid');
-        const customOpt = document.createElement('div');
-        customOpt.className = 'thumb-option selected';
-        customOpt.innerHTML = `
-          <img src="${dataUrl}">
-          <div class="check-badge"><svg width="10" height="10" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-          <div style="position:absolute;bottom:3px;left:6px;font-size:0.6rem;color:#fff;text-shadow:0 1px 2px #000">Uploaded</div>
-        `;
-        grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
-        customOpt.addEventListener('click', () => {
-          grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
-          customOpt.classList.add('selected');
-          selectedThumbDataUrl = dataUrl;
-        });
-        grid.appendChild(customOpt);
-      };
+  if (fileInput) {
+    fileInput.addEventListener('change', function() {
+      handleSelectedFiles(this.files);
+    });
+  }
+
+  // Switch between Drop File and Embed URL import
+  window.switchSourceType = function(type) {
+    sourceType = type;
+    document.getElementById('tab-file-btn').classList.toggle('active', type === 'file');
+    document.getElementById('tab-embed-btn').classList.toggle('active', type === 'embed');
+    document.getElementById('file-drop-container').style.display = type === 'file' ? 'block' : 'none';
+    document.getElementById('embed-url-container').style.display = type === 'embed' ? 'block' : 'none';
+  };
+
+  // Main file processing entrance
+  function handleSelectedFiles(files) {
+    if (files.length === 0) return;
+
+    // Show dashboard layouts, hide default dropzones
+    document.getElementById('welcome-dropzone').style.display = 'none';
+    document.getElementById('top-dropzone').style.display = 'block';
+    document.getElementById('studio-dashboard').style.display = 'block';
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // Basic check
+      if (!file.type.startsWith('video/') && !file.name.match(/\.(mp4|webm|mov|avi|mkv)$/i)) {
+        showToast(`File "${file.name}" is not a supported video.`, 'danger');
+        continue;
+      }
+      createUploadSession(file);
+    }
+    fileInput.value = ''; // clear input
+  }
+
+  // Import Embed logic
+  window.verifyAndLoadEmbed = async function() {
+    let urlVal = document.getElementById('embed-link-field').value.trim();
+    if (!urlVal) {
+      alert('Please enter a video URL.');
+      return;
+    }
+    
+    // Quick iframe extraction
+    if (urlVal.includes('<iframe')) {
+      const match = urlVal.match(/src=["']([^"']+)["']/i);
+      if (match && match[1]) {
+        urlVal = match[1];
+      }
+    }
+
+    // Hide welcome panel & switch to dashboard layout
+    document.getElementById('welcome-dropzone').style.display = 'none';
+    document.getElementById('top-dropzone').style.display = 'block';
+    document.getElementById('studio-dashboard').style.display = 'block';
+    document.getElementById('embed-link-field').value = '';
+
+    createEmbedSession(urlVal);
+  };
+
+  // Create an embed upload item session
+  function createEmbedSession(url) {
+    const uploadId = 'up_' + Math.random().toString(36).substr(2, 9);
+    const ytId = getYoutubeId(url);
+    const defaultTitle = ytId ? 'YouTube Import #' + ytId : 'External Import #' + Math.floor(Math.random() * 10000);
+
+    const session = {
+      id: uploadId,
+      isEmbed: true,
+      embedUrl: url,
+      file: { name: defaultTitle, size: 0 },
+      title: defaultTitle,
+      description: 'Imported external video link.',
+      tags: 'import, embed',
+      visibility: 'public',
+      categoryIds: [],
+      playlistIds: [],
+      progress: 0,
+      speed: 0,
+      eta: 0,
+      status: 'uploading',
+      videoId: null,
+      token: null,
+      thumbnails: [],
+      selectedThumbDataUrl: null,
+      localBlobUrl: null
     };
-    reader.readAsDataURL(file);
-  });
 
-  // Start Background Resumable Progressive Chunk Upload (Fetch & AJAX)
-  async function startProgressiveChunkUpload(file) {
-    try {
-      submitBtn.disabled = true;
-      submitBtn.style.opacity = '0.65';
-      statusText.innerHTML = `<span style="animation: spin 1.5s linear infinite; display:inline-block">🔄</span> Initializing background upload...`;
+    uploads[uploadId] = session;
+    renderQueueCard(session);
+    updateQueueCount();
+
+    if (!selectedUploadId) {
+      selectUpload(uploadId);
+    }
+
+    startEmbedProcess(session);
+  }
+
+  // Start background upload session
+  function createUploadSession(file) {
+    const uploadId = 'up_' + Math.random().toString(36).substr(2, 9);
+    const cleanTitle = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+
+    const session = {
+      id: uploadId,
+      isEmbed: false,
+      file: file,
+      title: cleanTitle.substring(0, 100),
+      description: '',
+      tags: '',
+      visibility: 'public',
+      categoryIds: [],
+      playlistIds: [],
+      progress: 0,
+      speed: 0,
+      eta: 0,
+      status: 'uploading',
+      videoId: null,
+      token: null,
+      uploadedBytes: 0,
+      thumbnails: [],
+      selectedThumbDataUrl: null,
+      localBlobUrl: URL.createObjectURL(file),
+      abortController: new AbortController()
+    };
+
+    uploads[uploadId] = session;
+    renderQueueCard(session);
+    updateQueueCount();
+
+    if (!selectedUploadId) {
+      selectUpload(uploadId);
+    }
+
+    startFileProgressiveUpload(session);
+  }
+
+  // Render a nice queue list item card
+  function renderQueueCard(session) {
+    const card = document.createElement('div');
+    card.className = 'upload-item-card';
+    card.id = `card_${session.id}`;
+    card.addEventListener('click', () => selectUpload(session.id));
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:start; gap:8px;">
+        <div style="display:flex; gap:10px; align-items:center; min-width:0; flex:1;">
+          <div class="card-thumb-preview" id="thumb_${session.id}" style="width:50px; aspect-ratio:16/9; background:#000; border-radius:6px; overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--text3);">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+          </div>
+          <div style="min-width:0; flex:1;">
+            <div class="card-title-lbl" style="font-size:0.8rem; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;" id="lbl_title_${session.id}">${escapeHtml(session.title)}</div>
+            <div style="font-size:0.7rem; color:var(--text2); display:flex; gap:6px; align-items:center;" id="lbl_meta_${session.id}">
+              <span id="lbl_status_${session.id}">Initializing...</span>
+              <span id="lbl_pct_${session.id}">0%</span>
+            </div>
+          </div>
+        </div>
+        <button class="cancel-upload-btn" onclick="cancelUploadSession(event, '${session.id}')" title="Cancel/Remove Upload">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="progress-mini-bar">
+        <div class="progress-mini-fill" id="fill_${session.id}"></div>
+      </div>
+    `;
+
+    uploadsQueue.appendChild(card);
+  }
+
+  // Update badge number of queue
+  function updateQueueCount() {
+    const badge = document.getElementById('queue-count-badge');
+    if (badge) {
+      badge.textContent = Object.keys(uploads).length;
+    }
+  }
+
+  // Cancel an upload session (and abort active chunk request)
+  window.cancelUploadSession = async function(e, id) {
+    if (e) e.stopPropagation();
+    const session = uploads[id];
+    if (!session) return;
+
+    if (session.status === 'uploading' || session.status === 'processing') {
+      if (!confirm(`Cancel and abort upload for "${session.title}"?`)) return;
+    }
+
+    // Abort HTTP chunk uploads
+    if (session.abortController) {
+      session.abortController.abort();
+    }
+
+    // Clean local blob memory
+    if (session.localBlobUrl) {
+      URL.revokeObjectURL(session.localBlobUrl);
+    }
+
+    // Remove from server draft database if initialized
+    if (session.videoId) {
+      try {
+        const formData = new FormData();
+        formData.append('csrf', '<?= csrf_token() ?>');
+        formData.append('action', 'delete_video');
+        formData.append('video_id', session.videoId);
+        fetch('<?= BASE_URL ?>/channel.php?id=<?= $uid ?>', {
+          method: 'POST',
+          body: formData
+        });
+      } catch (err) {}
+    }
+
+    // Delete from memory and DOM
+    delete uploads[id];
+    const card = document.getElementById(`card_${id}`);
+    if (card) card.remove();
+    updateQueueCount();
+
+    // If it was selected, clear details panel
+    if (selectedUploadId === id) {
+      selectedUploadId = null;
+      detailsForm.style.display = 'none';
+      editorPlaceholder.style.display = 'block';
+    }
+
+    showToast(`Upload removed.`, 'yellow');
+  };
+
+  // Select an upload from the queue list to edit details
+  function selectUpload(id) {
+    const session = uploads[id];
+    if (!session) return;
+
+    selectedUploadId = id;
+
+    // Highlight selected card
+    document.querySelectorAll('.upload-item-card').forEach(c => c.classList.remove('selected'));
+    const cardEl = document.getElementById(`card_${id}`);
+    if (cardEl) cardEl.classList.add('selected');
+
+    // Display editor, hide placeholder
+    editorPlaceholder.style.display = 'none';
+    detailsForm.style.display = 'block';
+
+    // Update panel title and status
+    document.getElementById('editor-selected-title').textContent = `Metadata: ${session.title}`;
+    const statusBadge = document.getElementById('editor-selected-status');
+    statusBadge.textContent = session.status.toUpperCase();
+    statusBadge.className = 'badge badge-' + (session.status === 'published' ? 'green' : (session.status === 'failed' ? 'red' : 'yellow'));
+
+    // Populate input fields
+    detailsTitle.value = session.title;
+    detailsDesc.value = session.description;
+    detailsTags.value = session.tags;
+    detailsVisibility.value = session.visibility;
+
+    // Set preview player
+    if (session.isEmbed) {
+      spaPlayer.style.display = 'none';
+      const ytId = getYoutubeId(session.embedUrl);
+      if (ytId) {
+        spaIframePlayer.src = `https://www.youtube.com/embed/${ytId}`;
+        spaIframePlayer.style.display = 'block';
+      } else {
+        spaIframePlayer.style.display = 'none';
+        spaPlayer.src = session.embedUrl;
+        spaPlayer.style.display = 'block';
+      }
+      detailsPreviewDuration.textContent = 'Embed URL';
+    } else {
+      spaIframePlayer.style.display = 'none';
+      spaIframePlayer.src = '';
+      if (session.status === 'published') {
+        // play final uploaded video url
+        spaPlayer.src = session.videoUrl;
+      } else {
+        spaPlayer.src = session.localBlobUrl;
+      }
+      spaPlayer.style.display = 'block';
       
+      // read duration
+      if (spaPlayer.duration) {
+        detailsPreviewDuration.textContent = formatTime(spaPlayer.duration);
+      } else {
+        spaPlayer.onloadedmetadata = () => {
+          detailsPreviewDuration.textContent = formatTime(spaPlayer.duration);
+        };
+      }
+    }
+
+    detailsPreviewTitle.textContent = session.title;
+
+    // Bind listeners to title changes
+    detailsTitle.oninput = function() {
+      session.title = this.value;
+      detailsPreviewTitle.textContent = this.value;
+      const cardTitle = document.getElementById(`lbl_title_${session.id}`);
+      if (cardTitle) cardTitle.textContent = this.value;
+    };
+    
+    detailsDesc.oninput = function() { session.description = this.value; };
+    detailsTags.oninput = function() { session.tags = this.value; };
+    detailsVisibility.onchange = function() { session.visibility = this.value; };
+
+    // Setup Category & Playlists checkboxes
+    document.querySelectorAll('.category-checkbox').forEach(cb => {
+      cb.checked = session.categoryIds.includes(cb.value);
+      cb.onchange = function() {
+        if (this.checked) {
+          if (!session.categoryIds.includes(this.value)) session.categoryIds.push(this.value);
+        } else {
+          session.categoryIds = session.categoryIds.filter(v => v !== this.value);
+        }
+      };
+    });
+
+    document.querySelectorAll('.playlist-checkbox').forEach(cb => {
+      cb.checked = session.playlistIds.includes(cb.value);
+      cb.onchange = function() {
+        if (this.checked) {
+          if (!session.playlistIds.includes(this.value)) session.playlistIds.push(this.value);
+        } else {
+          session.playlistIds = session.playlistIds.filter(v => v !== this.value);
+        }
+      };
+    });
+
+    // Populate thumbnail selector grid
+    renderThumbnailsGrid(session);
+  }
+
+  // Render thumbnail options in selector grid
+  function renderThumbnailsGrid(session) {
+    const grid = document.getElementById('details-thumb-grid');
+    const customTrigger = grid.querySelector('.custom-thumb-trigger');
+    grid.innerHTML = '';
+    grid.appendChild(customTrigger);
+
+    // Render generated frames
+    session.thumbnails.forEach((thumbUrl, idx) => {
+      const isSelected = (session.selectedThumbDataUrl === thumbUrl);
+      const opt = document.createElement('div');
+      opt.className = 'thumb-option' + (isSelected ? ' selected' : '');
+      opt.innerHTML = `
+        <img src="${thumbUrl}">
+        <div class="check-badge"><svg width="10" height="10" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div style="position:absolute;bottom:3px;left:6px;font-size:0.65rem;color:#fff;text-shadow:0 1px 2px #000">Frame ${idx+1}</div>
+      `;
+      opt.addEventListener('click', () => {
+        grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
+        opt.classList.add('selected');
+        session.selectedThumbDataUrl = thumbUrl;
+        
+        // upload thumbnail instantly if video ID is active
+        saveCustomThumbnail(session.videoId, thumbUrl);
+      });
+      grid.appendChild(opt);
+    });
+
+    // If custom thumbnail is selected and it is not in the generated frames
+    if (session.selectedThumbDataUrl && !session.thumbnails.includes(session.selectedThumbDataUrl)) {
+      const opt = document.createElement('div');
+      opt.className = 'thumb-option selected';
+      opt.innerHTML = `
+        <img src="${session.selectedThumbDataUrl}">
+        <div class="check-badge"><svg width="10" height="10" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div style="position:absolute;bottom:3px;left:6px;font-size:0.65rem;color:#fff;text-shadow:0 1px 2px #000">Uploaded</div>
+      `;
+      opt.addEventListener('click', () => {
+        grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
+        opt.classList.add('selected');
+        session.selectedThumbDataUrl = session.selectedThumbDataUrl;
+      });
+      grid.appendChild(opt);
+    }
+  }
+
+  // Handle custom image thumbnail file picker
+  if (customThumbInput) {
+    customThumbInput.addEventListener('change', function() {
+      const file = this.files[0];
+      if (!file) return;
+
+      const session = uploads[selectedUploadId];
+      if (!session) return;
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.src = e.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1280;
+          canvas.height = 720;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, 1280, 720);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+          session.selectedThumbDataUrl = dataUrl;
+          renderThumbnailsGrid(session);
+
+          // Upload thumbnail instantly
+          saveCustomThumbnail(session.videoId, dataUrl);
+        };
+      };
+      reader.readAsDataURL(file);
+      this.value = ''; // clear input
+    });
+  }
+
+  // Upload thumbnail base64 data to server
+  async function saveCustomThumbnail(videoId, dataUrl) {
+    if (!videoId || !dataUrl) return;
+    try {
+      await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({video_id: videoId, data_url: dataUrl})
+      });
+    } catch (e) {}
+  }
+
+  // Start background upload loop for standard video files
+  async function startFileProgressiveUpload(session) {
+    const file = session.file;
+    try {
       const meta = {
-        title: detailsTitle.value || 'Untitled Upload',
-        description: document.getElementById('details-desc').value || '',
-        tags: document.getElementById('details-tags').value || '',
-        category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value),
-        visibility: document.getElementById('details-visibility').value || 'public'
+        title: session.title,
+        description: session.description,
+        tags: session.tags,
+        visibility: session.visibility,
+        category_ids: session.categoryIds
       };
 
-      // 1. Initialize Upload Placeholder Record
+      // 1. Init placeholder
       const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({meta})
+        body: JSON.stringify({meta}),
+        signal: session.abortController.signal
       });
       const initData = await initRes.json();
       if (!initData.success) {
-        statusText.innerHTML = `✗ Initialization failed.`;
-        isUploading = false;
+        setUploadFailed(session, 'Initialization failed.');
         return;
       }
 
-      uploadVideoId = initData.data.video_id;
-      uploadToken = initData.data.upload_token;
-      
-      // Enable Submit Button Immediately - User can complete metadata save and continue working!
-      submitBtn.disabled = false;
-      submitBtn.style.opacity = '1';
-      
-      // 2. Perform Resumable progressive Chunk Upload Loop
-      const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-      const totalSize = file.size;
+      session.videoId = initData.data.video_id;
+      session.token = initData.data.upload_token;
+
+      // Extract client-side thumbnails in the background
+      extractThumbnailsInBackground(session);
+
+      // Check resumability status
       let uploadedBytes = 0;
-      
-      // status check (resumability)
       try {
-        const checkRes = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&video_id=${uploadVideoId}&token=${uploadToken}`);
+        const checkRes = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&video_id=${session.videoId}&token=${session.token}`, {
+          signal: session.abortController.signal
+        });
         const checkData = await checkRes.json();
         if (checkData.success && checkData.data.uploaded) {
           uploadedBytes = checkData.data.uploaded;
         }
       } catch (e) {}
 
+      session.uploadedBytes = uploadedBytes;
+
+      // 2. Progressive chunked upload loop (5MB Chunks)
+      const CHUNK_SIZE = 5 * 1024 * 1024;
+      const totalSize = file.size;
+
       let lastTime = Date.now();
       let lastBytes = uploadedBytes;
 
-      statusText.innerHTML = `<span style="animation: spin 1.5s linear infinite; display:inline-block">📤</span> Uploading chunks...`;
-      
-      // Define resilient chunk loop
+      updateCardProgress(session, 'Uploading chunks...');
+
       for (let start = uploadedBytes; start < totalSize; start += CHUNK_SIZE) {
-        if (!isUploading) break; // cancelled
-        
         const end = Math.min(start + CHUNK_SIZE, totalSize);
         const chunkBlob = file.slice(start, end);
         const formData = new FormData();
@@ -1016,361 +975,390 @@ require_once __DIR__ . '/../includes/header.php';
 
         let attempt = 0;
         let success = false;
-        
+
         while (attempt < 5 && !success) {
           try {
-            const uploadRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${uploadVideoId}&token=${uploadToken}`, {
+            const uploadRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}`, {
               method: 'POST',
-              body: formData
+              body: formData,
+              signal: session.abortController.signal
             });
             const uploadData = await uploadRes.json();
             if (uploadData.success) {
               success = true;
-              uploadedBytes = uploadData.data.uploaded || end;
+              session.uploadedBytes = uploadData.data.uploaded || end;
             } else {
               attempt++;
               await new Promise(r => setTimeout(r, 1500));
             }
           } catch (e) {
+            if (e.name === 'AbortError') return; // Cancelled
             attempt++;
-            statusText.innerHTML = `⚠️ Connection flicker — retrying chunk (${attempt}/5)...`;
+            updateCardProgress(session, `Flicker - retrying (${attempt}/5)...`);
             await new Promise(r => setTimeout(r, 2000));
           }
         }
 
         if (!success) {
-          isUploading = false;
-          statusText.innerHTML = `❌ Upload failed.`;
-          retryBtn.style.display = 'flex';
-          retryBtn.onclick = () => {
-            retryBtn.style.display = 'none';
-            isUploading = true;
-            startProgressiveChunkUpload(file);
-          };
+          setUploadFailed(session, 'Chunk upload failed.');
           return;
         }
 
-        // Calculate Speeds & ETAs
+        // Speed and ETA calculations
         const now = Date.now();
         const delta = (now - lastTime) / 1000;
-        const deltaBytes = uploadedBytes - lastBytes;
+        const deltaBytes = session.uploadedBytes - lastBytes;
         const speed = delta > 0 ? Math.round(deltaBytes / delta) : 0;
         lastTime = now;
-        lastBytes = uploadedBytes;
+        lastBytes = session.uploadedBytes;
 
-        const pct = Math.floor((uploadedBytes / totalSize) * 100);
-        uploadProgress = pct;
+        const pct = Math.floor((session.uploadedBytes / totalSize) * 100);
+        session.progress = pct;
+        session.speed = speed;
         
-        // Update diagnostics text
-        percentageText.textContent = pct + '%';
-        progressFill.style.width = pct + '%';
-        
-        // Success screen diagnostic update
-        const successPercentLbl = document.getElementById('success-percent-lbl');
-        const successProgressFill = document.getElementById('success-progress-fill');
-        if (successPercentLbl) successPercentLbl.textContent = pct + '%';
-        if (successProgressFill) successProgressFill.style.width = pct + '%';
+        const remainSec = speed > 0 ? Math.max(0, Math.round((totalSize - session.uploadedBytes) / speed)) : null;
+        session.eta = remainSec;
 
-        speedText.textContent = speed > 0 ? formatBytes(speed) + '/s' : '—';
-        
-        const remainSeconds = speed > 0 ? Math.max(0, Math.round((totalSize - uploadedBytes) / speed)) : null;
-        etaText.textContent = remainSeconds !== null ? formatETA(remainSeconds) : '—';
+        updateCardProgress(session, 'Uploading...');
       }
 
-      if (uploadedBytes >= totalSize) {
-        statusText.innerHTML = `⏳ Finalizing upload...`;
-        
-        const successStatusLbl = document.getElementById('success-status-lbl');
-        if (successStatusLbl) successStatusLbl.textContent = 'Finalizing background file...';
+      // 3. Finalize upload
+      if (session.uploadedBytes >= totalSize) {
+        updateCardProgress(session, 'Finalizing file...', 'processing');
+        session.status = 'processing';
+        updateSelectedEditorState(session);
 
-        // Finalize chunk merger on the server
-        const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${uploadVideoId}&token=${uploadToken}&finalize=1&filename=${encodeURIComponent(file.name)}`, {
-          method: 'POST'
+        const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          signal: session.abortController.signal
         });
         const finalizeData = await finalizeRes.json();
-        
+
         if (finalizeData.success) {
-          isUploading = false;
-          statusText.innerHTML = `✅ Complete`;
-          statusSpinner.textContent = '✓';
-          percentageText.textContent = '100%';
-          progressFill.style.width = '100%';
-          
-          if (successStatusLbl) successStatusLbl.textContent = 'Upload Completed & Processing Finished!';
-          
+          session.status = 'published';
+          session.videoUrl = finalizeData.data.video_url;
+
           // Save duration
-          const d = Math.max(1, Math.floor(spaPlayer.duration || 0));
-          if (d > 0) {
-            await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_duration', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({video_id: uploadVideoId, duration: d})
-            });
+          await saveVideoDuration(session);
+
+          // If default thumbnail is selected, upload it
+          if (session.selectedThumbDataUrl) {
+            await saveCustomThumbnail(session.videoId, session.selectedThumbDataUrl);
           }
-          
-          // Hide progress card on success screen once complete
-          const successDiagCard = document.getElementById('success-diagnostics-card');
-          if (successDiagCard) successDiagCard.style.display = 'none';
+
+          updateCardProgress(session, 'Published', 'published');
+          updateSelectedEditorState(session);
+          showToast(`🟢 <strong>"${escapeHtml(session.title)}"</strong> published successfully!`);
         } else {
-          statusText.textContent = `✗ Finalization failed.`;
-          isUploading = false;
+          setUploadFailed(session, 'Finalization failed.');
         }
       }
 
-    } catch (e) {
-      console.error(e);
-      isUploading = false;
-      statusText.innerHTML = `❌ Server connection failed.`;
+    } catch (err) {
+      if (err.name === 'AbortError') return; // Cancelled
+      setUploadFailed(session, 'Connection error.');
     }
   }
 
-  // Verify and load External embeds (YouTube / direct links)
-  window.verifyAndLoadEmbed = async function() {
-    let urlVal = document.getElementById('embed-link-field').value.trim();
-    if (!urlVal) {
-      alert('Please enter a video URL.');
-      return;
-    }
-
-    if (urlVal.includes('<iframe')) {
-      const match = urlVal.match(/src=["']([^"']+)["']/i);
-      if (match && match[1]) {
-        urlVal = match[1];
-        document.getElementById('embed-link-field').value = urlVal;
-      }
-    }
-
-    const ytId = getYoutubeId(urlVal);
-    
-    // Set wizard elements
-    dropzoneView.style.display = 'none';
-    detailsView.style.display = 'block';
-    
-    step1Indicator.classList.add('done');
-    step1Indicator.classList.remove('active');
-    step2Indicator.classList.add('active');
-
-    // Display appropriate preview player
-    if (ytId) {
-      spaPlayer.style.display = 'none';
-      spaIframePlayer.src = `https://www.youtube.com/embed/${ytId}`;
-      spaIframePlayer.style.display = 'block';
-      previewDuration.textContent = 'YouTube Embed';
-      
-      // Auto-fetch YouTube title
-      fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`)
-        .then(r => r.json())
-        .then(data => {
-          if (data && data.title) {
-            detailsTitle.value = data.title;
-            previewTitle.textContent = data.title;
-          }
-        }).catch(()=>{});
-
-      // Load YouTube Thumbnails in selector grid
-      const grid = document.getElementById('details-thumb-grid');
-      const customTrigger = grid.querySelector('.custom-thumb-trigger');
-      grid.innerHTML = '';
-      grid.appendChild(customTrigger);
-
-      const ytThumbs = [
-        { label: 'Max Resolution', url: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg` },
-        { label: 'High Quality', url: `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` },
-        { label: 'Medium Quality', url: `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` }
-      ];
-
-      ytThumbs.forEach((t, i) => {
-        const option = document.createElement('div');
-        option.className = 'thumb-option';
-        option.innerHTML = `
-          <img src="${t.url}">
-          <div class="check-badge"><svg width="10" height="10" fill="#fff" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-          <div style="position:absolute;bottom:3px;left:6px;font-size:0.6rem;color:#fff;text-shadow:0 1px 2px #000">${t.label}</div>
-        `;
-        option.addEventListener('click', () => {
-          grid.querySelectorAll('.thumb-option').forEach(o => o.classList.remove('selected'));
-          option.classList.add('selected');
-          convertYtImageToBase64(t.url);
-        });
-        grid.appendChild(option);
-        
-        if (i === 0) option.click();
-      });
-
-    } else {
-      // Direct file link
-      spaPlayer.src = urlVal;
-      spaPlayer.style.display = 'block';
-      spaIframePlayer.style.display = 'none';
-      
-      spaPlayer.addEventListener('loadedmetadata', () => {
-        previewDuration.textContent = formatTime(Math.max(1, Math.floor(spaPlayer.duration || 0)));
-      }, {once: true});
-
-      previewDuration.textContent = 'Direct URL';
-    }
-
-    // Hide Diagnostics progress bar for embeds (since no file chunks are uploaded!)
-    document.getElementById('spa-diagnostics-widget').style.display = 'none';
-  };
-
-  // Convert external YouTube image to base64 via canvas to allow server saving
-  function convertYtImageToBase64(url) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = url;
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1280;
-      canvas.height = 720;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, 1280, 720);
-      selectedThumbDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    };
-  }
-
-  // Submit Details Form & Complete SPA Transition (Non-blocking)
-  window.submitDetailsForm = async function(e) {
-    e.preventDefault();
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Saving details...';
-
-    // If it's an embed URL, initialize upload session and placeholder first
-    let urlVal = document.getElementById('embed-link-field').value.trim();
-    if (urlVal && !uploadVideoId) {
+  // Start background upload loop for external embeds
+  async function startEmbedProcess(session) {
+    try {
       const meta = {
-        title: detailsTitle.value || 'Untitled Embed',
-        description: document.getElementById('details-desc').value || '',
-        tags: document.getElementById('details-tags').value || '',
-        category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value),
-        visibility: document.getElementById('details-visibility').value || 'public'
+        title: session.title,
+        description: session.description,
+        tags: session.tags,
+        visibility: session.visibility,
+        category_ids: session.categoryIds
       };
-      
+
+      // 1. Init placeholder
       const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({meta})
       });
       const initData = await initRes.json();
-      if (initData.success) {
-        uploadVideoId = initData.data.video_id;
-        uploadToken = initData.data.upload_token;
+      if (!initData.success) {
+        setUploadFailed(session, 'Import initialization failed.');
+        return;
+      }
+
+      session.videoId = initData.data.video_id;
+      session.token = initData.data.upload_token;
+
+      // Import thumbnails from YouTube if applicable
+      const ytId = getYoutubeId(session.embedUrl);
+      if (ytId) {
+        const ytMaxThumb = `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`;
+        session.thumbnails = [
+          ytMaxThumb,
+          `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`,
+          `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`
+        ];
+        session.selectedThumbDataUrl = ytMaxThumb;
         
-        // Update direct video URL on backend
-        await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${uploadVideoId}&token=${uploadToken}&finalize=1&filename=${encodeURIComponent(urlVal)}`, {
-          method: 'POST'
+        // Save thumb instantly
+        convertAndSaveYtThumbnail(session.videoId, ytMaxThumb);
+        
+        if (selectedUploadId === session.id) {
+          renderThumbnailsGrid(session);
+        }
+      }
+
+      updateCardProgress(session, 'Processing import...', 'processing');
+
+      // 2. Finalize direct embed URL on backend
+      const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(session.embedUrl)}`, {
+        method: 'POST'
+      });
+      const finalizeData = await finalizeRes.json();
+
+      if (finalizeData.success) {
+        session.status = 'published';
+        session.videoUrl = finalizeData.data.video_url;
+        updateCardProgress(session, 'Published', 'published');
+        updateSelectedEditorState(session);
+        showToast(`🟢 <strong>"${escapeHtml(session.title)}"</strong> imported successfully!`);
+      } else {
+        setUploadFailed(session, 'Import finalization failed.');
+      }
+
+    } catch (e) {
+      setUploadFailed(session, 'Import failed.');
+    }
+  }
+
+  // Convert YouTube thumbnail to Base64 and save it
+  function convertAndSaveYtThumbnail(videoId, url) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, 1280, 720);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      saveCustomThumbnail(videoId, dataUrl);
+    };
+    img.src = url;
+  }
+
+  // Extract client-side video frames in the background
+  async function extractThumbnailsInBackground(session) {
+    const helperVideo = document.createElement('video');
+    helperVideo.preload = 'auto';
+    helperVideo.src = session.localBlobUrl;
+    helperVideo.muted = true;
+    helperVideo.playsInline = true;
+
+    helperVideo.onloadedmetadata = async () => {
+      const duration = Math.max(1, Math.floor(helperVideo.duration || 0));
+      const count = 7;
+      const step = duration / (count + 1);
+      const times = Array.from({length: count}, (_, i) => step * (i + 1));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 360;
+      const ctx = canvas.getContext('2d');
+
+      for (let i = 0; i < count; i++) {
+        try {
+          const time = times[i];
+          const dataUrl = await seekAndCapture(helperVideo, canvas, ctx, time);
+          session.thumbnails.push(dataUrl);
+
+          // Update grid dynamically if current video is selected
+          if (selectedUploadId === session.id) {
+            renderThumbnailsGrid(session);
+          }
+
+          // Auto-select first frame as default
+          if (i === 0 && !session.selectedThumbDataUrl) {
+            session.selectedThumbDataUrl = dataUrl;
+            // update mini card preview immediately
+            const miniThumb = document.getElementById(`thumb_${session.id}`);
+            if (miniThumb) {
+              miniThumb.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover">`;
+            }
+            if (selectedUploadId === session.id) {
+              renderThumbnailsGrid(session);
+            }
+          }
+        } catch (e) {}
+      }
+      URL.revokeObjectURL(helperVideo.src);
+    };
+  }
+
+  // Save video duration to server
+  async function saveVideoDuration(session) {
+    let d = 0;
+    if (selectedUploadId === session.id && spaPlayer.duration) {
+      d = Math.max(1, Math.floor(spaPlayer.duration || 0));
+    }
+    if (d <= 0) {
+      // Create quick hidden probe element
+      const probe = document.createElement('video');
+      probe.src = session.localBlobUrl;
+      await new Promise(r => {
+        probe.onloadedmetadata = () => {
+          d = Math.max(1, Math.floor(probe.duration || 0));
+          r();
+        };
+        probe.onerror = () => r();
+        setTimeout(r, 3000); // safety timeout
+      });
+    }
+    if (d > 0) {
+      try {
+        await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_duration', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({video_id: session.videoId, duration: d})
         });
+      } catch (e) {}
+    }
+  }
+
+  // Update card progress bar and label text
+  function updateCardProgress(session, text, fillState = 'uploading') {
+    const cardStatus = document.getElementById(`lbl_status_${session.id}`);
+    if (cardStatus) {
+      if (session.status === 'uploading' && session.progress > 0) {
+        const speedFmt = session.speed > 0 ? formatBytes(session.speed) + '/s' : '';
+        const etaFmt = session.eta !== null ? formatETA(session.eta) + ' remaining' : '';
+        cardStatus.innerHTML = `<span style="color:var(--accent)">📤 ${session.progress}%</span> · ${speedFmt} · ${etaFmt}`;
+      } else {
+        cardStatus.textContent = text;
       }
     }
 
-    if (!uploadVideoId) {
-      alert('Error initializing video upload. Please select a valid file.');
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Publish & Finish';
+    const pctLabel = document.getElementById(`lbl_pct_${session.id}`);
+    if (pctLabel) {
+      pctLabel.textContent = session.status === 'uploading' ? session.progress + '%' : '';
+    }
+
+    const fill = document.getElementById(`fill_${session.id}`);
+    if (fill) {
+      fill.className = `progress-mini-fill ${fillState}`;
+      fill.style.width = (session.status === 'uploading' ? session.progress : 100) + '%';
+    }
+  }
+
+  // Mark session upload as failed
+  function setUploadFailed(session, reason) {
+    session.status = 'failed';
+    updateCardProgress(session, `❌ Failed: ${reason}`, 'failed');
+    updateSelectedEditorState(session);
+    showToast(`❌ <strong>"${escapeHtml(session.title)}"</strong> upload failed.`, 'danger');
+  }
+
+  // Update selected details form header states
+  function updateSelectedEditorState(session) {
+    if (selectedUploadId !== session.id) return;
+    const statusBadge = document.getElementById('editor-selected-status');
+    statusBadge.textContent = session.status.toUpperCase();
+    statusBadge.className = 'badge badge-' + (session.status === 'published' ? 'green' : (session.status === 'failed' ? 'red' : 'yellow'));
+  }
+
+  // Save active video metadata using AJAX
+  window.saveActiveMetadata = async function(e) {
+    if (e) e.preventDefault();
+    const session = uploads[selectedUploadId];
+    if (!session) return;
+
+    if (!session.videoId) {
+      alert('Video is initializing. Please wait a moment.');
       return;
     }
 
-    // Capture metadata details
+    saveMetadataBtn.disabled = true;
+    saveMetadataBtn.textContent = 'Saving details...';
+
     const meta = {
-      video_id: uploadVideoId,
-      title: detailsTitle.value,
-      description: document.getElementById('details-desc').value,
-      tags: document.getElementById('details-tags').value,
-      visibility: document.getElementById('details-visibility').value,
-      category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value)
+      video_id: session.videoId,
+      title: session.title,
+      description: session.description,
+      tags: session.tags,
+      visibility: session.visibility,
+      category_ids: session.categoryIds
     };
 
     try {
-      // 1. Submit metadata update via AJAX
-      await fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
+      // 1. Save metadata via POST API
+      const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({meta})
       });
-
-      // 2. Save selected base64 client-side thumbnail via AJAX
-      if (selectedThumbDataUrl) {
-        await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({video_id: uploadVideoId, data_url: selectedThumbDataUrl})
-        });
-      }
-
-      // Transition wizard instantly to Success View (SPA)
-      detailsView.style.display = 'none';
-      successView.style.display = 'block';
+      const d = await res.json();
       
-      step2Indicator.classList.add('done');
-      step2Indicator.classList.remove('active');
-      step3Indicator.classList.add('active');
-
-      // Populate success view details
-      document.getElementById('success-video-title').textContent = detailsTitle.value;
-      if (selectedThumbDataUrl) {
-        document.getElementById('success-thumb-preview').src = selectedThumbDataUrl;
-      } else {
-        document.getElementById('success-thumb-preview').src = '<?= thumb_url(null) ?>';
-      }
-
-      // Hide active progress indicator on success view if upload has already completed!
-      const successDiagCard = document.getElementById('success-diagnostics-card');
-      if (!isUploading) {
-        if (successDiagCard) successDiagCard.style.display = 'none';
-      } else {
-        if (successDiagCard) {
-          successDiagCard.style.display = 'block';
-          document.getElementById('success-status-lbl').textContent = 'Uploading in background...';
-          document.getElementById('success-percent-lbl').textContent = uploadProgress + '%';
-          document.getElementById('success-progress-fill').style.width = uploadProgress + '%';
+      if (d.success) {
+        // 2. Save thumbnail choice if present
+        if (session.selectedThumbDataUrl) {
+          await saveCustomThumbnail(session.videoId, session.selectedThumbDataUrl);
         }
+        
+        showToast(`💾 Details saved successfully for "${escapeHtml(session.title)}"!`);
+      } else {
+        alert('Error saving details: ' + (d.message || 'Server error'));
       }
-
-    } catch (e) {
-      console.error(e);
-      alert('Error updating details. Please try again.');
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Publish & Finish';
+    } catch (err) {
+      alert('Failed to save details. Check your connection.');
+    } finally {
+      saveMetadataBtn.disabled = false;
+      saveMetadataBtn.textContent = '💾 Save Video Details';
     }
   };
 
-  // Reset entire SPA uploader state to upload another video
-  window.resetUploadWizard = function() {
-    isUploading = false;
-    activeFile = null;
-    uploadVideoId = null;
-    uploadToken = null;
-    selectedThumbDataUrl = null;
-    uploadProgress = 0;
+  // Show a gorgeous sliding notification card toast
+  function showToast(msg, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = 'toast-card';
     
-    // Reset forms
-    document.getElementById('spa-upload-form').reset();
-    detailsTitle.value = '';
-    previewTitle.textContent = 'Video Title Preview';
-    previewDuration.textContent = '0:00';
-    
-    // Stop players
-    spaPlayer.pause();
-    spaPlayer.src = '';
-    spaIframePlayer.src = '';
-    
-    // Transition views
-    successView.style.display = 'none';
-    detailsView.style.display = 'none';
-    dropzoneView.style.display = 'block';
-    
-    step1Indicator.className = 'wizard-step active';
-    step2Indicator.className = 'wizard-step';
-    step3Indicator.className = 'wizard-step';
-    
-    // Reset dropzone text
-    document.getElementById('embed-link-field').value = '';
-    document.getElementById('spa-diagnostics-widget').style.display = 'block';
-    percentageText.textContent = '0%';
-    progressFill.style.width = '0%';
-    speedText.textContent = '—';
-    etaText.textContent = '—';
-  };
+    let icon = '✓';
+    let color = 'var(--green)';
+    if (type === 'danger') { icon = '✗'; color = 'var(--red)'; }
+    else if (type === 'yellow') { icon = '⚠️'; color = 'var(--yellow)'; }
+
+    toast.innerHTML = `
+      <div style="width:24px; height:24px; border-radius:50%; background:${color}; display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; font-size:0.8rem; flex-shrink:0;">${icon}</div>
+      <div style="font-size:0.82rem; line-height:1.4;">${msg}</div>
+    `;
+
+    const container = document.getElementById('upload-toasts-container');
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.transform = 'translateY(-20px)';
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 400);
+    }, 4500);
+  }
+
+  // Helper seeks frame and extracts image JPEG base64
+  function seekAndCapture(video, canvas, ctx, time) {
+    return new Promise((resolve, reject) => {
+      const onSeeked = () => {
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+        try {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        } catch (e) { reject(e); }
+      };
+      const onError = (e) => {
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+        reject(e);
+      };
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('error', onError);
+      video.currentTime = time;
+    });
+  }
 
   // Utilities
   function getYoutubeId(url) {
@@ -1399,7 +1387,10 @@ require_once __DIR__ . '/../includes/header.php';
     return m + 'm ' + sec + 's';
   }
 
+  function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
 })();
 </script>
-
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

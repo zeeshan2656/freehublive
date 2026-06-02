@@ -184,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'file_size'    => 0,
             'duration'     => 0,
             'visibility'   => $visibility,
-            'status'       => 'pending',
+            'status'       => 'uploading',
             'is_reel'      => $is_reel
         ]);
 

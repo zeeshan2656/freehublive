@@ -97,8 +97,12 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
               </td>
               <td style="padding: 10px 8px; vertical-align: middle;">
-                <span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>" style="font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase;">
-                  <?= e($v['status']==='processing'?'Pending':ucfirst($v['status'])) ?>
+                <span class="badge badge-<?= 
+                  $v['status'] === 'published' ? 'green' : (
+                  in_array($v['status'], ['pending', 'processing', 'uploading']) ? 'yellow' : (
+                  in_array($v['status'], ['rejected', 'failed']) ? 'red' : 'gray'
+                  )) ?>" style="font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase;">
+                  <?= e(ucfirst($v['status'])) ?>
                 </span>
               </td>
               <td style="padding: 10px 8px; font-size: 0.8rem; color: var(--text); font-weight: 500; vertical-align: middle;">

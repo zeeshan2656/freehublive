@@ -70,13 +70,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!rename($tempPath, $finalPath)) json_error('Could not finalize upload', 500);
 
         $fsize = filesize($finalPath);
-        $approvalMode  = setting('video_approval_mode', 'manual');
-        $initialStatus = ($approvalMode === 'auto') ? 'published' : 'pending';
-        // Update video record
+        if ($fsize <= 0) {
+            db_update('videos', ['status' => 'failed'], 'id=?', [$vid]);
+            json_error('Verification failed: empty file.');
+        }
+
+        // Auto-publish video record directly
         db_update('videos', [
             'video_url' => $finalName,
             'file_size' => $fsize,
-            'status'    => $initialStatus
+            'status'    => 'published'
         ], 'id=?', [$vid]);
 
         // Try to ensure duration in background (best-effort)

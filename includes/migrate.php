@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.05.30.8';
+    $migration_version = '2026.05.30.9';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -585,6 +585,13 @@ function fh_run_migrations(): void {
         }
     } catch (Throwable $e) {
         // Suppress database engine or key index lock errors silently
+    }
+
+    // ── Video upload status enum tuning (2026.05.30.9) ──
+    if (fh_table_exists('videos')) {
+        try {
+            db_query("ALTER TABLE videos MODIFY COLUMN status ENUM('draft','pending','published','rejected','processing','uploading','failed') NOT NULL DEFAULT 'uploading'");
+        } catch (Throwable $e) {}
     }
 
     // ── All migrations passed — write flag to skip on next request ──

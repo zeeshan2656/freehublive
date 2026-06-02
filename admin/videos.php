@@ -312,8 +312,12 @@ require_once __DIR__ . '/partials/admin_head.php';
             </a>
           </td>
           <td>
-            <span class="badge badge-<?= $v['status']==='published'?'green':(($v['status']==='pending' || $v['status']==='processing')?'yellow':($v['status']==='rejected'?'red':'gray')) ?>">
-              <?= $v['status']==='processing'?'Pending':ucfirst($v['status']) ?>
+            <span class="badge badge-<?= 
+              $v['status'] === 'published' ? 'green' : (
+              in_array($v['status'], ['pending', 'processing', 'uploading']) ? 'yellow' : (
+              in_array($v['status'], ['rejected', 'failed']) ? 'red' : 'gray'
+              )) ?>">
+              <?= ucfirst($v['status']) ?>
             </span>
           </td>
           <td class="text-sm">👁️ <?= number_format((int)$v['views']) ?> views</td>
