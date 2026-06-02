@@ -24,11 +24,6 @@ if (!$video && auth_user()['role'] === 'admin') {
 
 if (!$video) { http_response_code(403); die('Not found or access denied.'); }
 
-// Redirect to edit_reel.php if this video is a Reel
-if ($video['is_reel']) {
-    redirect(BASE_URL . '/creator/edit_reel.php?id=' . $vid);
-}
-
 $selected_categories = array_column(
     db_fetchAll("SELECT category_id FROM video_categories WHERE video_id=?", [$vid]),
     'category_id'

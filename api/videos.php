@@ -25,13 +25,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     if ($channel_id) {
         $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
         if ($is_owner) {
-            $where = "v.user_id=? AND v.is_reel=0";
+            $where = "v.user_id=?";
         } else {
-            $where = "v.user_id=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0";
+            $where = "v.user_id=? AND v.status='published' AND v.visibility='public'";
         }
         $where_params[] = $channel_id;
     } else {
-        $where = "v.status='published' AND v.visibility='public' AND v.is_reel=0";
+        $where = "v.status='published' AND v.visibility='public'";
     }
 
     if ($q) {
@@ -146,23 +146,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'init_upload') {
         $meta = $body['meta'] ?? [];
         $title = trim($meta['title'] ?? '');
-        $is_reel = !empty($meta['is_reel']) ? 1 : 0;
+        $is_reel = 0;
         if ($title === '') {
-            if ($is_reel) {
-                $title = 'Reel #' . rand(10000, 99999);
-            } else {
-                $title = 'Video #' . rand(10000, 99999);
-            }
+            $title = 'Video #' . rand(10000, 99999);
         }
 
         $description = trim($meta['description'] ?? '');
-        if ($is_reel && $description === '') {
-            $description = 'Short vertical reel video.';
-        }
         $tags = trim($meta['tags'] ?? '');
-        if ($is_reel && $tags === '') {
-            $tags = 'reel,short';
-        }
         $visibility = $meta['visibility'] ?? 'public';
         if (!in_array($visibility, ['public', 'unlisted', 'private'])) {
             $visibility = 'public';
@@ -223,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $meta = $body['meta'] ?? [];
         $video_id = (int)($meta['video_id'] ?? 0);
         if (!$video_id) json_error('Missing video_id');
-        $video = db_fetch('SELECT id,user_id,is_reel FROM videos WHERE id=?', [$video_id]);
+        $video = db_fetch('SELECT id,user_id FROM videos WHERE id=?', [$video_id]);
         if (!$video) json_error('Not found', 404);
         if ((int)$video['user_id'] !== $uid && !is_admin()) json_error('Forbidden', 403);
 
@@ -231,11 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($meta['title'])) {
             $t = trim($meta['title']);
             if ($t === '') {
-                if (!empty($video['is_reel'])) {
-                    $t = 'Reel #' . rand(10000, 99999);
-                } else {
-                    $t = 'Video #' . rand(10000, 99999);
-                }
+                $t = 'Video #' . rand(10000, 99999);
             }
             $fields['title'] = $t;
         }

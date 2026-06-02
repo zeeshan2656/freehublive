@@ -7,12 +7,12 @@ require_once __DIR__ . '/includes/functions.php';
 $channel_id = (int)($_GET['id'] ?? 0);
 if (!$channel_id) { redirect(BASE_URL . '/'); }
 
-// Handle POST actions (like deleting a Reel or video)
+// Handle POST actions (like deleting a video)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in() && verify_csrf($_POST['csrf'] ?? '')) {
     $action = $_POST['action'] ?? '';
-    if ($action === 'delete_reel' || $action === 'delete_video') {
+    if ($action === 'delete_video') {
         $vid = (int)($_POST['video_id'] ?? 0);
-        $video = db_fetch("SELECT id, user_id, video_url, thumbnail, is_reel FROM videos WHERE id=?", [$vid]);
+        $video = db_fetch("SELECT id, user_id, video_url, thumbnail FROM videos WHERE id=?", [$vid]);
         if ($video && ($video['user_id'] == auth_user()['id'] || auth_user()['role'] === 'admin')) {
             if ($video['video_url'] && !str_starts_with($video['video_url'], 'http')) {
                 @unlink(VIDEO_PATH . $video['video_url']);
@@ -21,8 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in() && verify_csrf($_POS
                 @unlink(THUMB_PATH . $video['thumbnail']);
             }
             db_query("DELETE FROM videos WHERE id=?", [$vid]);
-            $targetTab = ((int)$video['is_reel'] === 1) ? 'reels' : 'videos';
-            redirect(BASE_URL . '/channel.php?id=' . $channel_id . '&tab=' . $targetTab);
+            redirect(BASE_URL . '/channel.php?id=' . $channel_id . '&tab=videos');
         }
     }
 }
@@ -30,8 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in() && verify_csrf($_POS
 $channel = db_fetch("SELECT * FROM users WHERE id=? AND status='active'", [$channel_id]);
 $is_self = is_logged_in() && auth_user()['id'] == $channel_id;
 
-$total_videos = db_count('videos', "user_id=? AND is_reel=0" . ($is_self ? "" : " AND status='published' AND visibility='public'"), [$channel_id]);
-$total_reels  = db_count('videos', "user_id=? AND is_reel=1" . ($is_self ? "" : " AND status='published' AND visibility='public'"), [$channel_id]);
+$total_videos = db_count('videos', "user_id=?" . ($is_self ? "" : " AND status='published' AND visibility='public'"), [$channel_id]);
 $has_videos = $total_videos > 0;
 
 if (!$channel || $channel['role'] === 'viewer' || (!$is_self && !$has_videos && !in_array($channel['role'],['creator','admin']))) {
@@ -50,48 +48,27 @@ $order = match($sort) { 'views'=>'views DESC', 'oldest'=>'published_at ASC', def
 
 $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
 $is_owner_or_admin = is_logged_in() && ($is_owner || auth_user()['role'] === 'admin');
-$is_reel_query = ($tab === 'reels') ? 1 : 0;
+if ($tab === 'reels') {
+    redirect(BASE_URL . '/channel.php?id=' . $channel_id . '&tab=videos');
+}
 
-if ($is_reel_query) {
-    if ($is_owner) {
-        $total  = db_count('videos', "user_id=? AND is_reel=1", [$channel_id]);
-        $pg     = paginate($total, 12, $page);
-        $videos = db_fetchAll(
-            "SELECT v.*, u.username, u.channel_name, u.avatar
-             FROM videos v
-             JOIN users u ON u.id = v.user_id
-             WHERE v.user_id = ? AND v.is_reel = 1
-             ORDER BY $order LIMIT 12 OFFSET {$pg['offset']}", [$channel_id]
-        );
-    } else {
-        $total  = db_count('videos', "user_id=? AND status='published' AND visibility='public' AND is_reel=1", [$channel_id]);
-        $pg     = paginate($total, 12, $page);
-        $videos = db_fetchAll(
-            "SELECT v.*, u.username, u.channel_name, u.avatar
-             FROM videos v JOIN users u ON u.id = v.user_id
-             WHERE v.user_id=? AND v.status='published' AND v.visibility='public' AND v.is_reel=1
-             ORDER BY $order LIMIT 12 OFFSET {$pg['offset']}", [$channel_id]
-        );
-    }
+if ($is_owner) {
+    $total  = db_count('videos', "user_id=?", [$channel_id]);
+    $videos = db_fetchAll(
+        "SELECT v.*, u.username, u.channel_name, u.avatar
+         FROM videos v
+         JOIN users u ON u.id = v.user_id
+         WHERE v.user_id = ?
+         ORDER BY $order LIMIT 52", [$channel_id]
+    );
 } else {
-    if ($is_owner) {
-        $total  = db_count('videos', "user_id=? AND is_reel=0", [$channel_id]);
-        $videos = db_fetchAll(
-            "SELECT v.*, u.username, u.channel_name, u.avatar
-             FROM videos v
-             JOIN users u ON u.id = v.user_id
-             WHERE v.user_id = ? AND v.is_reel = 0
-             ORDER BY $order LIMIT 52", [$channel_id]
-        );
-    } else {
-        $total  = db_count('videos', "user_id=? AND status='published' AND visibility='public' AND is_reel=0", [$channel_id]);
-        $videos = db_fetchAll(
-            "SELECT v.*, u.username, u.channel_name, u.avatar
-             FROM videos v JOIN users u ON u.id = v.user_id
-             WHERE v.user_id=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0
-             ORDER BY $order LIMIT 52", [$channel_id]
-        );
-    }
+    $total  = db_count('videos', "user_id=? AND status='published' AND visibility='public'", [$channel_id]);
+    $videos = db_fetchAll(
+        "SELECT v.*, u.username, u.channel_name, u.avatar
+         FROM videos v JOIN users u ON u.id = v.user_id
+         WHERE v.user_id=? AND v.status='published' AND v.visibility='public'
+         ORDER BY $order LIMIT 52", [$channel_id]
+    );
 }
 
 $is_subscribed = false;
@@ -140,11 +117,6 @@ require_once __DIR__ . '/includes/header.php';
         <a href="<?= BASE_URL ?>/creator/upload.php" class="btn btn-primary" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
           Upload Video
         </a>
-        <?php if (setting('reels_enabled', '1') === '1'): ?>
-        <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="btn btn-outline" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
-          Upload Reel
-        </a>
-        <?php endif; ?>
       </div>
       <?php endif; ?>
     </div>
@@ -155,7 +127,6 @@ require_once __DIR__ . '/includes/header.php';
         <div class="channel-meta-stats text-muted text-sm" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
           <span class="stat-subscribers">Subscriber <?= format_number((int)$channel['subscribers']) ?>.</span>
           <span class="stat-videos">Videos <?= $total_videos ?>.</span>
-          <span class="stat-reels">Reels <?= $total_reels ?>.</span>
           <span class="joined-date">Joined <?= date('M Y', strtotime($channel['created_at'])) ?></span>
         </div>
       </div>
@@ -174,11 +145,6 @@ require_once __DIR__ . '/includes/header.php';
         <a href="<?= BASE_URL ?>/creator/upload.php" class="btn btn-primary" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
           Upload Video
         </a>
-        <?php if (setting('reels_enabled', '1') === '1'): ?>
-        <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="btn btn-outline" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
-          Upload Reel
-        </a>
-        <?php endif; ?>
       </div>
       <?php endif; ?>
     </div>
@@ -187,9 +153,6 @@ require_once __DIR__ . '/includes/header.php';
   <!-- Tabs -->
   <div class="channel-tabs">
     <a href="?id=<?= $channel_id ?>&tab=videos" class="channel-tab <?= $tab==='videos'?'active':'' ?>">Videos</a>
-    <?php if (setting('reels_enabled', '1') === '1'): ?>
-    <a href="?id=<?= $channel_id ?>&tab=reels" class="channel-tab <?= $tab==='reels'?'active':'' ?>">Reels</a>
-    <?php endif; ?>
     <a href="?id=<?= $channel_id ?>&tab=playlists" class="channel-tab <?= $tab==='playlists'?'active':'' ?>">Playlists</a>
     <a href="?id=<?= $channel_id ?>&tab=about" class="channel-tab <?= $tab==='about'?'active':'' ?>">About</a>
     
@@ -237,87 +200,7 @@ require_once __DIR__ . '/includes/header.php';
   <?php endif; ?>
   <?php endif; ?>
 
-  <!-- Reels tab -->
-  <?php if ($tab==='reels'): ?>
-  <style>
-  @media (max-width: 768px) {
-    .grid-reels {
-      grid-template-columns: repeat(2, 1fr) !important;
-      gap: 10px !important;
-    }
-  }
-  </style>
-  <?php if ($videos): ?>
-  <div class="grid grid-reels" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:16px;">
-    <?php foreach ($videos as $v):
-      $thumb = thumb_url($v['thumbnail'] ?? null);
-      $title = e($v['title'] ?? '');
-      $url   = BASE_URL . '/reels.php?v=' . (int)$v['id'];
-      $views = format_number((int)($v['views'] ?? 0));
-      $likes = format_number((int)($v['likes'] ?? 0));
-      $is_reel_owner = is_logged_in() && (auth_user()['id'] == $channel_id || auth_user()['role'] === 'admin');
-    ?>
-    <div class="card reel-card" style="padding:0; overflow:hidden; position:relative; aspect-ratio:9/16; border-radius:12px; cursor:pointer; background:#000;" onclick="location.href='<?= $url ?>'">
-      <img src="<?= $thumb ?>" alt="<?= $title ?>" style="width:100%; height:100%; object-fit:cover; display:block; opacity:0.8;">
-      
-      <!-- Gradient overlay -->
-      <div style="position:absolute; bottom:0; left:0; right:0; top:0; background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0) 100%); pointer-events:none;"></div>
-      
-      <!-- Stats overlay -->
-      <div style="position:absolute; bottom:12px; left:12px; right:12px; color:#fff; display:flex; flex-direction:column; gap:4px; pointer-events:none;">
-        <div style="font-weight:700; font-size:0.9rem; line-height:1.2; text-shadow:0 1px 3px rgba(0,0,0,0.8); overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">
-          <?= $title ?>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; opacity:0.9; text-shadow:0 1px 2px rgba(0,0,0,0.8); flex-wrap:wrap;">
-          <span style="display:inline-flex; align-items:center; gap:2px;">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            <?= $views ?>
-          </span>
-          <span style="display:inline-flex; align-items:center; gap:2px;">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-            <?= $likes ?>
-          </span>
-          <span style="display:inline-flex; align-items:center; gap:2px;">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <?= format_number((int)($v['comments_count'] ?? 0)) ?>
-          </span>
-        </div>
-      </div>
 
-      <!-- Owner Actions overlay -->
-      <?php if ($is_reel_owner): ?>
-      <div class="reel-owner-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:6px;" onclick="event.stopPropagation();">
-        <a href="<?= BASE_URL ?>/creator/edit_reel.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.6); color:#fff; border:none; width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0;" title="Edit Reel">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </a>
-        <form method="POST" style="margin:0;" onsubmit="return confirm('Delete this Reel?');">
-          <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
-          <input type="hidden" name="video_id" value="<?= $v['id'] ?>">
-          <button type="submit" name="action" value="delete_reel" class="btn btn-sm btn-icon" style="background:rgba(239,68,68,0.8); color:#fff; border:none; width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="Delete Reel">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </form>
-      </div>
-      <?php endif; ?>
-    </div>
-    <?php endforeach; ?>
-  </div>
-
-  <?php if ($pg['pages'] > 1): ?>
-  <div class="flex gap-2" style="margin-top:24px; justify-content:center">
-    <?php if($pg['has_prev']): ?><a href="?id=<?= $channel_id ?>&tab=reels&sort=<?= $sort ?>&page=<?= $page-1 ?>" class="btn btn-outline btn-sm">&laquo;</a><?php endif; ?>
-    <span class="text-muted text-sm" style="align-self:center"><?= $page ?>/<?= $pg['pages'] ?></span>
-    <?php if($pg['has_next']): ?><a href="?id=<?= $channel_id ?>&tab=reels&sort=<?= $sort ?>&page=<?= $page+1 ?>" class="btn btn-outline btn-sm">&raquo;</a><?php endif; ?>
-  </div>
-  <?php endif; ?>
-
-  <?php else: ?>
-  <div style="text-align:center; padding:60px; color:var(--text2)">
-    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px; opacity:.4"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-    <p>No reels yet</p>
-  </div>
-  <?php endif; ?>
-  <?php endif; ?>
 
   <!-- Playlists tab -->
   <?php if ($tab==='playlists'): ?>
@@ -400,8 +283,6 @@ require_once __DIR__ . '/includes/header.php';
         <span>&#128337; Joined <?= date('F Y', strtotime($channel['created_at'])) ?></span>
         <span>·</span>
         <span>&#128250; <?= $total_videos ?> videos</span>
-        <span>·</span>
-        <span>&#128249; <?= $total_reels ?> reels</span>
         <span>·</span>
         <span>&#128065; <?= format_number((int)$channel['total_views']) ?> total views</span>
       </div>
@@ -513,8 +394,7 @@ function bindLoadMore() {
           const el = document.createElement('article');
           el.className = 'video-card fade-in';
           const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
-          const tabParam = (parseInt(v.is_reel) === 1) ? 'reels' : 'videos';
-          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=' + tabParam;
+          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=videos';
           el.onclick = () => location.href = watchUrl;
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`
@@ -526,8 +406,8 @@ function bindLoadMore() {
           let deleteBtnHtml = '';
           if (IS_OWNER_OR_ADMIN) {
             const csrfToken = '<?= csrf_token() ?>';
-            const deleteActionUrl = '<?= BASE_URL ?>/channel.php?id=' + encodeURIComponent(v.user_id) + '&tab=' + tabParam;
-            const editUrl = '<?= BASE_URL ?>/creator/' + (parseInt(v.is_reel) === 1 ? 'edit_reel.php' : 'edit.php') + '?id=' + encodeURIComponent(v.id);
+            const deleteActionUrl = '<?= BASE_URL ?>/channel.php?id=' + encodeURIComponent(v.user_id) + '&tab=videos';
+            const editUrl = '<?= BASE_URL ?>/creator/edit.php?id=' + encodeURIComponent(v.id);
             deleteBtnHtml = `
 <div class="video-owner-actions" style="position:absolute; top:8px; right:8px; z-index:15; display:flex; gap:6px;" onclick="event.stopPropagation();">
   <a href="${editUrl}" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.65); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="Edit Video">

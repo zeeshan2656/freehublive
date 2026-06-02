@@ -30,7 +30,7 @@ $latest = db_fetchAll_cached(
     "SELECT v.*,u.username,u.channel_name,u.avatar
      FROM videos v
      JOIN users u ON u.id=v.user_id
-     WHERE v.status='published' AND v.visibility='public' AND v.is_reel=0 {$cat_filter}
+     WHERE v.status='published' AND v.visibility='public' {$cat_filter}
      ORDER BY v.published_at DESC LIMIT 51",
     $params,
     60
@@ -38,7 +38,7 @@ $latest = db_fetchAll_cached(
 
 // ── Categories ───────────────────────────────────────────────
 $categories = db_fetchAll_cached(
-    "SELECT c.*,(SELECT COUNT(*) FROM videos WHERE category_id=c.id AND status='published' AND is_reel=0) as video_count
+    "SELECT c.*,(SELECT COUNT(*) FROM videos WHERE category_id=c.id AND status='published') as video_count
      FROM categories c WHERE c.is_active=1 ORDER BY c.sort_order LIMIT 10",
     [],
     60
@@ -148,8 +148,7 @@ function bindLoadMore() {
           const el = document.createElement('article');
           el.className = 'video-card fade-in';
           const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
-          const tabParam = (parseInt(v.is_reel) === 1) ? 'reels' : 'videos';
-          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=' + tabParam;
+          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=videos';
           el.onclick = () => location.href = watchUrl;
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`

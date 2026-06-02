@@ -62,12 +62,7 @@ $is_categories = ($current_page === 'categories.php');
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>Upload Video</span>
         </a>
-        <?php if (setting('reels_enabled', '1') === '1'): ?>
-        <a href="<?= BASE_URL ?>/creator/upload_reel.php" class="nav-item <?= $current_page === 'upload_reel.php' ? 'active' : '' ?>">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-          <span>Upload Reel</span>
-        </a>
-        <?php endif; ?>
+
         <a href="<?= BASE_URL ?>/creator/videos.php" class="nav-item <?= ($current_page === 'videos.php' || $current_page === 'edit.php') && str_contains($_SERVER['PHP_SELF'], '/creator/') ? 'active' : '' ?>">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
           <span>My Videos</span>

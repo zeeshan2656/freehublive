@@ -13,9 +13,7 @@ $video = db_fetch(
 );
 if (!$video) { http_response_code(404); die('Video not found'); }
 $is_xhr_view = isset($_GET['xhr_view']);
-if ((int)($video['is_reel'] ?? 0) === 1 && !$is_xhr_view) {
-    redirect(BASE_URL . '/reels.php?v=' . $video['id']);
-}
+
 
 $playlist_id = (int)($_GET['list'] ?? 0);
 $playlist = null;

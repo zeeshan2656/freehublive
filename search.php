@@ -14,7 +14,7 @@ require_once __DIR__ . '/includes/functions.php';
 $meta_title = ($q ? '"' . $q . '" — Search' : 'Search') . ' — ' . setting('site_name','FreeHub');
 $meta_desc  = $q ? "Search results for \"$q\" on " . setting('site_name','FreeHub') : 'Search videos';
 
-$where  = "v.status='published' AND v.visibility='public' AND v.is_reel=0";
+$where  = "v.status='published' AND v.visibility='public'";
 $where_params = [];
 if ($q) {
     $where .= " AND MATCH(v.title,v.description,v.tags) AGAINST(? IN BOOLEAN MODE)";
@@ -160,8 +160,7 @@ function bindLoadMore() {
           const el = document.createElement('article');
           el.className = 'video-card fade-in';
           const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
-          const tabParam = (parseInt(v.is_reel) === 1) ? 'reels' : 'videos';
-          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=' + tabParam;
+          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=videos';
           el.onclick = () => location.href = watchUrl;
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`

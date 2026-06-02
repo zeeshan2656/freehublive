@@ -614,8 +614,7 @@ function render_video_card(array $v, array $opts = []): string {
     $earnings  = isset($opts['earnings_usd']) ? (float)$opts['earnings_usd'] : null;
     $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
     $url       = BASE_URL . '/watch.php?v=' . (int)$v['id'] . $ref_param;
-    $tabParam = ((int)($v['is_reel'] ?? 0) === 1) ? 'reels' : 'videos';
-    $channelUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=' . $tabParam;
+    $channelUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=videos';
     $thumb     = thumb_url($v['thumbnail'] ?? null);
     $durSec    = (int)($v['duration'] ?? 0);
     $dur       = $durSec > 0 ? format_duration($durSec) : '';
@@ -646,9 +645,8 @@ function render_video_card(array $v, array $opts = []): string {
     $deleteBtnHtml = '';
     if (!empty($opts['show_delete'])) {
         $csrfToken = csrf_token();
-        $deleteActionUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=' . $tabParam;
-        $isReel = (int)($v['is_reel'] ?? 0) === 1;
-        $editUrl = BASE_URL . '/creator/' . ($isReel ? 'edit_reel.php' : 'edit.php') . '?id=' . (int)$v['id'];
+        $deleteActionUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=videos';
+        $editUrl = BASE_URL . '/creator/edit.php?id=' . (int)$v['id'];
         $deleteBtnHtml = <<<HTML
 <div class="video-owner-actions" style="position:absolute; top:8px; right:8px; z-index:15; display:flex; gap:6px;" onclick="event.stopPropagation();">
   <a href="{$editUrl}" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.65); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="Edit Video">

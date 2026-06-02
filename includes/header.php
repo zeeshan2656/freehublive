@@ -207,7 +207,7 @@ $is_home = ($current_page === 'index.php' && !isset($_GET['cat']));
 $is_trending = ($current_page === 'search.php' && ($current_q === 'trending' || $current_sort === 'views')) || ($current_page === 'index.php' && isset($_GET['sort']) && $_GET['sort'] === 'views');
 $is_latest = ($current_page === 'search.php' && $current_sort === 'latest') || ($current_page === 'index.php' && isset($_GET['sort']) && $_GET['sort'] === 'latest');
 $is_categories = ($current_page === 'categories.php');
-$is_reels = ($current_page === 'reels.php');
+$is_reels = false;
 $nav_cats = db_fetchAll(
     "SELECT id, name, slug, image, color FROM categories WHERE is_active=1 ORDER BY sort_order LIMIT ?",
     [$nav_cat_limit]
@@ -1137,23 +1137,13 @@ endif;
     <!-- DESKTOP: Nav Links -->
     <div class="header-nav-links desktop-only" style="display:flex; align-items:center; gap:8px; margin-left:16px">
       <a href="<?= BASE_URL ?>/" class="btn <?= $is_home ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Home</a>
-      <?php if (setting('reels_enabled', '1') === '1'): ?>
-      <a href="<?= BASE_URL ?>/reels.php" class="btn <?= $is_reels ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Reels</a>
-      <?php endif; ?>
+
     </div>
 
     <!-- RIGHT: mobile user/login icon -->
     <!-- RIGHT: mobile user/login icon and dropdown (like desktop mode) -->
     <div class="navbar-end">
-      <!-- Mobile Reels Shortcut -->
-      <?php if (setting('reels_enabled', '1') === '1'): ?>
-      <a href="<?= BASE_URL ?>/reels.php" class="btn btn-outline btn-sm btn-icon reels-mobile-btn" aria-label="Watch Reels" title="Watch Reels" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3);text-decoration:none;margin-right:8px">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-          <rect x="5" y="2" width="14" height="20" rx="3" />
-          <polygon points="10 9 15 12 10 15 10 9" fill="currentColor"/>
-        </svg>
-      </a>
-      <?php endif; ?>
+
 
       <!-- Mobile search toggle -->
       <button class="btn btn-outline btn-sm btn-icon" id="search-toggle-mobile" aria-label="Toggle Search" title="Toggle Search" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3)">

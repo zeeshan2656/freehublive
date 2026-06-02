@@ -60,7 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
 $page   = max(1, (int)($_GET['page'] ?? 1));
 $filter = $_GET['status'] ?? 'all';
 $search = trim($_GET['search'] ?? '');
-$type   = $_GET['type'] ?? 'all';
 $from   = trim($_GET['from'] ?? '');
 $to     = trim($_GET['to'] ?? '');
 $min_earn  = trim($_GET['min_earn'] ?? '');
@@ -77,11 +76,6 @@ if ($search !== '') {
     $where .= " AND (title LIKE ? OR tags LIKE ?)";
     $params[] = "%$search%";
     $params[] = "%$search%";
-}
-if ($type === 'reel') {
-    $where .= " AND is_reel = 1";
-} elseif ($type === 'video') {
-    $where .= " AND is_reel = 0";
 }
 if ($from !== '' && $to !== '') {
     $where .= " AND DATE(created_at) BETWEEN ? AND ?";
@@ -141,15 +135,7 @@ $header_actions = '
   <span>Upload Video</span>
 </a>';
 
-if (setting('reels_enabled', '1') === '1') {
-    $header_actions .= '
-<a href="' . BASE_URL . '/creator/upload_reel.php" class="btn btn-outline btn-sm flex gap-1 header-upload-btn" style="border-radius: 18px; padding: 6px 12px;" title="Upload Reel">
-  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="flex-shrink:0;">
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/>
-  </svg>
-  <span>Upload Reel</span>
-</a>';
-}
+
 
 $header_actions .= '</div>';
 require_once __DIR__ . '/../includes/header.php';
@@ -212,15 +198,7 @@ require_once __DIR__ . '/../includes/header.php';
           <input type="text" name="search" value="<?= e($search) ?>" placeholder="Search title or tag..." class="form-input" style="height:38px; font-size:0.85rem;">
         </div>
 
-        <!-- Video Type Filter -->
-        <div class="form-group filter-type">
-          <label class="form-label" style="font-size:0.8rem; font-weight:600; margin-bottom:4px; display:block;">Type</label>
-          <select class="form-input form-select" name="type" style="height:38px; font-size:0.85rem;">
-            <option value="all" <?= $type==='all'?'selected':'' ?>>All Types</option>
-            <option value="video" <?= $type==='video'?'selected':'' ?>>Videos Only</option>
-            <option value="reel" <?= $type==='reel'?'selected':'' ?>>Reels Only</option>
-          </select>
-        </div>
+
 
         <!-- Date Range Filter -->
         <div class="form-group filter-date-range">
@@ -285,11 +263,7 @@ require_once __DIR__ . '/../includes/header.php';
               <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" target="_blank" style="color:var(--accent); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<?= e($v['title']) ?>">
                 <?= e(truncate($v['title'], 50)) ?>
               </a>
-              <?php if ((int)($v['is_reel'] ?? 0) === 1): ?>
-                <span class="badge" style="background:rgba(139,92,246,0.15); color:#c084fc; font-size:.65rem; border:1px solid rgba(139,92,246,0.3); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block">Reel</span>
-              <?php else: ?>
-                <span class="badge" style="background:rgba(99,102,241,0.15); color:#818cf8; font-size:.65rem; border:1px solid rgba(99,102,241,0.3); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block">Video</span>
-              <?php endif; ?>
+
               <div class="text-xs text-muted" style="margin-top:2px"><?= e($v['visibility']) ?></div>
             </td>
             <td>
@@ -313,7 +287,7 @@ require_once __DIR__ . '/../includes/header.php';
             <td>
               <div class="flex gap-2" style="align-items:center">
                 <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" target="_blank" class="btn btn-sm btn-outline" title="View Video" style="padding: 4px 8px;">View</a>
-                <a href="<?= BASE_URL ?>/creator/<?= $v['is_reel'] ? 'edit_reel.php' : 'edit.php' ?>?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline" title="Edit Video" style="padding: 4px 8px;">Edit</a>
+                <a href="<?= BASE_URL ?>/creator/edit.php?id=<?= $v['id'] ?>" class="btn btn-sm btn-outline" title="Edit Video" style="padding: 4px 8px;">Edit</a>
                 <form method="POST" action="?<?= e(http_build_query($_GET)) ?>" style="display:inline" onsubmit="return confirm('Are you sure you want to delete this video?')">
                   <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
                   <input type="hidden" name="video_id" value="<?= $v['id'] ?>">
