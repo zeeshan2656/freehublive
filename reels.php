@@ -1033,7 +1033,7 @@ body {
           <div class="reel-player-and-panel-row">
             <!-- Video element container -->
             <div class="reel-player-container">
-              <video class="reel-video" src="<?= $video_src ?>" loop playsinline webkit-playsinline preload="<?= ($index === 0) ? 'auto' : 'none' ?>" poster="<?= $thumb ?>"></video>
+              <video class="reel-video" src="<?= $video_src ?>" loop playsinline webkit-playsinline muted preload="<?= ($index === 0) ? 'auto' : 'none' ?>" poster="<?= $thumb ?>"></video>
               
               <!-- Loading spinner overlay -->
               <div class="video-overlay-loading-spinner" style="display:none;">
@@ -1246,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const noSearchResults = document.getElementById('no-search-results');
 
   let activeIndex = 0;
-  let mutedGlobal = false; // default to normal mode (unmuted)
+  let mutedGlobal = true; // default to muted mode for reliable autoplay
 
   // ── Reels Diagnostics & Buffering Loader Control ──
   console.log("Reels Diagnostics: Initializing event listeners for", slides.length, "slides");
@@ -1355,49 +1355,55 @@ document.addEventListener('DOMContentLoaded', function() {
           video.preload = "auto";
           video.load();
         }
-        video.play().then(() => {
-          // Increment view via watches if needed
-          fetch(`<?= BASE_URL ?>/watch.php?v=${slide.dataset.id}&xhr_view=1`)
-            .then(res => res.json())
-            .then(data => {
-              if (data && data.success) {
-                // Update all view counters on the page for this reel in real-time
-                document.querySelectorAll(`.views-count[data-id="${slide.dataset.id}"]`).forEach(el => {
-                  if (el.classList.contains('stat-item')) {
-                    el.textContent = `${data.formatted} views`;
-                  } else {
-                    el.textContent = data.formatted;
-                  }
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            // Increment view via watches if needed
+            fetch(`<?= BASE_URL ?>/watch.php?v=${slide.dataset.id}&xhr_view=1`)
+              .then(res => res.json())
+              .then(data => {
+                if (data && data.success) {
+                  // Update all view counters on the page for this reel in real-time
+                  document.querySelectorAll(`.views-count[data-id="${slide.dataset.id}"]`).forEach(el => {
+                    if (el.classList.contains('stat-item')) {
+                      el.textContent = `${data.formatted} views`;
+                    } else {
+                      el.textContent = data.formatted;
+                    }
+                  });
+                }
+              }).catch(()=>{});
+          }).catch(err => {
+            console.log("Autoplay blocked or failed:", err);
+            // Fallback to muted playback if autoplay with sound is blocked
+            if (!mutedGlobal) {
+              video.muted = true;
+              mutedGlobal = true;
+              syncSoundButtonsState();
+              const retryPromise = video.play();
+              if (retryPromise !== undefined) {
+                retryPromise.then(() => {
+                  // Increment view for muted playback too
+                  fetch(`<?= BASE_URL ?>/watch.php?v=${slide.dataset.id}&xhr_view=1`)
+                    .then(res => res.json())
+                    .then(data => {
+                      if (data && data.success) {
+                        document.querySelectorAll(`.views-count[data-id="${slide.dataset.id}"]`).forEach(el => {
+                          if (el.classList.contains('stat-item')) {
+                            el.textContent = `${data.formatted} views`;
+                          } else {
+                            el.textContent = data.formatted;
+                          }
+                        });
+                      }
+                    }).catch(()=>{});
+                }).catch(muteErr => {
+                  console.log("Muted autoplay also blocked:", muteErr);
                 });
               }
-            }).catch(()=>{});
-        }).catch(err => {
-          console.log("Autoplay blocked or failed:", err);
-          // Fallback to muted playback if autoplay with sound is blocked
-          if (!mutedGlobal) {
-            video.muted = true;
-            mutedGlobal = true;
-            syncSoundButtonsState();
-            video.play().then(() => {
-              // Increment view for muted playback too
-              fetch(`<?= BASE_URL ?>/watch.php?v=${slide.dataset.id}&xhr_view=1`)
-                .then(res => res.json())
-                .then(data => {
-                  if (data && data.success) {
-                    document.querySelectorAll(`.views-count[data-id="${slide.dataset.id}"]`).forEach(el => {
-                      if (el.classList.contains('stat-item')) {
-                        el.textContent = `${data.formatted} views`;
-                      } else {
-                        el.textContent = data.formatted;
-                      }
-                    });
-                  }
-                }).catch(()=>{});
-            }).catch(muteErr => {
-              console.log("Muted autoplay also blocked:", muteErr);
-            });
-          }
-        });
+            }
+          });
+        }
         
         // Load comments for this active reel
         loadComments(slide.dataset.id);
@@ -1656,7 +1662,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const playBtn = slide.querySelector('.video-overlay-play-btn');
     
     if (video.paused) {
-      video.play();
+      video.play().catch(e => console.log("Play failed in togglePlayPause:", e));
       if (playBtn) {
         playBtn.innerHTML = '<svg width="40" height="40" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>'; // play symbol fading out
         playBtn.classList.add('show');
