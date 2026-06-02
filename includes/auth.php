@@ -72,7 +72,7 @@ function can_earn(): bool    {
     return $user && !is_admin() && ($user['status'] ?? 'pending') === 'active'; 
 }
 
-function require_login(string $redirect = '/welcome.php'): void {
+function require_login(string $redirect = '/auth/login.php'): void {
     if (!is_logged_in()) {
         header('Location: ' . BASE_URL . $redirect . '?next=' . urlencode($_SERVER['REQUEST_URI']));
         exit;

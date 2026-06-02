@@ -10,7 +10,6 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
-require_login();
 
 $meta_title = ($q ? '"' . $q . '" — Search' : 'Search') . ' — ' . setting('site_name','FreeHub');
 $meta_desc  = $q ? "Search results for \"$q\" on " . setting('site_name','FreeHub') : 'Search videos';

@@ -5,7 +5,6 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
-require_login();
 
 $meta_title = 'FreeHub — Watch, Share & Earn';
 $meta_desc  = 'Discover trending videos, share and earn with our affiliate program.';

@@ -5,7 +5,6 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
-require_login();
 
 // Check if feature flag is active
 if (setting('reels_enabled', '1') !== '1') {

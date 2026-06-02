@@ -5,7 +5,6 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
-require_login();
 
 $meta_title = 'Categories — ' . 'FreeHub';
 $meta_desc  = 'Browse videos by category';
