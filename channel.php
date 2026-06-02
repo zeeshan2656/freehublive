@@ -7,15 +7,22 @@ require_once __DIR__ . '/includes/functions.php';
 $channel_id = (int)($_GET['id'] ?? 0);
 if (!$channel_id) { redirect(BASE_URL . '/'); }
 
-// Handle POST actions (like deleting a Reel)
+// Handle POST actions (like deleting a Reel or video)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in() && verify_csrf($_POST['csrf'] ?? '')) {
     $action = $_POST['action'] ?? '';
-    if ($action === 'delete_reel') {
+    if ($action === 'delete_reel' || $action === 'delete_video') {
         $vid = (int)($_POST['video_id'] ?? 0);
-        $video = db_fetch("SELECT id, user_id FROM videos WHERE id=?", [$vid]);
+        $video = db_fetch("SELECT id, user_id, video_url, thumbnail, is_reel FROM videos WHERE id=?", [$vid]);
         if ($video && ($video['user_id'] == auth_user()['id'] || auth_user()['role'] === 'admin')) {
+            if ($video['video_url'] && !str_starts_with($video['video_url'], 'http')) {
+                @unlink(VIDEO_PATH . $video['video_url']);
+            }
+            if ($video['thumbnail'] && !str_starts_with($video['thumbnail'], 'http')) {
+                @unlink(THUMB_PATH . $video['thumbnail']);
+            }
             db_query("DELETE FROM videos WHERE id=?", [$vid]);
-            redirect(BASE_URL . '/channel.php?id=' . $channel_id . '&tab=reels');
+            $targetTab = ((int)$video['is_reel'] === 1) ? 'reels' : 'videos';
+            redirect(BASE_URL . '/channel.php?id=' . $channel_id . '&tab=' . $targetTab);
         }
     }
 }
@@ -42,6 +49,7 @@ $page = max(1,(int)($_GET['page']??1));
 $order = match($sort) { 'views'=>'views DESC', 'oldest'=>'published_at ASC', default=>'published_at DESC' };
 
 $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
+$is_owner_or_admin = is_logged_in() && ($is_owner || auth_user()['role'] === 'admin');
 $is_reel_query = ($tab === 'reels') ? 1 : 0;
 
 if ($is_reel_query) {
@@ -207,7 +215,11 @@ require_once __DIR__ . '/includes/header.php';
   <?php if ($videos): ?>
   <div class="grid grid-4" id="video-grid">
     <?php foreach ($videos as $v):
-      echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
+      $card_opts = fh_video_card_opts($v, $earningsMap, $ref);
+      if ($is_owner_or_admin) {
+          $card_opts['show_delete'] = true;
+      }
+      echo render_video_card($v, $card_opts);
     endforeach; ?>
   </div>
 
@@ -475,6 +487,7 @@ document.querySelectorAll('.playlist-delete-btn').forEach(btn => {
 
 // ── Infinite scroll / Load More for Channel Videos ───────────────────
 const FH_CREATOR_ID = <?= (is_logged_in() && is_creator()) ? (int)auth_user()['id'] : 0 ?>;
+const IS_OWNER_OR_ADMIN = <?= $is_owner_or_admin ? 'true' : 'false' ?>;
 
 function bindLoadMore() {
   const loadMoreBtn = document.getElementById('load-more');
@@ -509,10 +522,28 @@ function bindLoadMore() {
           const earnHtml = (FH_CREATOR_ID && v.user_id === FH_CREATOR_ID && v.earnings_fmt)
             ? `<div class="video-card-earnings-box" title="Watch-time earnings on this video"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
             : '';
+          
+          let deleteBtnHtml = '';
+          if (IS_OWNER_OR_ADMIN) {
+            const csrfToken = '<?= csrf_token() ?>';
+            const deleteActionUrl = '<?= BASE_URL ?>/channel.php?id=' + encodeURIComponent(v.user_id) + '&tab=' + tabParam;
+            deleteBtnHtml = `
+<div class="video-owner-actions" style="position:absolute; top:8px; right:8px; z-index:15; display:flex; gap:6px;" onclick="event.stopPropagation();">
+  <form method="POST" action="${deleteActionUrl}" style="margin:0;" onsubmit="return confirm('Delete this video?');">
+    <input type="hidden" name="csrf" value="${csrfToken}">
+    <input type="hidden" name="video_id" value="${v.id}">
+    <button type="submit" name="action" value="delete_video" class="btn btn-sm btn-icon" style="background:rgba(239,68,68,0.85); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="Delete Video">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    </button>
+  </form>
+</div>`;
+          }
+
           el.innerHTML = `
             <div class="video-thumb" style="position:relative">
               <img src="${v.thumbnail}" alt="${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
               ${durBadge}
+              ${deleteBtnHtml}
             </div>
             <div class="video-card-body">
               <div class="video-card-info-wrap">

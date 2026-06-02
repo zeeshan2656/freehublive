@@ -643,11 +643,29 @@ function render_video_card(array $v, array $opts = []): string {
             . '<span>' . $label . ' earned</span></div>';
     }
 
+    $deleteBtnHtml = '';
+    if (!empty($opts['show_delete'])) {
+        $csrfToken = csrf_token();
+        $deleteActionUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=' . $tabParam;
+        $deleteBtnHtml = <<<HTML
+<div class="video-owner-actions" style="position:absolute; top:8px; right:8px; z-index:15; display:flex; gap:6px;" onclick="event.stopPropagation();">
+  <form method="POST" action="{$deleteActionUrl}" style="margin:0;" onsubmit="return confirm('Delete this video?');">
+    <input type="hidden" name="csrf" value="{$csrfToken}">
+    <input type="hidden" name="video_id" value="{$v['id']}">
+    <button type="submit" name="action" value="delete_video" class="btn btn-sm btn-icon" style="background:rgba(239,68,68,0.85); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="Delete Video">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    </button>
+  </form>
+</div>
+HTML;
+    }
+
     return <<<HTML
 <article class="video-card fade-in{$formatClass}" onclick="location.href='{$url}'">
   <div class="video-thumb" style="position:relative">
     <img src="{$thumb}" alt="{$title}" loading="lazy" decoding="async" width="320" height="180" class="thumb-main">
     {$durBadge}
+    {$deleteBtnHtml}
   </div>
   <div class="video-card-body">
     <div style="display:flex;gap:10px;margin-bottom:8px">
