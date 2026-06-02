@@ -1,3 +1,7 @@
+
+
+
+
 <?php
 /**
  * Hostinger database credentials (this file stays on the server only).
@@ -11,3 +15,7 @@ return [
     'name'    => 'u434697879_freehub',
     'charset' => 'utf8mb4',
 ];
+
+
+
+
