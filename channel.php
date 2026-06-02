@@ -44,7 +44,7 @@ $tab  = $_GET['tab'] ?? 'videos';
 $sort = $_GET['sort'] ?? 'latest';
 $page = max(1,(int)($_GET['page']??1));
 
-$order = match($sort) { 'views'=>'views DESC', 'oldest'=>'published_at ASC', default=>'published_at DESC' };
+$order = match($sort) { 'views'=>'views DESC', 'oldest'=>'created_at ASC', default=>'created_at DESC' };
 
 $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
 $is_owner_or_admin = is_logged_in() && ($is_owner || auth_user()['role'] === 'admin');

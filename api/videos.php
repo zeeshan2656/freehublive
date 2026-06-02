@@ -47,9 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $order = match($sort) {
         'views'   => 'v.views DESC',
         'likes'   => 'v.likes DESC',
-        'oldest'  => 'v.published_at ASC',
-        'latest'  => 'v.published_at DESC',
-        default   => $q ? 'MATCH(v.title,v.description,v.tags) AGAINST(?) DESC' : 'v.published_at DESC',
+        'oldest'  => 'v.created_at ASC',
+        'latest'  => 'v.created_at DESC',
+        default   => $q ? 'MATCH(v.title,v.description,v.tags) AGAINST(?) DESC' : 'v.created_at DESC',
     };
 
     $order_params = [];

@@ -28,9 +28,10 @@ if ($cat) {
 
 $order = match($sort) {
     'views'  => 'v.views DESC',
-    'latest' => 'v.published_at DESC',
-    'oldest' => 'v.published_at ASC',
-    default  => $q ? 'MATCH(v.title,v.description,v.tags) AGAINST(?) DESC' : 'v.views DESC',
+    'likes'  => 'v.likes DESC',
+    'oldest' => 'v.created_at ASC',
+    'latest' => 'v.created_at DESC',
+    default  => $q ? "MATCH(v.title,v.description,v.tags) AGAINST(?) DESC" : "v.created_at DESC",
 };
 // ORDER BY params are separate — db_count doesn't use ORDER BY
 $order_params = [];

@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.05.30.7';
+    $migration_version = '2026.05.30.8';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -394,6 +394,9 @@ function fh_run_migrations(): void {
     if (fh_table_exists('videos')) {
         if (!fh_index_exists('videos', 'idx_vid_status_visibility_pub')) {
             db_query("ALTER TABLE videos ADD INDEX idx_vid_status_visibility_pub (status, visibility, published_at DESC)");
+        }
+        if (!fh_index_exists('videos', 'idx_vid_status_visibility_created')) {
+            db_query("ALTER TABLE videos ADD INDEX idx_vid_status_visibility_created (status, visibility, created_at DESC)");
         }
         if (!fh_index_exists('videos', 'idx_vid_status_visibility_views')) {
             db_query("ALTER TABLE videos ADD INDEX idx_vid_status_visibility_views (status, visibility, views DESC)");

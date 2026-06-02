@@ -31,7 +31,7 @@ $latest = db_fetchAll_cached(
      FROM videos v
      JOIN users u ON u.id=v.user_id
      WHERE v.status='published' AND v.visibility='public' {$cat_filter}
-     ORDER BY v.published_at DESC LIMIT 51",
+     ORDER BY v.created_at DESC LIMIT 51",
     $params,
     60
 );
