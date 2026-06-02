@@ -647,8 +647,13 @@ function render_video_card(array $v, array $opts = []): string {
     if (!empty($opts['show_delete'])) {
         $csrfToken = csrf_token();
         $deleteActionUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=' . $tabParam;
+        $isReel = (int)($v['is_reel'] ?? 0) === 1;
+        $editUrl = BASE_URL . '/creator/' . ($isReel ? 'edit_reel.php' : 'edit.php') . '?id=' . (int)$v['id'];
         $deleteBtnHtml = <<<HTML
 <div class="video-owner-actions" style="position:absolute; top:8px; right:8px; z-index:15; display:flex; gap:6px;" onclick="event.stopPropagation();">
+  <a href="{$editUrl}" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.65); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="Edit Video">
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+  </a>
   <form method="POST" action="{$deleteActionUrl}" style="margin:0;" onsubmit="return confirm('Delete this video?');">
     <input type="hidden" name="csrf" value="{$csrfToken}">
     <input type="hidden" name="video_id" value="{$v['id']}">
