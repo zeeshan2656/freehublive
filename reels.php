@@ -1002,7 +1002,7 @@ body {
           <div class="reel-player-and-panel-row">
             <!-- Video element container -->
             <div class="reel-player-container">
-              <video class="reel-video" src="<?= $video_src ?>" loop playsinline webkit-playsinline preload="none" poster="<?= $thumb ?>"></video>
+              <video class="reel-video" src="<?= $video_src ?>" loop playsinline webkit-playsinline preload="<?= ($index === 0) ? 'auto' : 'none' ?>" poster="<?= $thumb ?>"></video>
               
               <!-- Tap/Play/Volume overlays -->
               <div class="video-overlay-play-btn">
@@ -1299,8 +1299,13 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         // Pause other videos
         video.pause();
-        // Reset time if far away to save resources
-        if (Math.abs(idx - index) > 1) {
+        // Preload adjacent slides to enable instant loading when swiping/scrolling
+        if (Math.abs(idx - index) === 1) {
+          if (video.preload !== "auto") {
+            video.preload = "auto";
+            video.load(); // Force the browser to start downloading/buffering the video stream
+          }
+        } else {
           video.preload = "none";
         }
       }
