@@ -142,11 +142,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         json_success(['likes' => format_number($likes), 'reaction' => $new_reaction]);
     }
 
-    // Initialize an upload: create placeholder video record and return upload token
+    // Initialize an upload: create ONLY an upload_sessions row (NO videos record yet)
+    // The actual video record is created only on successful finalization.
     if ($action === 'init_upload') {
         $meta = $body['meta'] ?? [];
         $title = trim($meta['title'] ?? '');
-        $is_reel = 0;
         if ($title === '') {
             $title = 'Video #' . rand(10000, 99999);
         }
@@ -158,61 +158,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $visibility = 'public';
         }
         $category_ids = $meta['category_ids'] ?? [];
-        $first_category_id = null;
-        if (!empty($category_ids)) {
-            $first_category_id = (int)$category_ids[0];
-        }
-
-        $slug = slugify($title);
-        $base = $slug;
-        $i = 1;
-        while (db_fetch("SELECT id FROM videos WHERE slug=?", [$slug])) {
-            $slug = $base . '-' . $i++;
-        }
 
         $upload_token = bin2hex(random_bytes(32));
 
-        $new_id = db_insert('videos', [
-            'user_id'      => $uid,
-            'category_id'  => $first_category_id,
+        // Store all metadata as JSON in upload_sessions — no videos row yet
+        $meta_json = json_encode([
             'title'        => $title,
-            'slug'         => $slug,
             'description'  => $description,
             'tags'         => $tags,
-            'video_url'    => '',
-            'thumbnail'    => null,
-            'file_size'    => 0,
-            'duration'     => 0,
             'visibility'   => $visibility,
-            'status'       => 'uploading',
-            'is_reel'      => $is_reel
+            'category_ids' => $category_ids,
+            'is_reel'      => 0,
+            'duration'     => 0,
+        ], JSON_UNESCAPED_UNICODE);
+
+        $session_id = db_insert('upload_sessions', [
+            'video_id'   => null,
+            'user_id'    => $uid,
+            'token'      => $upload_token,
+            'meta_json'  => $meta_json,
+            'status'     => 'active',
         ]);
 
-        if ($new_id && !empty($category_ids)) {
-            foreach ($category_ids as $cid) {
-                db_insert('video_categories', ['video_id' => $new_id, 'category_id' => (int)$cid]);
-            }
-        }
-
-        // ensure upload_sessions table exists (best-effort)
-        db_query("CREATE TABLE IF NOT EXISTS upload_sessions (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            video_id INT UNSIGNED NOT NULL,
-            user_id INT UNSIGNED NOT NULL,
-            token VARCHAR(64) NOT NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_video (video_id)
-        ) ENGINE=InnoDB;");
-        db_insert('upload_sessions', ['video_id'=>$new_id, 'user_id'=>$uid, 'token'=>$upload_token]);
-
-        json_success(['video_id' => $new_id, 'upload_token' => $upload_token]);
+        json_success(['session_id' => $session_id, 'upload_token' => $upload_token]);
     }
 
-    // Save/update metadata for an existing video (can be called before upload completes)
+    // Save/update metadata — supports both session_id (pre-publish) and video_id (post-publish)
     if ($action === 'save_metadata') {
         $meta = $body['meta'] ?? [];
-        $video_id = (int)($meta['video_id'] ?? 0);
-        if (!$video_id) json_error('Missing video_id');
+        $video_id   = (int)($meta['video_id'] ?? 0);
+        $session_id = (int)($meta['session_id'] ?? 0);
+
+        // ── Pre-publish: update upload_sessions.meta_json ──
+        if ($session_id && !$video_id) {
+            $session = db_fetch('SELECT id, user_id, meta_json FROM upload_sessions WHERE id=?', [$session_id]);
+            if (!$session) json_error('Session not found', 404);
+            if ((int)$session['user_id'] !== $uid && !is_admin()) json_error('Forbidden', 403);
+
+            $existing = json_decode($session['meta_json'] ?? '{}', true) ?: [];
+            if (isset($meta['title'])) {
+                $t = trim($meta['title']);
+                $existing['title'] = $t !== '' ? $t : 'Video #' . rand(10000, 99999);
+            }
+            if (isset($meta['description'])) $existing['description'] = trim($meta['description']);
+            if (isset($meta['tags']))        $existing['tags'] = trim($meta['tags']);
+            if (isset($meta['visibility']) && in_array($meta['visibility'], ['public','unlisted','private'])) {
+                $existing['visibility'] = $meta['visibility'];
+            }
+            if (isset($meta['category_ids']) && is_array($meta['category_ids'])) {
+                $existing['category_ids'] = $meta['category_ids'];
+            }
+            if (isset($meta['is_reel'])) {
+                $existing['is_reel'] = (int)$meta['is_reel'] === 1 ? 1 : 0;
+            }
+
+            db_update('upload_sessions', ['meta_json' => json_encode($existing, JSON_UNESCAPED_UNICODE)], 'id=?', [$session_id]);
+            json_success(['updated' => true, 'session_id' => $session_id]);
+        }
+
+        // ── Post-publish: update videos table directly ──
+        if (!$video_id) json_error('Missing video_id or session_id');
         $video = db_fetch('SELECT id,user_id FROM videos WHERE id=?', [$video_id]);
         if (!$video) json_error('Not found', 404);
         if ((int)$video['user_id'] !== $uid && !is_admin()) json_error('Forbidden', 403);

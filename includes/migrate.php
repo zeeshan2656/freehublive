@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.05.30.9';
+    $migration_version = '2026.06.03.1';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -591,6 +591,42 @@ function fh_run_migrations(): void {
     if (fh_table_exists('videos')) {
         try {
             db_query("ALTER TABLE videos MODIFY COLUMN status ENUM('draft','pending','published','rejected','processing','uploading','failed') NOT NULL DEFAULT 'uploading'");
+        } catch (Throwable $e) {}
+    }
+
+    // ── Expand upload_sessions for deferred-publish workflow (2026.06.03.1) ──
+    if (fh_table_exists('upload_sessions')) {
+        if (!fh_column_exists('upload_sessions', 'meta_json')) {
+            try { db_query("ALTER TABLE upload_sessions ADD COLUMN meta_json TEXT DEFAULT NULL AFTER token"); } catch (Throwable $e) {}
+        }
+        if (!fh_column_exists('upload_sessions', 'temp_thumb')) {
+            try { db_query("ALTER TABLE upload_sessions ADD COLUMN temp_thumb VARCHAR(255) DEFAULT NULL AFTER meta_json"); } catch (Throwable $e) {}
+        }
+        if (!fh_column_exists('upload_sessions', 'status')) {
+            try { db_query("ALTER TABLE upload_sessions ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active' AFTER temp_thumb"); } catch (Throwable $e) {}
+        }
+        if (!fh_column_exists('upload_sessions', 'uploaded_bytes')) {
+            try { db_query("ALTER TABLE upload_sessions ADD COLUMN uploaded_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER status"); } catch (Throwable $e) {}
+        }
+        // Make video_id nullable (session is created before video record exists)
+        try { db_query("ALTER TABLE upload_sessions MODIFY COLUMN video_id INT UNSIGNED DEFAULT NULL"); } catch (Throwable $e) {}
+    } else {
+        // Create expanded upload_sessions table from scratch
+        try {
+            db_query("CREATE TABLE IF NOT EXISTS upload_sessions (
+                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                video_id INT UNSIGNED DEFAULT NULL,
+                user_id INT UNSIGNED NOT NULL,
+                token VARCHAR(64) NOT NULL,
+                meta_json TEXT DEFAULT NULL,
+                temp_thumb VARCHAR(255) DEFAULT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'active',
+                uploaded_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_token (token),
+                INDEX idx_user (user_id),
+                INDEX idx_status (status)
+            ) ENGINE=InnoDB;");
         } catch (Throwable $e) {}
     }
 

@@ -3,57 +3,58 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-// Simple chunked upload endpoint supporting resumable uploads.
-// POST?video_id=...&token=... : upload chunk via multipart/form-data field 'chunk' and header 'Content-Range'
-// GET?video_id=...&action=status : returns uploaded bytes
+// ============================================================
+// FreeHub.Live — Chunked Upload API (Deferred-Publish Workflow)
+// ============================================================
+// Chunks are uploaded against an upload_sessions row.
+// NO videos record exists until finalization succeeds.
+// POST?session_id=...&token=...           : upload chunk
+// POST?session_id=...&token=...&finalize=1 : finalize + publish in transaction
+// GET?session_id=...&action=status         : returns uploaded bytes
+// ============================================================
 
 header('Content-Type: application/json; charset=utf-8');
 
 $action = $_GET['action'] ?? '';
 
+// ── GET: Check upload status ────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'status') {
     if (!is_logged_in()) json_error('Unauthorized', 401);
-    $vid = (int)($_GET['video_id'] ?? 0);
-    if (!$vid) json_error('Missing video_id');
-    $meta = db_fetch('SELECT file_size FROM videos WHERE id=?', [$vid]);
-    if (!$meta) json_error('Not found', 404);
-    $us = db_fetch('SELECT token FROM upload_sessions WHERE video_id=? ORDER BY id DESC LIMIT 1', [$vid]);
-    if (!$us || $us['token'] !== ($_GET['token'] ?? '')) json_error('Forbidden', 403);
-    $temp = VIDEO_PATH . '._upload_' . $vid . '.part';
+    $sid = (int)($_GET['session_id'] ?? 0);
+    if (!$sid) json_error('Missing session_id');
+    $session = db_fetch('SELECT id, user_id, token FROM upload_sessions WHERE id=?', [$sid]);
+    if (!$session) json_error('Not found', 404);
+    if ($session['token'] !== ($_GET['token'] ?? '')) json_error('Forbidden', 403);
+    if ((int)$session['user_id'] !== (int)auth_user()['id'] && !is_admin()) json_error('Forbidden', 403);
+    $temp = VIDEO_PATH . '._upload_' . $sid . '.part';
     $size = is_file($temp) ? filesize($temp) : 0;
     json_success(['uploaded' => $size]);
 }
 
-// Receive chunk (Content-Range: bytes start-end/total) or full file
+// ── POST: Receive chunk or finalize ─────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_logged_in()) json_error('Unauthorized', 401);
-    $vid = (int)($_GET['video_id'] ?? 0);
+    $sid   = (int)($_GET['session_id'] ?? 0);
     $token = $_GET['token'] ?? '';
-    if (!$vid || !$token) json_error('Missing params');
+    if (!$sid || !$token) json_error('Missing params');
 
-    $video = db_fetch('SELECT id,user_id FROM videos WHERE id=?', [$vid]);
-    if (!$video) json_error('Not found', 404);
-    // validate token from upload_sessions
-    $us = db_fetch('SELECT token, user_id FROM upload_sessions WHERE video_id=? ORDER BY id DESC LIMIT 1', [$vid]);
-    if (!$us || $us['token'] !== $token) json_error('Forbidden', 403);
-    if ((int)$video['user_id'] !== (int)auth_user()['id'] && !is_admin()) json_error('Forbidden', 403);
+    $session = db_fetch('SELECT id, user_id, token, meta_json, temp_thumb, status FROM upload_sessions WHERE id=?', [$sid]);
+    if (!$session) json_error('Not found', 404);
+    if ($session['token'] !== $token) json_error('Forbidden', 403);
+    if ((int)$session['user_id'] !== (int)auth_user()['id'] && !is_admin()) json_error('Forbidden', 403);
 
     if (!is_dir(VIDEO_PATH)) mkdir(VIDEO_PATH, 0755, true);
-    $tempPath = VIDEO_PATH . '._upload_' . $vid . '.part';
+    $tempPath = VIDEO_PATH . '._upload_' . $sid . '.part';
 
-    // If raw PUT (some clients), read php://input
+    // Read chunk data
     if (isset($_FILES['chunk'])) {
         $chunk = $_FILES['chunk'];
         if ($chunk['error'] !== UPLOAD_ERR_OK) json_error('Upload chunk error');
-        // Append to temp file
         $in = fopen($chunk['tmp_name'], 'rb');
     } else {
         $in = fopen('php://input', 'rb');
     }
     if (!$in) json_error('No chunk data');
-
-    // Optional Content-Range header
-    $range = $_SERVER['HTTP_CONTENT_RANGE'] ?? ($_SERVER['HTTP_X_CONTENT_RANGE'] ?? '');
 
     // Append to temp file
     $out = fopen($tempPath, file_exists($tempPath) ? 'ab' : 'wb');
@@ -61,9 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     stream_copy_to_stream($in, $out);
     fclose($in); fclose($out);
 
-    // If client declares it's the final chunk via query param finalize=1
+    // ── Finalize: create video record in a single transaction ──
     if (!empty($_GET['finalize'])) {
-        // Move temp to final filename
         $ext = pathinfo($_GET['filename'] ?? '', PATHINFO_EXTENSION) ?: 'mp4';
         $finalName = unique_filename($ext);
         $finalPath = VIDEO_PATH . $finalName;
@@ -71,23 +71,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $fsize = filesize($finalPath);
         if ($fsize <= 0) {
-            db_update('videos', ['status' => 'failed'], 'id=?', [$vid]);
+            @unlink($finalPath);
+            db_update('upload_sessions', ['status' => 'failed'], 'id=?', [$sid]);
             json_error('Verification failed: empty file.');
         }
 
-        // Auto-publish video record directly
-        db_update('videos', [
-            'video_url' => $finalName,
-            'file_size' => $fsize,
-            'status'    => 'published'
-        ], 'id=?', [$vid]);
+        // Read metadata from session
+        $meta = json_decode($session['meta_json'] ?? '{}', true) ?: [];
+        $title       = $meta['title'] ?? 'Untitled Video';
+        $description = $meta['description'] ?? '';
+        $tags        = $meta['tags'] ?? '';
+        $visibility  = $meta['visibility'] ?? 'public';
+        $is_reel     = (int)($meta['is_reel'] ?? 0);
+        $duration    = (int)($meta['duration'] ?? 0);
+        $category_ids = $meta['category_ids'] ?? [];
+        $first_cat   = !empty($category_ids) ? (int)$category_ids[0] : null;
+        $thumbnail   = $session['temp_thumb'] ?? null;
 
-        // Try to ensure duration in background (best-effort)
+        // Generate unique slug
+        $slug = slugify($title);
+        $base_slug = $slug;
+        $i = 1;
+        while (db_fetch("SELECT id FROM videos WHERE slug=?", [$slug])) {
+            $slug = $base_slug . '-' . $i++;
+        }
+
+        $uid = (int)$session['user_id'];
+
+        // ── BEGIN TRANSACTION: create video + categories atomically ──
+        global $pdo;
+        $pdo->beginTransaction();
+        try {
+            $video_id = db_insert('videos', [
+                'user_id'      => $uid,
+                'category_id'  => $first_cat,
+                'title'        => $title,
+                'slug'         => $slug,
+                'description'  => $description,
+                'tags'         => $tags,
+                'video_url'    => $finalName,
+                'thumbnail'    => $thumbnail,
+                'file_size'    => $fsize,
+                'duration'     => $duration,
+                'visibility'   => $visibility,
+                'status'       => 'published',
+                'published_at' => date('Y-m-d H:i:s'),
+                'is_reel'      => $is_reel,
+            ]);
+
+            // Insert category mappings
+            if ($video_id && !empty($category_ids)) {
+                foreach ($category_ids as $cid) {
+                    db_insert('video_categories', [
+                        'video_id'    => $video_id,
+                        'category_id' => (int)$cid,
+                    ]);
+                }
+            }
+
+            // Mark upload session as completed
+            db_update('upload_sessions', [
+                'video_id' => $video_id,
+                'status'   => 'completed',
+            ], 'id=?', [$sid]);
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            // Clean up the finalized video file on transaction failure
+            @unlink($finalPath);
+            if ($thumbnail && !str_starts_with($thumbnail, 'http')) {
+                @unlink(THUMB_PATH . $thumbnail);
+            }
+            db_update('upload_sessions', ['status' => 'failed'], 'id=?', [$sid]);
+            json_error('Publish failed: ' . $e->getMessage(), 500);
+        }
+
         @ignore_user_abort(true);
-        // Return success
-        json_success(['finalized' => true, 'video_url' => video_url($finalName), 'file_size' => $fsize]);
+        json_success([
+            'finalized'  => true,
+            'video_id'   => $video_id,
+            'video_url'  => video_url($finalName),
+            'file_size'  => $fsize,
+        ]);
     }
 
+    // Non-finalize chunk: return current uploaded size
     json_success(['uploaded' => is_file($tempPath) ? filesize($tempPath) : 0]);
 }
 

@@ -1270,6 +1270,9 @@ require_once __DIR__ . '/../includes/header.php';
           
           showToast(`🟢 <strong>"${escapeHtml(session.title)}"</strong> published successfully!`);
           
+          // Auto-hide from queue after brief delay
+          removePublishedCard(session.id);
+          
           processQueue();
         } else {
           setUploadFailed(session, 'Finalization failed.');
@@ -1354,6 +1357,9 @@ require_once __DIR__ . '/../includes/header.php';
 
         await UploadDB.delete(session.id);
         showToast(`🟢 <strong>"${escapeHtml(session.title)}"</strong> imported successfully!`);
+        
+        // Auto-hide from queue after brief delay
+        removePublishedCard(session.id);
         
         processQueue();
       } else {
@@ -1537,6 +1543,53 @@ require_once __DIR__ . '/../includes/header.php';
       fill.className = `progress-mini-fill ${fillState}`;
       fill.style.width = (session.status === 'uploading' ? session.progress : 100) + '%';
     }
+  }
+
+  // Auto-remove published card from queue after a brief visual delay
+  function removePublishedCard(id) {
+    setTimeout(() => {
+      const card = document.getElementById(`card_${id}`);
+      if (card) {
+        card.style.transition = 'opacity 0.5s ease, transform 0.5s ease, max-height 0.5s ease';
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(30px)';
+        card.style.maxHeight = card.offsetHeight + 'px';
+        card.style.overflow = 'hidden';
+        
+        setTimeout(() => {
+          card.style.maxHeight = '0';
+          card.style.padding = '0';
+          card.style.margin = '0';
+          card.style.border = 'none';
+          
+          setTimeout(() => {
+            card.remove();
+            delete uploads[id];
+            updateQueueCount();
+            
+            // If this was the selected card, clear editor
+            if (selectedUploadId === id) {
+              selectedUploadId = null;
+              detailsForm.style.display = 'none';
+              editorPlaceholder.style.display = 'block';
+              
+              // Auto-select next available card if any
+              const remaining = Object.keys(uploads);
+              if (remaining.length > 0) {
+                selectUpload(remaining[0]);
+              }
+            }
+            
+            // If no uploads left, show welcome dropzone again
+            if (Object.keys(uploads).length === 0) {
+              document.getElementById('welcome-dropzone').style.display = 'block';
+              document.getElementById('top-dropzone').style.display = 'none';
+              document.getElementById('studio-dashboard').style.display = 'none';
+            }
+          }, 500);
+        }, 50);
+      }
+    }, 2000); // Show "Published" status for 2 seconds before removing
   }
 
   // Mark session upload as failed
