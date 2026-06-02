@@ -44,6 +44,7 @@ function fh_connect_pdo(): PDO {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,
         PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES ' . DB_CHARSET . ' COLLATE utf8mb4_unicode_ci',
+        PDO::ATTR_PERSISTENT         => true,
     ];
 
     $hosts = array_unique([DB_HOST, DB_HOST === 'localhost' ? '127.0.0.1' : DB_HOST]);

@@ -9,7 +9,23 @@ function fhInitPendingDurations() {
   const pending = document.querySelectorAll('.video-duration--pending[data-video-id]');
   if (!pending.length || !FH_BASE) return;
 
-  pending.forEach(el => {
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries, obs) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const el = entry.target;
+          obs.unobserve(el);
+          probeDuration(el);
+        }
+      });
+    }, { rootMargin: '100px' });
+
+    pending.forEach(el => observer.observe(el));
+  } else {
+    pending.forEach(el => probeDuration(el));
+  }
+
+  function probeDuration(el) {
     const videoId = el.dataset.videoId;
     const src = el.dataset.videoSrc;
     if (!videoId || !src || el.dataset.probing === '1') return;
@@ -39,13 +55,21 @@ function fhInitPendingDurations() {
         .catch(() => { delete el.dataset.probing; });
     }, {once: true});
     v.addEventListener('error', () => { delete el.dataset.probing; }, {once: true});
-  });
+  }
+}
+
+function fhTriggerPendingDurations() {
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(() => fhInitPendingDurations());
+  } else {
+    setTimeout(fhInitPendingDurations, 100);
+  }
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', fhInitPendingDurations);
+  document.addEventListener('DOMContentLoaded', fhTriggerPendingDurations);
 } else {
-  fhInitPendingDurations();
+  fhTriggerPendingDurations();
 }
 
 // ── Lazy image loading ────────────────────────────────────────
