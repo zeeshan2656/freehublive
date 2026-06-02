@@ -549,6 +549,11 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
           </div>
 
+          <!-- Remove and select another video button -->
+          <button type="button" class="btn btn-outline btn-sm w-full" onclick="resetUploadWizard()" style="justify-content:center; gap:6px; color:var(--red); border-color:rgba(239,68,68,0.25); margin-bottom: 20px; font-weight:700">
+            🗑️ Remove Video &amp; Select Another
+          </button>
+
           <!-- Diagnostics Upload Progress widget -->
           <div class="upload-diagnostics-card" id="spa-diagnostics-widget">
             <div style="display:flex; justify-content:space-between; align-items:center">
@@ -1014,6 +1019,9 @@ require_once __DIR__ . '/../includes/header.php';
     uploadToken = null;
     selectedThumbDataUrl = null;
     uploadProgress = 0;
+    
+    // Clear file input element explicitly so user can select same or another file
+    if (fileInput) fileInput.value = '';
     
     document.getElementById('spa-upload-form').reset();
     detailsTitle.value = '';
