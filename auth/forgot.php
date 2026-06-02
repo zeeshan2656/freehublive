@@ -65,7 +65,7 @@ $primary    = setting('primary_color', '#6366f1');
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= e($meta_title) ?></title>
-<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
+<link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.css') ?>">
 <style>:root{--accent:<?= e($primary) ?>;--accent2:<?= e($primary) ?>cc}</style>
 <script>const _st=localStorage.getItem('fh_theme');if(_st)document.documentElement.setAttribute('data-theme',_st);</script>
 <style>

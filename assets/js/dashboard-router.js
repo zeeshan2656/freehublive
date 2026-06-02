@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
       window._cycleTheme();
     } else {
       // Fallback if _cycleTheme not defined
-      const themes = ['light-white', 'dark-minimal', 'gray', 'light-blue', 'pink', 'red-black', 'green', 'light-green'];
+      const themes = ['light-white', 'dark-minimal'];
       let current = document.documentElement.getAttribute('data-theme') || 'dark-minimal';
       let nextIndex = (themes.indexOf(current) + 1) % themes.length;
       let next = themes[nextIndex];

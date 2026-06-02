@@ -80,13 +80,7 @@ $meta_title = 'Site Settings';
 require_once __DIR__ . '/partials/admin_head.php';
 $themes = [
   'light-white'  => 'Light White',
-  'dark-minimal' => 'Minima',
-  'gray'         => 'Gray',
-  'light-blue'   => 'Light Blue',
-  'pink'         => 'Pink',
-  'red-black'    => 'Red Black',
-  'green'        => 'Green',
-  'light-green'  => 'Light Green'
+  'dark-minimal' => 'Minima'
 ];
 ?>
 <div class="admin-content">

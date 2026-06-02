@@ -311,12 +311,6 @@ input,select,textarea{font-family:inherit;outline:none}
 :root{--bg:#141414;--bg2:#1a1a1a;--bg3:#222222;--surface:#1e1e1e;--border:rgba(255,255,255,.1);--text:#efefef;--text2:#999;--text3:#555;--accent:#ff6600;--accent2:#ff8533;--red:#e53935;--green:#43a047;--yellow:#ffb300;--radius:3px;--radius-lg:4px;--shadow:0 4px 16px rgba(0,0,0,.6);--shadow-sm:0 2px 6px rgba(0,0,0,.4);--font:'Inter',sans-serif;--font2:'Outfit',sans-serif;--nav-h:56px;--trans:.15s ease}
 [data-theme="light-white"]{--bg:#f8fafc;--bg2:#fff;--bg3:#f1f5f9;--surface:#fff;--accent:#3b82f6;--accent2:#60a5fa;--text:#0f172a;--text2:#475569;--border:rgba(0,0,0,.08);--shadow:0 4px 12px rgba(0,0,0,.04);--radius:4px;--radius-lg:6px}
 [data-theme="dark-minimal"]{--bg:#0a0f1d;--bg2:#111827;--bg3:#1f2937;--surface:#111827;--accent:#3b82f6;--accent2:#60a5fa;--text:#f3f4f6;--text2:#9ca3af;--border:rgba(255,255,255,.08);--radius:4px;--radius-lg:6px}
-[data-theme="gray"]{--bg:#18181b;--bg2:#27272a;--bg3:#3f3f46;--surface:#27272a;--accent:#a1a1aa;--accent2:#d4d4d8;--text:#f4f4f5;--text2:#a1a1aa;--border:rgba(255,255,255,.08);--radius:4px;--radius-lg:6px}
-[data-theme="light-blue"]{--bg:#f0f7ff;--bg2:#fff;--bg3:#e0f2fe;--surface:#fff;--accent:#0284c7;--accent2:#38bdf8;--text:#0f172a;--text2:#475569;--border:rgba(0,0,0,.08);--shadow:0 4px 12px rgba(0,0,0,.04);--radius:4px;--radius-lg:6px}
-[data-theme="pink"]{--bg:#fdf2f8;--bg2:#fff;--bg3:#fce7f3;--surface:#fff;--accent:#db2777;--accent2:#f472b6;--text:#1e1b4b;--text2:#6b21a8;--border:rgba(0,0,0,.06);--radius:6px;--radius-lg:8px}
-[data-theme="red-black"]{--bg:#080808;--bg2:#141414;--bg3:#222222;--surface:#141414;--accent:#e11d48;--accent2:#fb7185;--text:#f3f4f6;--text2:#a1a1aa;--border:rgba(255,255,255,.06);--radius:2px;--radius-lg:4px}
-[data-theme="green"]{--bg:#05130b;--bg2:#0b2416;--bg3:#143d26;--surface:#0b2416;--accent:#10b981;--accent2:#34d399;--text:#ecfdf5;--text2:#a7f3d0;--border:rgba(255,255,255,.06);--radius:4px;--radius-lg:6px}
-[data-theme="light-green"]{--bg:#f0fdf4;--bg2:#fff;--bg3:#dcfce7;--surface:#fff;--accent:#16a34a;--accent2:#4ade80;--text:#14532d;--text2:#166534;--border:rgba(0,0,0,.08);--radius:4px;--radius-lg:6px}
 /* Navbar */
 .navbar{position:sticky;top:0;z-index:100;height:var(--nav-h);background:var(--bg2)!important;border-bottom:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,0.16)}
 .navbar-inner{height:100%;display:flex;align-items:center;gap:16px;padding:0 20px}
@@ -1366,8 +1360,8 @@ endif;
 
 <script>
 // Restore saved theme IMMEDIATELY (before DOMContentLoaded) to prevent flash
-const _themes=['light-white','dark-minimal','gray','light-blue','pink','red-black','green','light-green'];
-const _themeLabels={'light-white':'Light White','dark-minimal':'Minima','gray':'Gray','light-blue':'Light Blue','pink':'Pink','red-black':'Red Black','green':'Green','light-green':'Light Green'};
+const _themes=['light-white','dark-minimal'];
+const _themeLabels={'light-white':'Light White','dark-minimal':'Minima'};
 let _savedTheme=localStorage.getItem('fh_theme');
 if(_savedTheme && !_themes.includes(_savedTheme)){
   localStorage.removeItem('fh_theme');
