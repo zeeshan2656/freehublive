@@ -145,38 +145,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Initialize an upload: create placeholder video record and return upload token
     if ($action === 'init_upload') {
         $meta = $body['meta'] ?? [];
-        $title = trim($meta['title'] ?? 'Untitled');
-        $description = trim($meta['description'] ?? '');
-        $tags = trim($meta['tags'] ?? '');
-        $category_ids = $meta['category_ids'] ?? [];
-        $visibility = in_array($meta['visibility'] ?? '', ['public','unlisted','private']) ? $meta['visibility'] : 'public';
+        $title = trim($meta['title'] ?? '');
+        $is_reel = !empty($meta['is_reel']) ? 1 : 0;
+        if ($title === '') {
+            if ($is_reel) {
+                $title = 'Reel #' . rand(10000, 99999);
+            } else {
+                $title = 'Video #' . rand(10000, 99999);
+            }
+        }
 
-        if (strlen($title) < 1) $title = 'Untitled';
+        $description = trim($meta['description'] ?? '');
+        if ($is_reel && $description === '') {
+            $description = 'Short vertical reel video.';
+        }
+        $tags = trim($meta['tags'] ?? '');
+        if ($is_reel && $tags === '') {
+            $tags = 'reel,short';
+        }
+        $visibility = $meta['visibility'] ?? 'unlisted';
+        if (!in_array($visibility, ['public', 'unlisted', 'private'])) {
+            $visibility = 'unlisted';
+        }
+        $category_ids = $meta['category_ids'] ?? [];
+        $first_category_id = null;
+        if (!empty($category_ids)) {
+            $first_category_id = (int)$category_ids[0];
+        }
+
         $slug = slugify($title);
-        $base = $slug; $i = 1;
+        $base = $slug;
+        $i = 1;
         while (db_fetch("SELECT id FROM videos WHERE slug=?", [$slug])) {
             $slug = $base . '-' . $i++;
         }
 
-        $upload_token = bin2hex(random_bytes(16));
-        $approvalMode  = setting('video_approval_mode', 'manual');
-        $initialStatus = ($approvalMode === 'auto') ? 'published' : 'pending';
-        $publishedAt   = ($approvalMode === 'auto') ? date('Y-m-d H:i:s') : null;
+        $upload_token = bin2hex(random_bytes(32));
 
         $new_id = db_insert('videos', [
-            'user_id' => $uid,
-            'category_id' => !empty($category_ids) ? (int)$category_ids[0] : null,
-            'title' => $title,
-            'slug'  => $slug,
-            'description' => $description,
-            'tags' => $tags,
-            'video_url' => '',
-            'thumbnail' => null,
-            'file_size' => 0,
-            'duration' => 0,
-            'visibility' => $visibility,
-            'status' => $initialStatus,
-            'published_at' => $publishedAt
+            'user_id'      => $uid,
+            'category_id'  => $first_category_id,
+            'title'        => $title,
+            'slug'         => $slug,
+            'description'  => $description,
+            'tags'         => $tags,
+            'video_url'    => '',
+            'thumbnail'    => null,
+            'file_size'    => 0,
+            'duration'     => 0,
+            'visibility'   => $visibility,
+            'status'       => 'pending',
+            'is_reel'      => $is_reel
         ]);
 
         if ($new_id && !empty($category_ids)) {
@@ -204,12 +223,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $meta = $body['meta'] ?? [];
         $video_id = (int)($meta['video_id'] ?? 0);
         if (!$video_id) json_error('Missing video_id');
-        $video = db_fetch('SELECT id,user_id FROM videos WHERE id=?', [$video_id]);
+        $video = db_fetch('SELECT id,user_id,is_reel FROM videos WHERE id=?', [$video_id]);
         if (!$video) json_error('Not found', 404);
         if ((int)$video['user_id'] !== $uid && !is_admin()) json_error('Forbidden', 403);
 
         $fields = [];
-        if (isset($meta['title'])) $fields['title'] = trim($meta['title']);
+        if (isset($meta['title'])) {
+            $t = trim($meta['title']);
+            if ($t === '') {
+                if (!empty($video['is_reel'])) {
+                    $t = 'Reel #' . rand(10000, 99999);
+                } else {
+                    $t = 'Video #' . rand(10000, 99999);
+                }
+            }
+            $fields['title'] = $t;
+        }
         if (isset($meta['description'])) $fields['description'] = trim($meta['description']);
         if (isset($meta['tags'])) $fields['tags'] = trim($meta['tags']);
         if (isset($meta['visibility']) && in_array($meta['visibility'], ['public','unlisted','private'])) $fields['visibility'] = $meta['visibility'];
