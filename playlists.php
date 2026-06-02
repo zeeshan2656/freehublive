@@ -290,7 +290,8 @@ if ($playlist_id > 0) {
                   <div class="playlist-video-item">
                     <div class="playlist-video-index"><?= $idx + 1 ?></div>
                     
-                    <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>&list=<?= $playlist['id'] ?>" class="playlist-video-thumb-wrapper">
+                    <?php $is_portrait = (int)($v['is_reel'] ?? 0) === 1; ?>
+                    <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>&list=<?= $playlist['id'] ?>" class="playlist-video-thumb-wrapper <?= $is_portrait ? 'is-portrait' : '' ?>">
                       <img src="<?= thumb_url($v['thumbnail']) ?>" alt="<?= e($v['title']) ?>" class="playlist-video-thumb" loading="lazy">
                       <span style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.8);color:#fff;font-size:0.7rem;font-weight:600;padding:2px 6px;border-radius:4px">
                         <?= format_duration((int)$v['duration']) ?>

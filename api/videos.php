@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $total  = db_count('videos v', $where, $where_params);
     $all_params = array_merge($where_params, $order_params);
     $videos = db_fetchAll(
-        "SELECT v.id,v.user_id,v.title,v.thumbnail,v.duration,v.views,v.published_at,
+        "SELECT v.id,v.user_id,v.title,v.thumbnail,v.duration,v.views,v.published_at,v.is_reel,
                 u.username,u.channel_name,u.avatar
          FROM videos v JOIN users u ON u.id=v.user_id
          WHERE $where ORDER BY $order LIMIT $per OFFSET $offset",
@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
             'channel'      => $v['channel_name'] ?? $v['username'],
             'avatar'       => avatar_url($v['avatar']),
             'url'          => BASE_URL . '/watch.php?v=' . $v['id'] . $ref_param,
-
+            'is_reel'      => (int)($v['is_reel'] ?? 0),
         ];
         if ($creatorId && (int)$v['user_id'] === $creatorId) {
             $usd = $earningsMap[(int)$v['id']] ?? 0.0;
@@ -231,6 +231,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($meta['category_ids']) && is_array($meta['category_ids'])) {
             $first = (int)($meta['category_ids'][0] ?? 0);
             if ($first > 0) $fields['category_id'] = $first;
+        }
+        if (isset($meta['is_reel'])) {
+            $fields['is_reel'] = (int)$meta['is_reel'] === 1 ? 1 : 0;
         }
 
         if ($fields) db_update('videos', $fields, 'id=?', [$video_id]);

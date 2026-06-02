@@ -424,10 +424,10 @@ function bindLoadMore() {
           }
 
           el.innerHTML = `
-            <div class="video-thumb" style="position:relative">
-              <img src="${v.thumbnail}" alt="${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
-              ${durBadge}
-              ${deleteBtnHtml}
+            <div class="video-thumb \${v.is_reel ? 'is-portrait' : ''}" style="position:relative">
+              <img src="\${v.thumbnail}" alt="\${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
+              \${durBadge}
+              \${deleteBtnHtml}
             </div>
             <div class="video-card-body">
               <div class="video-card-info-wrap">

@@ -882,11 +882,17 @@ require_once __DIR__ . '/../includes/header.php';
         const img = new Image();
         img.src = e.target.result;
         img.onload = () => {
+          const imgPortrait = img.naturalHeight > img.naturalWidth;
           const canvas = document.createElement('canvas');
-          canvas.width = 1280;
-          canvas.height = 720;
+          if (imgPortrait) {
+            canvas.width = 720;
+            canvas.height = 1280;
+          } else {
+            canvas.width = 1280;
+            canvas.height = 720;
+          }
           const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, 1280, 720);
+          drawImageFit(img, canvas, ctx);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
 
           session.selectedThumbDataUrl = dataUrl;
@@ -1133,11 +1139,17 @@ require_once __DIR__ . '/../includes/header.php';
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function() {
+      const imgPortrait = img.naturalHeight > img.naturalWidth;
       const canvas = document.createElement('canvas');
-      canvas.width = 1280;
-      canvas.height = 720;
+      if (imgPortrait) {
+        canvas.width = 720;
+        canvas.height = 1280;
+      } else {
+        canvas.width = 1280;
+        canvas.height = 720;
+      }
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, 1280, 720);
+      drawImageFit(img, canvas, ctx);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       saveCustomThumbnail(videoId, dataUrl);
     };
@@ -1158,9 +1170,29 @@ require_once __DIR__ . '/../includes/header.php';
       const step = duration / (count + 1);
       const times = Array.from({length: count}, (_, i) => step * (i + 1));
 
+      const vWidth = helperVideo.videoWidth || 640;
+      const vHeight = helperVideo.videoHeight || 360;
+      const isPortrait = vHeight > vWidth;
+      session.isReel = isPortrait ? 1 : 0;
+
+      // Save video orientation to backend database asynchronously
+      if (session.videoId) {
+        saveVideoOrientation(session.videoId, session.isReel);
+      }
+
+      const maxDim = 640;
+      let cw, ch;
+      if (isPortrait) {
+        cw = Math.round(maxDim * (vWidth / vHeight));
+        ch = maxDim;
+      } else {
+        cw = maxDim;
+        ch = Math.round(maxDim * (vHeight / vWidth));
+      }
+
       const canvas = document.createElement('canvas');
-      canvas.width = 640;
-      canvas.height = 360;
+      canvas.width = cw || (isPortrait ? 360 : 640);
+      canvas.height = ch || (isPortrait ? 640 : 360);
       const ctx = canvas.getContext('2d');
 
       for (let i = 0; i < count; i++) {
@@ -1180,7 +1212,7 @@ require_once __DIR__ . '/../includes/header.php';
             // update mini card preview immediately
             const miniThumb = document.getElementById(`thumb_${session.id}`);
             if (miniThumb) {
-              miniThumb.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover">`;
+              miniThumb.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;background:#000">`;
             }
             if (selectedUploadId === session.id) {
               renderThumbnailsGrid(session);
@@ -1283,7 +1315,8 @@ require_once __DIR__ . '/../includes/header.php';
       description: session.description,
       tags: session.tags,
       visibility: session.visibility,
-      category_ids: session.categoryIds
+      category_ids: session.categoryIds,
+      is_reel: session.isReel || 0
     };
 
     try {
@@ -1345,7 +1378,7 @@ require_once __DIR__ . '/../includes/header.php';
         video.removeEventListener('seeked', onSeeked);
         video.removeEventListener('error', onError);
         try {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          drawVideoFit(video, canvas, ctx);
           resolve(canvas.toDataURL('image/jpeg', 0.8));
         } catch (e) { reject(e); }
       };
@@ -1358,6 +1391,81 @@ require_once __DIR__ . '/../includes/header.php';
       video.addEventListener('error', onError);
       video.currentTime = time;
     });
+  }
+
+  // Draw video using letterbox/pillarbox fitting
+  function drawVideoFit(video, canvas, ctx) {
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    
+    // Clear / Fill black
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, cw, ch);
+    
+    const canvasRatio = cw / ch;
+    const videoRatio = vw / vh;
+    
+    let drawWidth, drawHeight, x, y;
+    if (videoRatio > canvasRatio) {
+      drawWidth = cw;
+      drawHeight = cw / videoRatio;
+      x = 0;
+      y = (ch - drawHeight) / 2;
+    } else {
+      drawWidth = ch * videoRatio;
+      drawHeight = ch;
+      x = (cw - drawWidth) / 2;
+      y = 0;
+    }
+    ctx.drawImage(video, x, y, drawWidth, drawHeight);
+  }
+
+  // Draw image using letterbox/pillarbox fitting
+  function drawImageFit(img, canvas, ctx) {
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    
+    // Clear / Fill black
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, cw, ch);
+    
+    const canvasRatio = cw / ch;
+    const imageRatio = iw / ih;
+    
+    let drawWidth, drawHeight, x, y;
+    if (imageRatio > canvasRatio) {
+      drawWidth = cw;
+      drawHeight = cw / imageRatio;
+      x = 0;
+      y = (ch - drawHeight) / 2;
+    } else {
+      drawWidth = ch * imageRatio;
+      drawHeight = ch;
+      x = (cw - drawWidth) / 2;
+      y = 0;
+    }
+    ctx.drawImage(img, x, y, drawWidth, drawHeight);
+  }
+
+  // Save orientation to DB asynchronously
+  async function saveVideoOrientation(videoId, isReel) {
+    if (!videoId) return;
+    try {
+      await fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          meta: {
+            video_id: videoId,
+            is_reel: isReel
+          }
+        })
+      });
+    } catch (e) {}
   }
 
   // Utilities

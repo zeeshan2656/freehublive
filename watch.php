@@ -30,7 +30,7 @@ if ($playlist_id > 0) {
         
         if ($playlist['visibility'] !== 'private' || $is_playlist_owner) {
             $playlist_videos = db_fetchAll(
-                "SELECT pv.video_id, v.title, v.thumbnail, v.duration, u.username, u.channel_name
+                "SELECT pv.video_id, v.title, v.thumbnail, v.duration, v.is_reel, u.username, u.channel_name
                  FROM playlist_videos pv
                  JOIN videos v ON v.id = pv.video_id
                  JOIN users u ON u.id = v.user_id
@@ -112,18 +112,18 @@ if ($is_xhr_view) {
 $related = db_fetchAll_cached(
     "(SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
       JOIN users u ON u.id=v.user_id
-      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0 AND v.category_id=?
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.category_id=?
       ORDER BY v.views DESC LIMIT 12)
      UNION
      (SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
       JOIN users u ON u.id=v.user_id
-      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public'
       AND EXISTS (SELECT 1 FROM video_categories vc WHERE vc.video_id = v.id AND vc.category_id = ?)
       ORDER BY v.views DESC LIMIT 12)
      UNION
      (SELECT v.*,u.username,u.channel_name,u.avatar FROM videos v
       JOIN users u ON u.id=v.user_id
-      WHERE v.id!=? AND v.status='published' AND v.visibility='public' AND v.is_reel=0
+      WHERE v.id!=? AND v.status='published' AND v.visibility='public'
       ORDER BY v.views DESC LIMIT 12)
      LIMIT 12",
     [$vid, $video['category_id'], $vid, $video['category_id'], $vid],
@@ -392,8 +392,9 @@ require_once __DIR__ . '/includes/header.php';
                 <?php endif; ?>
               </div>
 
-              <div style="width: 80px; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden; position: relative; flex-shrink: 0; background: var(--bg3)">
-                <img src="<?= $pv_thumb ?>" alt="<?= e($pv['title']) ?>" style="width:100%; height:100%; object-fit: cover">
+              <?php $is_pv_portrait = (int)($pv['is_reel'] ?? 0) === 1; ?>
+              <div class="playlist-video-thumb-wrapper<?= $is_pv_portrait ? ' is-portrait' : '' ?>" style="width: 80px; aspect-ratio: <?= $is_pv_portrait ? '9/16' : '16/9' ?>; border-radius: 4px; overflow: hidden; position: relative; flex-shrink: 0; background: var(--bg3)">
+                <img src="<?= $pv_thumb ?>" alt="<?= e($pv['title']) ?>" style="width:100%; height:100%; object-fit: <?= $is_pv_portrait ? 'contain' : 'cover' ?>">
                 <span style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.8); color: #fff; font-size: 0.6rem; font-weight: 600; padding: 0.5px 3px; border-radius: 2px">
                   <?= format_duration((int)$pv['duration']) ?>
                 </span>
@@ -424,9 +425,11 @@ require_once __DIR__ . '/includes/header.php';
       <div style="margin-bottom: 20px; padding: 0 16px;">
         <?= render_ad_placeholder('watch_up_next') ?>
       </div>
-      <?php foreach ($related as $r): ?>
+      <?php foreach ($related as $r):
+        $is_r_portrait = (int)($r['is_reel'] ?? 0) === 1;
+      ?>
       <a href="<?= BASE_URL ?>/watch.php?v=<?= $r['id'] ?>" class="related-video-item">
-        <div class="related-thumb">
+        <div class="related-thumb<?= $is_r_portrait ? ' is-portrait' : '' ?>" style="position:relative">
           <img src="<?= thumb_url($r['thumbnail']) ?>" alt="<?= e($r['title']) ?>"
                loading="lazy" width="168" height="94">
           <span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.8);color:#fff;font-size:.68rem;font-weight:600;padding:1px 5px;border-radius:3px">

@@ -157,9 +157,9 @@ function bindLoadMore() {
             ? `<div class="video-card-earnings-box" title="Watch-time earnings on this video"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
             : '';
           el.innerHTML = `
-            <div class="video-thumb" style="position:relative">
-              <img src="${v.thumbnail}" alt="${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
-              ${durBadge}
+            <div class="video-thumb \${v.is_reel ? 'is-portrait' : ''}" style="position:relative">
+              <img src="\${v.thumbnail}" alt="\${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
+              \${durBadge}
             </div>
             <div class="video-card-body">
               <div class="video-card-info-wrap">

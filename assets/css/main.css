@@ -1955,3 +1955,28 @@ tbody tr:hover{background:var(--bg3)}
   background: #0c0c0d !important;
 }
 
+/* Portrait/Reel Aspect Ratio Support */
+.video-thumb.is-portrait {
+  aspect-ratio: 9/16 !important;
+  background: #000;
+}
+.video-thumb.is-portrait img {
+  object-fit: contain !important;
+}
+.playlist-video-thumb-wrapper.is-portrait {
+  aspect-ratio: 9/16 !important;
+  width: 90px !important;
+  background: #000;
+}
+.playlist-video-thumb-wrapper.is-portrait img {
+  object-fit: contain !important;
+}
+.related-thumb.is-portrait {
+  aspect-ratio: 9/16 !important;
+  width: 94px !important;
+  background: #000;
+}
+.related-thumb.is-portrait img {
+  object-fit: contain !important;
+}
+

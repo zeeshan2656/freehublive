@@ -632,6 +632,8 @@ function render_video_card(array $v, array $opts = []): string {
          : '<span class="video-duration video-duration--pending" data-video-id="' . (int)$v['id'] . '"' . $srcAttr . '>…</span>';
 
     $formatClass = $format === 'full' ? ' video-card--full-width' : ($format === 'side' ? ' video-card--side' : '');
+    $is_portrait = (int)($v['is_reel'] ?? 0) === 1;
+    $portraitClass = $is_portrait ? ' is-portrait' : '';
 
     $earningsHtml = '';
     if ($earnings !== null && is_logged_in() && is_creator()) {
@@ -665,7 +667,7 @@ HTML;
 
     return <<<HTML
 <article class="video-card fade-in{$formatClass}" onclick="location.href='{$url}'">
-  <div class="video-thumb" style="position:relative">
+  <div class="video-thumb{$portraitClass}" style="position:relative">
     <img src="{$thumb}" alt="{$title}" loading="lazy" decoding="async" width="320" height="180" class="thumb-main">
     {$durBadge}
     {$deleteBtnHtml}
