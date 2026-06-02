@@ -27,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
     $tags        = trim($_POST['tags'] ?? '');
     $featured    = (int)($_POST['featured'] ?? 0);
     $note        = trim($_POST['approval_note'] ?? '');
+    $visibility  = in_array($_POST['visibility'] ?? '', ['public', 'unlisted', 'private']) ? $_POST['visibility'] : $video['visibility'];
 
     if (empty($title)) {
         $error = 'Title is required.';
@@ -39,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
             'tags'          => $tags,
             'featured'      => $featured ? 1 : 0,
             'approval_note' => $note ?: null,
+            'visibility'    => $visibility,
         ];
 
         // Handle published_at
@@ -131,6 +133,14 @@ require_once __DIR__ . '/partials/admin_head.php';
                 <?php endforeach; ?>
               </select>
             </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Visibility</label>
+            <select class="form-input form-select" name="visibility">
+              <?php foreach (['public','unlisted','private'] as $vis): ?>
+              <option value="<?= $vis ?>" <?= $video['visibility']===$vis?'selected':'' ?>><?= ucfirst($vis) ?></option>
+              <?php endforeach; ?>
+            </select>
           </div>
           <div class="form-group">
             <label class="form-label">Admin Approval Note</label>

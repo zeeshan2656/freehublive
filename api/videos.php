@@ -163,9 +163,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($is_reel && $tags === '') {
             $tags = 'reel,short';
         }
-        $visibility = $meta['visibility'] ?? 'unlisted';
+        $visibility = $meta['visibility'] ?? 'public';
         if (!in_array($visibility, ['public', 'unlisted', 'private'])) {
-            $visibility = 'unlisted';
+            $visibility = 'public';
         }
         $category_ids = $meta['category_ids'] ?? [];
         $first_category_id = null;

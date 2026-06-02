@@ -615,8 +615,8 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="form-group">
               <label class="form-label">Visibility</label>
               <select class="form-input form-select" id="details-visibility" name="visibility" style="border-radius: 8px">
-                <option value="public">Public</option>
-                <option value="unlisted" selected>Unlisted</option>
+                <option value="public" selected>Public</option>
+                <option value="unlisted">Unlisted</option>
                 <option value="private">Private</option>
               </select>
             </div>
@@ -963,7 +963,7 @@ require_once __DIR__ . '/../includes/header.php';
         description: document.getElementById('details-desc').value || '',
         tags: document.getElementById('details-tags').value || '',
         category_ids: Array.from(document.querySelectorAll('input[name="category_ids[]"]:checked')).map(i=>i.value),
-        visibility: document.getElementById('details-visibility').value || 'unlisted'
+        visibility: document.getElementById('details-visibility').value || 'public'
       };
 
       // 1. Initialize Upload Placeholder Record

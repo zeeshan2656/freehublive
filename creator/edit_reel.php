@@ -39,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Invalid request.';
     } else {
         $title = trim($_POST['title'] ?? '');
+        $visibility = in_array($_POST['visibility'] ?? '', ['public','unlisted','private']) ? $_POST['visibility'] : 'public';
         if (strlen($title) < 3) {
             $error = 'Reel Title must be at least 3 characters.';
         } else {
@@ -49,8 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             db_update('videos', [
-                'title' => $title,
-                'slug'  => $slug
+                'title'      => $title,
+                'slug'       => $slug,
+                'visibility' => $visibility
             ], 'id=?', [$vid]);
 
             // Refresh video data
@@ -106,6 +108,17 @@ require_once __DIR__ . '/../includes/header.php';
           <div class="form-group" style="margin-bottom: 24px;">
             <label class="form-label" style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Reel Title <span style="color:var(--red)">*</span></label>
             <input type="text" name="title" class="form-input" value="<?= e($video['title']) ?>" placeholder="Give your reel a catchy title..." minlength="3" required style="border-radius: 8px; font-size: 1rem; padding: 12px 16px;">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 24px;">
+            <label class="form-label" style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Visibility</label>
+            <select class="form-input form-select" name="visibility" style="border-radius: 8px; font-size: 1rem; padding: 12px 16px; height: auto;">
+              <?php foreach (['public','unlisted','private'] as $vis): ?>
+              <option value="<?= $vis ?>" <?= $video['visibility']===$vis?'selected':'' ?>>
+                <?= ucfirst($vis) ?>
+              </option>
+              <?php endforeach; ?>
+            </select>
           </div>
 
           <div class="flex gap-2" style="justify-content: flex-end; align-items: center; border-top: 1px solid var(--border); padding-top: 20px; margin-top: 12px;">
