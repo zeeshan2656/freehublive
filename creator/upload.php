@@ -1826,6 +1826,7 @@ require_once __DIR__ . '/../includes/header.php';
             speed: item.speed || 0,
             eta: item.eta || null,
             status: item.status,
+            sessionId: item.sessionId,
             videoId: item.videoId,
             token: item.token,
             uploadedBytes: item.uploadedBytes || 0,
