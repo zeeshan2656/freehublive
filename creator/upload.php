@@ -497,6 +497,7 @@ require_once __DIR__ . '/../includes/header.php';
           speed: session.speed,
           eta: session.eta,
           status: session.status,
+          sessionId: session.sessionId,
           videoId: session.videoId,
           token: session.token,
           uploadedBytes: session.uploadedBytes,
@@ -652,6 +653,7 @@ require_once __DIR__ . '/../includes/header.php';
       speed: 0,
       eta: 0,
       status: 'queued',
+      sessionId: null,
       videoId: null,
       token: null,
       thumbnails: [],
@@ -694,6 +696,7 @@ require_once __DIR__ . '/../includes/header.php';
       speed: 0,
       eta: 0,
       status: 'queued',
+      sessionId: null,
       videoId: null,
       token: null,
       uploadedBytes: 0,
@@ -788,19 +791,9 @@ require_once __DIR__ . '/../includes/header.php';
       URL.revokeObjectURL(session.localBlobUrl);
     }
 
-    // Remove from server draft database if initialized
-    if (session.videoId) {
-      try {
-        const formData = new FormData();
-        formData.append('csrf', '<?= csrf_token() ?>');
-        formData.append('action', 'delete_video');
-        formData.append('video_id', session.videoId);
-        fetch('<?= BASE_URL ?>/channel.php?id=<?= $uid ?>', {
-          method: 'POST',
-          body: formData
-        });
-      } catch (err) {}
-    }
+    // No server-side video record to clean up — deferred-publish means
+    // no videos row exists until finalization succeeds.
+    // Temp upload chunks will be cleaned up by the server naturally.
 
     // Delete from IndexedDB
     await UploadDB.delete(id);
@@ -1023,8 +1016,8 @@ require_once __DIR__ . '/../includes/header.php';
         opt.classList.add('selected');
         session.selectedThumbDataUrl = thumbUrl;
         
-        // upload thumbnail instantly if video ID is active
-        saveCustomThumbnail(session.videoId, thumbUrl);
+        // upload thumbnail instantly using session_id or video_id
+        saveCustomThumbnail(session, thumbUrl);
       });
       grid.appendChild(opt);
     });
@@ -1078,7 +1071,7 @@ require_once __DIR__ . '/../includes/header.php';
           renderThumbnailsGrid(session);
 
           // Upload thumbnail instantly
-          saveCustomThumbnail(session.videoId, dataUrl);
+          saveCustomThumbnail(session, dataUrl);
         };
       };
       reader.readAsDataURL(file);
@@ -1086,14 +1079,22 @@ require_once __DIR__ . '/../includes/header.php';
     });
   }
 
-  // Upload thumbnail base64 data to server
-  async function saveCustomThumbnail(videoId, dataUrl) {
-    if (!videoId || !dataUrl) return;
+  // Upload thumbnail base64 data to server (supports pre-publish via session_id)
+  async function saveCustomThumbnail(session, dataUrl) {
+    if (!session || !dataUrl) return;
+    const payload = { data_url: dataUrl };
+    if (session.videoId) {
+      payload.video_id = session.videoId;
+    } else if (session.sessionId) {
+      payload.session_id = session.sessionId;
+    } else {
+      return; // Neither ID available yet
+    }
     try {
       await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({video_id: videoId, data_url: dataUrl})
+        body: JSON.stringify(payload)
       });
     } catch (e) {}
   }
@@ -1114,8 +1115,8 @@ require_once __DIR__ . '/../includes/header.php';
         category_ids: session.categoryIds
       };
 
-      // 1. Init placeholder if not already initialized
-      if (!session.videoId || !session.token) {
+      // 1. Init session if not already initialized
+      if (!session.sessionId || !session.token) {
         updateCardProgress(session, 'Initializing...', 'uploading');
         const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
           method: 'POST',
@@ -1129,7 +1130,7 @@ require_once __DIR__ . '/../includes/header.php';
           return;
         }
 
-        session.videoId = initData.data.video_id;
+        session.sessionId = initData.data.session_id;
         session.token = initData.data.upload_token;
         await UploadDB.save(session);
 
@@ -1145,7 +1146,7 @@ require_once __DIR__ . '/../includes/header.php';
       // Check resumability status from the server
       let uploadedBytes = 0;
       try {
-        const checkRes = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&video_id=${session.videoId}&token=${session.token}`, {
+        const checkRes = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&session_id=${session.sessionId}&token=${session.token}`, {
           signal: session.abortController.signal
         });
         const checkData = await checkRes.json();
@@ -1179,7 +1180,7 @@ require_once __DIR__ . '/../includes/header.php';
 
         let success = false;
         try {
-          const uploadRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}`, {
+          const uploadRes = await fetch(`<?= BASE_URL ?>/api/upload.php?session_id=${session.sessionId}&token=${session.token}`, {
             method: 'POST',
             body: formData,
             signal: session.abortController.signal
@@ -1243,7 +1244,7 @@ require_once __DIR__ . '/../includes/header.php';
         updateSelectedEditorState(session);
         await UploadDB.save(session);
 
-        const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(file.name)}`, {
+        const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?session_id=${session.sessionId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(file.name)}`, {
           method: 'POST',
           signal: session.abortController.signal
         });
@@ -1251,16 +1252,16 @@ require_once __DIR__ . '/../includes/header.php';
 
         if (finalizeData.success) {
           session.status = 'published';
+          session.videoId = finalizeData.data.video_id;
           session.videoUrl = finalizeData.data.video_url;
           session.activeLoopRunning = false;
 
-          // Save duration
+          // Duration is already saved in session meta_json and committed in the transaction
+          // But re-save if we have a more accurate client-side reading
           await saveVideoDuration(session);
 
-          // If default thumbnail is selected, upload it
-          if (session.selectedThumbDataUrl) {
-            await saveCustomThumbnail(session.videoId, session.selectedThumbDataUrl);
-          }
+          // Thumbnail was already saved to upload_sessions.temp_thumb and committed
+          // No need to re-upload
 
           updateCardProgress(session, 'Published', 'published');
           updateSelectedEditorState(session);
@@ -1300,8 +1301,8 @@ require_once __DIR__ . '/../includes/header.php';
         category_ids: session.categoryIds
       };
 
-      // 1. Init placeholder if not already initialized
-      if (!session.videoId || !session.token) {
+      // 1. Init session if not already initialized
+      if (!session.sessionId || !session.token) {
         updateCardProgress(session, 'Initializing import...', 'uploading');
         const initRes = await fetch('<?= BASE_URL ?>/api/videos.php?action=init_upload', {
           method: 'POST',
@@ -1314,7 +1315,7 @@ require_once __DIR__ . '/../includes/header.php';
           return;
         }
 
-        session.videoId = initData.data.video_id;
+        session.sessionId = initData.data.session_id;
         session.token = initData.data.upload_token;
         await UploadDB.save(session);
 
@@ -1329,8 +1330,8 @@ require_once __DIR__ . '/../includes/header.php';
           ];
           session.selectedThumbDataUrl = ytMaxThumb;
           
-          // Save thumb instantly
-          convertAndSaveYtThumbnail(session.videoId, ytMaxThumb);
+          // Save thumb instantly using session_id
+          convertAndSaveYtThumbnail(session, ytMaxThumb);
           
           if (selectedUploadId === session.id) {
             renderThumbnailsGrid(session);
@@ -1343,13 +1344,14 @@ require_once __DIR__ . '/../includes/header.php';
       await UploadDB.save(session);
 
       // 2. Finalize direct embed URL on backend
-      const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?video_id=${session.videoId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(session.embedUrl)}`, {
+      const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?session_id=${session.sessionId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(session.embedUrl)}`, {
         method: 'POST'
       });
       const finalizeData = await finalizeRes.json();
 
       if (finalizeData.success) {
         session.status = 'published';
+        session.videoId = finalizeData.data.video_id;
         session.videoUrl = finalizeData.data.video_url;
         session.activeLoopRunning = false;
         updateCardProgress(session, 'Published', 'published');
@@ -1372,7 +1374,7 @@ require_once __DIR__ . '/../includes/header.php';
   }
 
   // Convert YouTube thumbnail to Base64 and save it
-  function convertAndSaveYtThumbnail(videoId, url) {
+  function convertAndSaveYtThumbnail(session, url) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function() {
@@ -1388,7 +1390,7 @@ require_once __DIR__ . '/../includes/header.php';
       const ctx = canvas.getContext('2d');
       drawImageFit(img, canvas, ctx);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      saveCustomThumbnail(videoId, dataUrl);
+      saveCustomThumbnail(session, dataUrl);
     };
     img.src = url;
   }
@@ -1413,9 +1415,9 @@ require_once __DIR__ . '/../includes/header.php';
       session.isReel = isPortrait ? 1 : 0;
       await UploadDB.save(session);
 
-      // Save video orientation to backend database asynchronously
-      if (session.videoId) {
-        saveVideoOrientation(session.videoId, session.isReel);
+      // Save video orientation to backend session asynchronously
+      if (session.sessionId) {
+        saveVideoOrientation(session);
       }
 
       const maxDim = 640;
@@ -1461,7 +1463,7 @@ require_once __DIR__ . '/../includes/header.php';
     };
   }
 
-  // Save video duration to server
+  // Save video duration to server (supports pre-publish via session_id)
   async function saveVideoDuration(session) {
     let d = 0;
     if (selectedUploadId === session.id && spaPlayer.duration) {
@@ -1481,11 +1483,19 @@ require_once __DIR__ . '/../includes/header.php';
       });
     }
     if (d > 0) {
+      const payload = { duration: d };
+      if (session.videoId) {
+        payload.video_id = session.videoId;
+      } else if (session.sessionId) {
+        payload.session_id = session.sessionId;
+      } else {
+        return;
+      }
       try {
         await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_duration', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({video_id: session.videoId, duration: d})
+          body: JSON.stringify(payload)
         });
       } catch (e) {}
     }
@@ -1611,13 +1621,13 @@ require_once __DIR__ . '/../includes/header.php';
     statusBadge.className = 'badge badge-' + (session.status === 'published' ? 'green' : (session.status === 'failed' ? 'red' : 'yellow'));
   }
 
-  // Save active video metadata using AJAX
+  // Save active video metadata using AJAX (supports pre-publish via session_id)
   window.saveActiveMetadata = async function(e) {
     if (e) e.preventDefault();
     const session = uploads[selectedUploadId];
     if (!session) return;
 
-    if (!session.videoId) {
+    if (!session.sessionId && !session.videoId) {
       alert('Video is initializing. Please wait a moment.');
       return;
     }
@@ -1626,7 +1636,6 @@ require_once __DIR__ . '/../includes/header.php';
     saveMetadataBtn.textContent = 'Saving details...';
 
     const meta = {
-      video_id: session.videoId,
       title: session.title,
       description: session.description,
       tags: session.tags,
@@ -1634,6 +1643,12 @@ require_once __DIR__ . '/../includes/header.php';
       category_ids: session.categoryIds,
       is_reel: session.isReel || 0
     };
+    // Send the appropriate ID depending on publish state
+    if (session.videoId) {
+      meta.video_id = session.videoId;
+    } else if (session.sessionId) {
+      meta.session_id = session.sessionId;
+    }
 
     try {
       // 1. Save metadata via POST API
@@ -1647,7 +1662,7 @@ require_once __DIR__ . '/../includes/header.php';
       if (d.success) {
         // 2. Save thumbnail choice if present
         if (session.selectedThumbDataUrl) {
-          await saveCustomThumbnail(session.videoId, session.selectedThumbDataUrl);
+          await saveCustomThumbnail(session, session.selectedThumbDataUrl);
         }
         
         showToast(`💾 Details saved successfully for "${escapeHtml(session.title)}"!`);
@@ -1767,19 +1782,21 @@ require_once __DIR__ . '/../includes/header.php';
     ctx.drawImage(img, x, y, drawWidth, drawHeight);
   }
 
-  // Save orientation to DB asynchronously
-  async function saveVideoOrientation(videoId, isReel) {
-    if (!videoId) return;
+  // Save orientation to session/DB asynchronously
+  async function saveVideoOrientation(session) {
+    const meta = { is_reel: session.isReel };
+    if (session.videoId) {
+      meta.video_id = session.videoId;
+    } else if (session.sessionId) {
+      meta.session_id = session.sessionId;
+    } else {
+      return;
+    }
     try {
       await fetch('<?= BASE_URL ?>/api/videos.php?action=save_metadata', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          meta: {
-            video_id: videoId,
-            is_reel: isReel
-          }
-        })
+        body: JSON.stringify({ meta })
       });
     } catch (e) {}
   }
