@@ -1,12 +1,13 @@
 <?php
 /**
- * Local database credentials overriding db.config.php for development.
+ * Hostinger database credentials (this file stays on the server only).
+ * Do not commit real passwords to public git repos. 
  */
 return [
     'host'    => 'localhost',
     'port'    => 3306,
-    'user'    => 'root',
-    'pass'    => '',
-    'name'    => 'freehub',
+    'user'    => 'u434697879_freehub',
+    'pass'    => '03061881882Star2656@',
+    'name'    => 'u434697879_freehub',
     'charset' => 'utf8mb4',
 ];
