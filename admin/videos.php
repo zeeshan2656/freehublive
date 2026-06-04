@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
     } elseif ($action === 'toggle_approval_mode') {
         $newMode = $approvalMode === 'auto' ? 'manual' : 'auto';
         db_query("INSERT INTO settings (`key`,`value`,`group`) VALUES ('video_approval_mode',?,'content') ON DUPLICATE KEY UPDATE `value`=?", [$newMode, $newMode]);
-        cache_delete('settings');
+        fh_cache_delete('fh_settings_cache');
         flash('success', 'Approval mode switched to: ' . strtoupper($newMode));
     }
     // Redirect back preserving GET parameters
@@ -70,7 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
 $stats = [
     'total' => (int)db_fetch("SELECT COUNT(*) AS c FROM videos")['c'],
     'watch_time' => (int)db_fetch("SELECT COALESCE(SUM(watch_time),0) AS c FROM videos")['c'],
-    'earnings' => (float)db_fetch("SELECT COALESCE(SUM(revenue),0) AS c FROM videos")['c'],
     'published' => (int)db_fetch("SELECT COUNT(*) AS c FROM videos WHERE status='published'")['c'],
     'pending' => (int)db_fetch("SELECT COUNT(*) AS c FROM videos WHERE status='pending'")['c'],
     'rejected' => (int)db_fetch("SELECT COUNT(*) AS c FROM videos WHERE status='rejected'")['c'],
@@ -84,8 +83,6 @@ $from = trim($_GET['from'] ?? '');
 $to = trim($_GET['to'] ?? '');
 $min_watch = trim($_GET['min_watch'] ?? '');
 $max_watch = trim($_GET['max_watch'] ?? '');
-$min_earn = trim($_GET['min_earn'] ?? '');
-$max_earn = trim($_GET['max_earn'] ?? '');
 $type = $_GET['type'] ?? 'all';
 $page = max(1, (int)($_GET['page'] ?? 1));
 
@@ -121,14 +118,6 @@ if ($min_watch !== '') {
 if ($max_watch !== '') {
     $where .= " AND v.watch_time <= ?";
     $params[] = (int)$max_watch;
-}
-if ($min_earn !== '') {
-    $where .= " AND v.revenue >= ?";
-    $params[] = (float)$min_earn;
-}
-if ($max_earn !== '') {
-    $where .= " AND v.revenue <= ?";
-    $params[] = (float)$max_earn;
 }
 
 $total = db_count('videos v JOIN users u ON u.id=v.user_id', $where, $params);
@@ -174,10 +163,6 @@ require_once __DIR__ . '/partials/admin_head.php';
     <div class="stat-card" style="padding:14px 18px;">
       <div class="stat-value" style="font-size:1.3rem;"><?= format_duration($stats['watch_time']) ?></div>
       <div class="stat-label">Total Watch Time</div>
-    </div>
-    <div class="stat-card" style="padding:14px 18px;">
-      <div class="stat-value" style="font-size:1.3rem; color:var(--green);">$<?= number_format($stats['earnings'], 2) ?></div>
-      <div class="stat-label">Creator Earnings</div>
     </div>
     <div class="stat-card" style="padding:14px 18px; border-left: 3px solid var(--green);">
       <div class="stat-value" style="font-size:1.3rem; color:var(--green);"><?= number_format($stats['published']) ?></div>
@@ -246,16 +231,6 @@ require_once __DIR__ . '/partials/admin_head.php';
         </div>
       </div>
 
-      <!-- Earning Range -->
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Earnings (USD)</label>
-        <div class="flex gap-2">
-          <input type="number" step="0.01" name="min_earn" value="<?= e($min_earn) ?>" placeholder="Min" class="form-input" style="flex:1">
-          <span class="text-muted" style="align-self:center">-</span>
-          <input type="number" step="0.01" name="max_earn" value="<?= e($max_earn) ?>" placeholder="Max" class="form-input" style="flex:1">
-        </div>
-      </div>
-
       <!-- Actions -->
       <div class="flex gap-2" style="margin-bottom:0">
         <button type="submit" class="btn btn-primary" style="flex:1; justify-content:center; height:42px;">Filter</button>
@@ -286,7 +261,6 @@ require_once __DIR__ . '/partials/admin_head.php';
           <th>Status</th>
           <th>Views &amp; Stats</th>
           <th>Ad Stats</th>
-          <th>Earnings</th>
           <th>Upload Date</th>
           <th style="width:120px">Actions</th>
         </tr></thead>
@@ -325,7 +299,6 @@ require_once __DIR__ . '/partials/admin_head.php';
             <div style="white-space:nowrap">📺 <?= number_format((int)$v['ad_impressions']) ?> imps</div>
             <div style="white-space:nowrap">🖱️ <?= number_format((int)$v['ad_clicks']) ?> clicks</div>
           </td>
-          <td class="text-sm font-bold" style="color:var(--green)">$<?= number_format((float)($v['revenue'] ?? 0), 2) ?></td>
           <td class="text-xs text-muted"><?= date('M j, Y H:i', strtotime($v['created_at'])) ?></td>
           <td>
             <div class="flex gap-2" style="align-items:center">

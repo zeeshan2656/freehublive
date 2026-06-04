@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
             if (str_ends_with($key, '_enabled') && empty($val)) $val = '0';
             db_query("INSERT INTO settings (`key`,`value`,`group`) VALUES (?,?,'content') ON DUPLICATE KEY UPDATE `value`=?", [$key, $val, $val]);
         }
+        fh_cache_delete('fh_settings_cache');
         header('Content-Type: application/json');
         echo json_encode(['success' => true, 'message' => 'Ad Code settings saved instantly!']);
         exit;
@@ -71,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
     }
 
     // Bust setting cache if accessible
-    // cache_delete('settings');
+    fh_cache_delete('fh_settings_cache');
     flash('success', 'Settings saved!');
     redirect(BASE_URL . '/admin/settings.php');
 }
@@ -91,7 +92,6 @@ $themes = [
     <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:8px" id="settings-sidebar">
       <button class="btn btn-outline" style="justify-content:flex-start;border:none;background:rgba(99,102,241,.1);color:var(--accent)" onclick="showSlice('slice-general', this)">⚙️ General</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-appearance', this)">🎨 Appearance</button>
-      <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-monetization', this)">💰 Monetization</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-approval', this)">🛡️ Approval Settings</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-adcode', this)">📢 Ad Code</button>
       <button class="btn btn-outline" style="justify-content:flex-start;border:none" onclick="showSlice('slice-popup', this)">🔞 First Popup</button>
@@ -165,266 +165,7 @@ $themes = [
       </div>
       </div>
 
-      <!-- Monetization Slice -->
-      <div id="slice-monetization" class="slice-section" style="display:none">
-      
-      <?php
-      $all_placements = db_fetchAll("SELECT id, key_name, name FROM ad_placements ORDER BY name ASC");
-
-      $v_selected_placements = array_filter(array_map('trim', explode(',', setting('viewer_eligible_placements', ''))), 'strlen');
-      $c_selected_placements = array_filter(array_map('trim', explode(',', setting('creator_eligible_placements', ''))), 'strlen');
-      ?>
-
-      <style>
-      .monetization-grid-container {
-        display: flex;
-        flex-direction: column;
-        gap: 28px;
-      }
-      .monetization-section-title {
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: var(--accent);
-        margin-bottom: 12px;
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .monetization-section {
-        background: rgba(255, 255, 255, 0.01);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 20px;
-        transition: all 0.2s ease;
-      }
-      .monetization-section:hover {
-        border-color: rgba(99, 102, 241, 0.2);
-      }
-      .checkbox-tiles-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: 12px;
-        margin-top: 14px;
-      }
-      .checkbox-tile-label {
-        display: block;
-        position: relative;
-        cursor: pointer;
-        user-select: none;
-      }
-      .checkbox-tile-label input {
-        position: absolute;
-        opacity: 0;
-        cursor: pointer;
-        height: 0;
-        width: 0;
-      }
-      .checkbox-tile-inner {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 14px;
-        background: var(--bg3);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-weight: 500;
-        transition: all 0.2s ease;
-      }
-      .checkbox-tile-label:hover .checkbox-tile-inner {
-        border-color: var(--accent);
-        background: rgba(99, 102, 241, 0.04);
-      }
-      .checkbox-tile-label input:checked + .checkbox-tile-inner {
-        background: rgba(99, 102, 241, 0.08);
-        border-color: var(--accent);
-        box-shadow: 0 0 0 1px var(--accent);
-      }
-      .checkbox-tile-custom {
-        width: 18px;
-        height: 18px;
-        border: 2px solid var(--text3);
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-        flex-shrink: 0;
-        background: var(--bg2);
-      }
-      .checkbox-tile-label input:checked + .checkbox-tile-inner .checkbox-tile-custom {
-        background: var(--accent);
-        border-color: var(--accent);
-      }
-      .checkbox-tile-custom::after {
-        content: '';
-        width: 4px;
-        height: 8px;
-        border: solid white;
-        border-width: 0 2px 2px 0;
-        transform: rotate(45deg);
-        display: none;
-        margin-bottom: 2px;
-      }
-      .checkbox-tile-label input:checked + .checkbox-tile-inner .checkbox-tile-custom::after {
-        display: block;
-      }
-      .checkbox-tile-text {
-        font-size: 0.82rem;
-        color: var(--text);
-        line-height: 1.4;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      </style>
-
-      <div class="card">
-        <h3 style="font-weight:700;margin-bottom:6px">💰 Monetization System Settings</h3>
-        <p class="text-sm text-muted" style="margin-bottom:20px">
-          Configure independent earning rates and select qualifying ads and placements for both Viewers and Creators.
-        </p>
-
-        <div class="monetization-grid-container">
-
-          <!-- Section: Viewer Ad Revenue Settings -->
-          <div class="monetization-section">
-            <div class="monetization-section-title">
-              <span>👁️ Viewer Ad Revenue Settings</span>
-            </div>
-            <div class="stat-grid-3" style="margin-bottom: 20px;">
-              <div class="form-group">
-                <label class="form-label">Viewer CPM (USD per 1000 Impressions)</label>
-                <input class="form-input" type="number" name="viewer_cpm" step="0.01" min="0"
-                       value="<?= e(setting('viewer_cpm', '0.50')) ?>" required>
-                <small class="text-muted text-xs">Earnings for every 1000 valid impressions.</small>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Viewer CPC-1000 (USD per 1000 Clicks)</label>
-                <input class="form-input" type="number" name="viewer_cpc" step="0.01" min="0"
-                       value="<?= e(setting('viewer_cpc', '2.00')) ?>" required>
-                <small class="text-muted text-xs">Earnings for every 1000 valid clicks.</small>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Viewer Minimum Withdrawal (USD)</label>
-                <input class="form-input" type="number" name="min_withdrawal_viewer" step="0.01" min="0"
-                       value="<?= e(setting('min_withdrawal_viewer', '25.00')) ?>" required>
-                <small class="text-muted text-xs">Threshold at which viewers can request payouts.</small>
-              </div>
-            </div>
-
-            <!-- Viewer Revenue Eligible Placements Section -->
-            <div style="border-top: 1px dashed var(--border); padding-top: 16px;">
-              <label class="form-label" style="font-weight: 700; margin-bottom: 4px;">Viewer Revenue Eligible Placements</label>
-              <p class="text-xs text-muted" style="margin-bottom: 12px;">Select which website placements qualify to generate viewer earnings.</p>
-              <?php if (empty($all_placements)): ?>
-                <p class="text-xs text-muted">No placements available.</p>
-              <?php else: ?>
-                <div class="checkbox-tiles-grid">
-                  <?php foreach ($all_placements as $place): ?>
-                    <label class="checkbox-tile-label">
-                      <input type="checkbox" name="viewer_eligible_placements[]" value="<?= e($place['key_name']) ?>"
-                             <?= in_array((string)$place['key_name'], $v_selected_placements) ? 'checked' : '' ?>>
-                      <div class="checkbox-tile-inner">
-                        <div class="checkbox-tile-custom"></div>
-                        <span class="checkbox-tile-text" title="<?= e($place['name']) ?>"><?= e($place['name']) ?></span>
-                      </div>
-                    </label>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
-            </div>
-          </div>
-
-          <!-- Section: Creator Ad Revenue Settings -->
-          <div class="monetization-section">
-            <div class="monetization-section-title">
-              <span>🎬 Creator Ad Revenue Settings</span>
-            </div>
-            <div class="stat-grid-3" style="margin-bottom: 20px;">
-              <div class="form-group">
-                <label class="form-label">Creator CPM (USD per 1000 Impressions)</label>
-                <input class="form-input" type="number" name="creator_cpm" step="0.01" min="0"
-                       value="<?= e(setting('creator_cpm', '1.00')) ?>" required>
-                <small class="text-muted text-xs">Earnings for every 1000 valid impressions generated on their videos.</small>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Creator CPC-1000 (USD per 1000 Clicks)</label>
-                <input class="form-input" type="number" name="creator_cpc" step="0.01" min="0"
-                       value="<?= e(setting('creator_cpc', '5.00')) ?>" required>
-                <small class="text-muted text-xs">Earnings for every 1000 valid clicks generated on their videos.</small>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Creator Minimum Withdrawal (USD)</label>
-                <input class="form-input" type="number" name="min_withdrawal_creator" step="0.01" min="0"
-                       value="<?= e(setting('min_withdrawal_creator', '25.00')) ?>" required>
-                <small class="text-muted text-xs">Threshold at which creators can request payouts.</small>
-              </div>
-            </div>
-
-            <!-- Creator Revenue Eligible Placements Section -->
-            <div style="border-top: 1px dashed var(--border); padding-top: 16px;">
-              <label class="form-label" style="font-weight: 700; margin-bottom: 4px;">Creator Revenue Eligible Placements</label>
-              <p class="text-xs text-muted" style="margin-bottom: 12px;">Select which website placements qualify to contribute toward creator earnings.</p>
-              <?php if (empty($all_placements)): ?>
-                <p class="text-xs text-muted">No placements available.</p>
-              <?php else: ?>
-                <div class="checkbox-tiles-grid">
-                  <?php foreach ($all_placements as $place): ?>
-                    <label class="checkbox-tile-label">
-                      <input type="checkbox" name="creator_eligible_placements[]" value="<?= e($place['key_name']) ?>"
-                             <?= in_array((string)$place['key_name'], $c_selected_placements) ? 'checked' : '' ?>>
-                      <div class="checkbox-tile-inner">
-                        <div class="checkbox-tile-custom"></div>
-                        <span class="checkbox-tile-text" title="<?= e($place['name']) ?>"><?= e($place['name']) ?></span>
-                      </div>
-                    </label>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
-            </div>
-          </div>
-
-
-          <!-- Section: Other Global Rules -->
-          <div class="monetization-section">
-            <div class="monetization-section-title">
-              <span>⚙️ Payout & Affiliate Rules</span>
-            </div>
-            <div class="stat-grid-2">
-              <div class="form-group">
-                <label class="form-label">Withdrawal Processing Days</label>
-                <input class="form-input" type="number" name="withdrawal_days" step="1" min="0"
-                       value="<?= e(setting('withdrawal_days','7')) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Withdrawal Approval Mode</label>
-                <select class="form-input form-select" name="withdrawal_approval_mode">
-                  <option value="manual" <?= setting('withdrawal_approval_mode','manual')==='manual'?'selected':'' ?>>Manual — Review requests manually</option>
-                  <option value="auto"   <?= setting('withdrawal_approval_mode','manual')==='auto'?'selected':'' ?>>Auto — Instant processing</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Referral Bonus per Signup (USD, 0 = disabled)</label>
-                <input class="form-input" type="number" name="referral_bonus_usd" step="0.01" min="0"
-                       value="<?= e(setting('referral_bonus_usd','0.00')) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Admin Ad Revenue per Click (USD)</label>
-                <input class="form-input" type="number" name="ad_revenue_per_click" step="0.001" min="0"
-                       value="<?= e(setting('ad_revenue_per_click','0.05')) ?>">
-              </div>
-              <div class="form-group" style="grid-column: span 2;">
-                <label class="form-label">Currency Rates JSON (vs USD)</label>
-                <textarea class="form-input" name="currency_rates_json" rows="3" style="font-family:monospace;font-size:.8rem"><?= e(setting('currency_rates_json','')) ?></textarea>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-      </div>
+      <!-- Monetization slice removed -->
 
       <!-- Approval Settings Slice -->
       <div id="slice-approval" class="slice-section" style="display:none">

@@ -184,7 +184,6 @@ require_once __DIR__ . '/partials/admin_head.php';
           <div><span class="text-muted">Views:</span> <?= format_number((int)$video['views']) ?></div>
           <div><span class="text-muted">Watch Time:</span> <?= format_duration((int)($video['watch_time'] ?? 0)) ?></div>
           <div><span class="text-muted">Duration:</span> <?= format_duration((int)($video['duration'] ?? 0)) ?></div>
-          <div><span class="text-muted">Revenue:</span> $<?= number_format((float)($video['revenue']??0),4) ?></div>
           <div><span class="text-muted">Uploaded:</span> <?= date('M j, Y', strtotime($video['created_at'])) ?></div>
           <?php if ($video['published_at']): ?>
           <div><span class="text-muted">Published:</span> <?= date('M j, Y', strtotime($video['published_at'])) ?></div>

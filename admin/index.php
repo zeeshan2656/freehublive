@@ -15,9 +15,6 @@ $stats = [
     'videos'      => db_count('videos'),
     'views'       => db_fetch("SELECT SUM(views) as t FROM videos")['t'] ?? 0,
     'pending_vid' => db_count('videos', "status='pending'"),
-    'pending_wd'  => fh_table_exists('withdrawal_requests') ? db_count('withdrawal_requests', "status='pending'") : 0,
-    'earnings_distributed' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND status='approved'")['t'] ?? 0),
-    'earnings_paid'        => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM withdrawal_requests WHERE status='paid'")['t'] ?? 0),
 ];
 
 $recent_videos = db_fetchAll(
@@ -35,12 +32,12 @@ require_once __DIR__ . '/partials/admin_head.php';
 ?>
 <div class="admin-content">
 
-    <!-- Admin Welcome Banner (no earnings shown — admin cannot earn) -->
+    <!-- Admin Welcome Banner -->
     <div class="card" style="margin-bottom:24px;background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.06));border-color:rgba(99,102,241,.3)">
       <div class="flex gap-4" style="align-items:center;flex-wrap:wrap">
         <div>
           <div style="font-size:1.1rem;font-weight:800;margin-bottom:4px">Welcome back, Admin 👋</div>
-          <div class="text-sm text-muted">You are managing the FreeHub platform. Admins do not earn from the platform.</div>
+          <div class="text-sm text-muted">You are managing the FreeHub platform.</div>
         </div>
         <div class="flex gap-2" style="margin-left:auto;flex-wrap:wrap">
           <a href="<?= BASE_URL ?>/admin/settings.php" class="btn btn-outline btn-sm">⚙️ Settings</a>
@@ -50,7 +47,7 @@ require_once __DIR__ . '/partials/admin_head.php';
     </div>
 
     <!-- Stats Grid -->
-    <div class="stat-grid-4" style="margin-bottom:24px">
+    <div class="stat-grid-2" style="margin-bottom:24px">
       <div class="stat-card">
         <div class="stat-value"><?= format_number($stats['users']) ?></div>
         <div class="stat-label">Total Users</div>
@@ -60,18 +57,6 @@ require_once __DIR__ . '/partials/admin_head.php';
         <div class="stat-value"><?= format_number($stats['videos']) ?></div>
         <div class="stat-label">Total Videos</div>
         <div class="text-xs" style="margin-top:4px;color:var(--yellow)"><?= $stats['pending_vid'] ?> pending review</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color:var(--green)">$<?= number_format($stats['earnings_distributed'],2) ?></div>
-        <div class="stat-label">Earnings Distributed</div>
-        <div class="text-xs text-muted" style="margin-top:4px">$<?= number_format($stats['earnings_paid'],2) ?> paid out</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color:var(--yellow)"><?= $stats['pending_wd'] ?></div>
-        <div class="stat-label">Pending Withdrawals</div>
-        <div class="text-xs text-muted" style="margin-top:4px">
-          <a href="<?= BASE_URL ?>/admin/withdrawals.php" style="color:var(--accent)">View all →</a>
-        </div>
       </div>
     </div>
 
@@ -105,10 +90,6 @@ require_once __DIR__ . '/partials/admin_head.php';
       <a href="<?= BASE_URL ?>/admin/users.php?role=creator&status=pending" class="qa-btn">
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
         <span>New Creators</span>
-      </a>
-      <a href="<?= BASE_URL ?>/admin/withdrawals.php?status=pending" class="qa-btn">
-        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        <span>Withdrawals</span>
       </a>
       <a href="<?= BASE_URL ?>/admin/analytics.php" class="qa-btn">
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>

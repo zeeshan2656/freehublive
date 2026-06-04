@@ -31,8 +31,6 @@ $uid   = auth_user()['id'];
 $user  = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
 $error = '';
 $success = '';
-$currencies    = fh_currencies();
-$currency_label = $currencies[$user['preferred_currency'] ?? 'USD']['label'] ?? ($user['preferred_currency'] ?? 'USD');
 $role_label    = ucfirst($user['role'] ?? 'user');
 $cropped_avatar_data = trim($_POST['cropped_avatar_data'] ?? '');
 $cropped_cover_data  = trim($_POST['cropped_cover_data'] ?? '');
@@ -199,7 +197,7 @@ $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
 /* Stats row */
 .prof-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0;
   margin: 16px 0 22px;
   background: var(--bg3); border-radius: 12px;
@@ -224,11 +222,8 @@ $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
   .prof-avatar-row { margin-top: -44px; }
   .prof-avatar-wrap { width: 88px; height: 88px; }
   .prof-card { padding: 0 14px 20px; }
-  /* 2x2 stats grid on mobile */
-  .prof-stats { grid-template-columns: repeat(2, 1fr); }
-  .prof-stat:nth-child(2) { border-right: none; }
-  .prof-stat:nth-child(1),
-  .prof-stat:nth-child(2) { border-bottom: 1px solid var(--border); }
+  /* 3-column stats grid on mobile */
+  .prof-stats { grid-template-columns: repeat(3, 1fr); }
   .prof-stat-val { font-size: .95rem; }
   .prof-meta h1 { font-size: 1.1rem; }
   .prof-sub { font-size: .78rem; gap: 6px !important; }
@@ -355,10 +350,6 @@ $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
         <div class="prof-stat">
           <div class="prof-stat-val"><?= format_number((int)db_fetch("SELECT SUM(views) as s FROM videos WHERE user_id=?",[$uid])['s']) ?></div>
           <div class="prof-stat-lbl">Total Views</div>
-        </div>
-        <div class="prof-stat">
-          <div class="prof-stat-val"><?= e($currency_label) ?></div>
-          <div class="prof-stat-lbl">Currency</div>
         </div>
       </div>
 

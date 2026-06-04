@@ -6,8 +6,8 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
-$meta_title = 'FreeHub — Watch, Share & Earn';
-$meta_desc  = 'Discover trending videos, share and earn with our affiliate program.';
+$meta_title = 'FreeHub — Watch & Share';
+$meta_desc  = 'Discover trending videos and share them.';
 require_once __DIR__ . '/includes/header.php';
 
 // ── Selected category filter ─────────────────────────────────
@@ -30,7 +30,7 @@ $latest = db_fetchAll_cached(
     "SELECT v.*,u.username,u.channel_name,u.avatar
      FROM videos v
      JOIN users u ON u.id=v.user_id
-     WHERE v.status='published' AND v.visibility='public' {$cat_filter}
+     WHERE v.status='published' AND v.visibility='public' AND v.is_reel = 0 {$cat_filter}
      ORDER BY v.created_at DESC LIMIT 51",
     $params,
     60
@@ -52,19 +52,6 @@ $cat_videos = [];
 
 $ref = auth_user()['ref_code'] ?? '';
 $creatorId    = (is_logged_in() && is_creator()) ? (int)auth_user()['id'] : 0;
-$earningsMap  = [];
-if ($creatorId) {
-    $pool = $latest;
-    $ownIds = [];
-    foreach ($pool as $row) {
-        if ((int)($row['user_id'] ?? 0) === $creatorId) {
-            $ownIds[] = (int)$row['id'];
-        }
-    }
-    if ($ownIds) {
-        $earningsMap = fh_creator_video_earnings_map($creatorId, $ownIds);
-    }
-}
 ?>
 
 <div class="layout">
@@ -89,7 +76,7 @@ if ($creatorId) {
         $i = 0;
         foreach ($latest_subset as $v) {
             $i++;
-            echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
+            echo render_video_card($v, fh_video_card_opts($v, [], $ref));
             if ($i % 10 === 0) {
                 $ad_key = ($sel_cat > 0) ? 'category_grid_' . $i : 'landing_latest_' . $i;
                 echo render_ad_card($ad_key);
@@ -153,9 +140,6 @@ function bindLoadMore() {
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`
             : `<span class="video-duration video-duration--pending">…</span>`;
-          const earnHtml = (FH_CREATOR_ID && v.user_id === FH_CREATOR_ID && v.earnings_fmt)
-            ? `<div class="video-card-earnings-box" title="Watch-time earnings on this video"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
-            : '';
           el.innerHTML = `
             <div class="video-thumb \${v.is_reel ? 'is-portrait' : ''}" style="position:relative">
               <img src="\${v.thumbnail}" alt="\${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
@@ -180,7 +164,6 @@ function bindLoadMore() {
                 <span>·</span>
                 <span>${v.ago}</span>
               </div>
-              ${earnHtml}
             </div>`;
           grid.appendChild(el);
         });

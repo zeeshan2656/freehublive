@@ -84,9 +84,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $visibility  = $meta['visibility'] ?? 'public';
         $is_reel     = (int)($meta['is_reel'] ?? 0);
         $duration    = (int)($meta['duration'] ?? 0);
+        if ($is_reel === 1 && $duration > 60) {
+            $is_reel = 0;
+        }
         $category_ids = $meta['category_ids'] ?? [];
         $first_cat   = !empty($category_ids) ? (int)$category_ids[0] : null;
-        $thumbnail   = $session['temp_thumb'] ?? null;
+        $thumbnail   = !empty($session['temp_thumb']) ? $session['temp_thumb'] : 'default-thumb.jpg';
 
         // Generate unique slug
         $slug = slugify($title);

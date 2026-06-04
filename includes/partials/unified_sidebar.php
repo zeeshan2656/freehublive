@@ -12,11 +12,10 @@ $role = $sidebar_role ?? (auth_user()['role'] ?? 'viewer');
     </div>
   </div>
   <a href="<?= BASE_URL ?>/dashboard.php" class="studio-nav-item <?= $current_page === 'dashboard.php' ? 'active' : '' ?>">&#127968; Dashboard</a>
-  <a href="<?= BASE_URL ?>/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">&#128200; Analytics</a>
-  <a href="<?= BASE_URL ?>/upload.php" class="studio-nav-item <?= $current_page === 'upload.php' ? 'active' : '' ?>">&#11014; Upload Video</a>
-  <a href="<?= BASE_URL ?>/videos.php" class="studio-nav-item <?= $current_page === 'videos.php' ? 'active' : '' ?>">&#127916; My Videos</a>
-  <a href="<?= BASE_URL ?>/earnings.php" class="studio-nav-item <?= $current_page === 'earnings.php' ? 'active' : '' ?>">&#128176; Earnings</a>
-  <a href="<?= BASE_URL ?>/withdrawal.php" class="studio-nav-item <?= $current_page === 'withdrawal.php' ? 'active' : '' ?>">&#128179; Withdrawal</a>
+  <a href="<?= BASE_URL ?>/creator/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">&#128200; Analytics</a>
+  <a href="<?= BASE_URL ?>/creator/upload.php" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') !== 'reel' ? 'active' : '' ?>">&#11014; Upload Video</a>
+  <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') === 'reel' ? 'active' : '' ?>">&#127916; Upload Reel</a>
+  <a href="<?= BASE_URL ?>/creator/videos.php" class="studio-nav-item <?= $current_page === 'videos.php' ? 'active' : '' ?>">&#127916; My Videos</a>
   <a href="<?= BASE_URL ?>/profile.php?tab=profile" class="studio-nav-item <?= ($current_page === 'profile.php' && $current_tab === 'profile') ? 'active' : '' ?>">&#128100; Profile</a>
   <?php if ($role === 'creator'): ?>
   <a href="<?= BASE_URL ?>/channel.php?id=<?= auth_user()['id'] ?>" class="studio-nav-item <?= $current_page === 'channel.php' && ($_GET['id'] ?? 0) == auth_user()['id'] ? 'active' : '' ?>">&#128250; My Channel</a>

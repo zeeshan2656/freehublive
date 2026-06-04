@@ -12,8 +12,6 @@ $user  = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
 $error = '';
 $success = '';
 
-$currencies = fh_currencies();
-$currency_label = $currencies[$user['preferred_currency'] ?? 'USD']['label'] ?? ($user['preferred_currency'] ?? 'USD');
 $role_label = ucfirst($user['role'] ?? 'user');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -21,8 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Invalid request.';
     } else {
         $email    = trim($_POST['email'] ?? '');
-        $currency = strtoupper(trim($_POST['preferred_currency'] ?? 'USD'));
-        if (!isset($currencies[$currency])) $currency = 'USD';
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Please enter a valid email address.';
@@ -34,7 +30,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $updateData = [
                     'email'              => $email,
-                    'preferred_currency' => $currency,
                 ];
 
                 // Password change validation
@@ -60,7 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
                     // Update session
                     $_SESSION['user']['email'] = $user['email'];
-                    $_SESSION['user']['preferred_currency'] = $user['preferred_currency'] ?? 'USD';
                     $success = 'Settings updated successfully!';
                 }
             }
@@ -97,16 +91,7 @@ $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
               <input class="form-input" type="email" name="email" required value="<?= e($user['email']) ?>">
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Preferred Currency</label>
-              <select class="form-input form-select" name="preferred_currency">
-                <?php foreach ($currencies as $code => $info): ?>
-                <option value="<?= $code ?>" <?= ($user['preferred_currency'] ?? 'USD') === $code ? 'selected' : '' ?>>
-                  <?= e($info['label']) ?> (<?= e($code) ?>)
-                </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
+
           </div>
 
           <!-- Security settings card -->

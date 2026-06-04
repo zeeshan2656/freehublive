@@ -51,26 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'preferred_currency' => 'USD',
                 ]);
                 ensure_user_channel((int)$id, $username);
-                // Track referral conversion
-                if ($ref_by && fh_table_exists('referral_conversions')) {
-                    try {
-                        $refUser2 = db_fetch("SELECT ref_code FROM users WHERE id=?", [$ref_by]);
-                        db_insert('referral_conversions', [
-                            'referrer_id'      => $ref_by,
-                            'referred_user_id' => $id,
-                            'ref_code'         => $refUser2['ref_code'] ?? '',
-                            'bonus_paid'       => 0,
-                        ]);
-                        // Pay referral bonus if configured
-                        $bonus = (float)setting('referral_bonus_usd', '0.00');
-                        if ($bonus > 0) {
-                            require_once __DIR__ . '/../includes/earnings.php';
-                            fh_credit_user($bonus, $ref_by, "Referral bonus: new user #{$id}");
-                            db_update('referral_conversions', ['bonus_paid' => 1], 'referrer_id=? AND referred_user_id=?', [$ref_by, $id]);
-                        }
-                    } catch (Throwable $e) { /* ignore duplicate */ }
-                }
-                
                 $msg = 'Account created successfully!';
                 if ($status === 'pending') {
                     $msg = 'Account created! Admin will review your application before full access is enabled.';
@@ -112,7 +92,7 @@ $primary    = setting('primary_color', '#6366f1');
       <?= render_site_logo('auth') ?>
     </div>
     <h1 class="auth-title">Create Your Account</h1>
-    <p class="auth-sub">Earn from watch time — viewers and creators alike</p>
+    <p class="auth-sub">Watch and share high-quality video content</p>
     <?php if ($error): ?><div class="alert alert-error"><?= e($error) ?></div><?php endif; ?>
     <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php else: ?>
     <form method="POST" id="reg-form">

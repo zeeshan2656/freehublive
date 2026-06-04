@@ -90,6 +90,16 @@ define('CAT_PATH',    __DIR__ . '/../uploads/categories/');
 function thumb_url(?string $thumb): string {
     if (!$thumb) return BASE_URL . '/assets/img/default-thumb.jpg';
     if (str_starts_with($thumb, 'http')) return $thumb;
+    if ($thumb === 'default-thumb.jpg') {
+        $dest = THUMB_PATH . 'default-thumb.jpg';
+        if (!file_exists($dest)) {
+            $src = __DIR__ . '/../assets/img/default-thumb.jpg';
+            if (file_exists($src)) {
+                if (!is_dir(THUMB_PATH)) mkdir(THUMB_PATH, 0755, true);
+                @copy($src, $dest);
+            }
+        }
+    }
     return BASE_URL . '/uploads/thumbnails/' . $thumb;
 }
 
@@ -588,21 +598,87 @@ function render_site_logo(string $variant = 'nav', bool $link = true): string {
     return '<span class="' . $classes . '" style="display:inline-flex;align-items:center">' . $svg . '</span>';
 }
 
-require_once __DIR__ . '/earnings.php';
+// Monetization system removed - stub functions to prevent breakage
+function fh_currencies() {
+    return [
+        'USD' => ['code' => 'USD', 'symbol' => '$', 'name' => 'US Dollar', 'label' => '$ (USD)']
+    ];
+}
+function fh_set_user_currency($code) {
+    return true;
+}
+function fh_format_money($amount, $currency = 'USD') {
+    return '';
+}
+function fh_user_currency($userId = null) {
+    return 'USD';
+}
+function fh_pending_withdrawal($userId) {
+    return false;
+}
+function fh_track_ad_event($adId, $eventType, $videoId = null) {
+    return false;
+}
+function fh_user_watch_stats(int $userId): array {
+    $user = db_fetch("SELECT total_views, total_watch_seconds FROM users WHERE id=?", [$userId]);
+    $watch_sec = (int)($user['total_watch_seconds'] ?? 0);
+    return [
+        'total_views'          => (int)($user['total_views'] ?? 0),
+        'total_watch_seconds'  => $watch_sec,
+        'total_watch_formatted'=> format_duration($watch_sec),
+        'balance_usd'          => 0.0,
+        'balance_formatted'    => '',
+        'lifetime_watch_usd'   => 0.0,
+        'lifetime_watch_formatted' => '',
+        'watch_hours'          => round($watch_sec / 3600, 2),
+    ];
+}
+function fh_process_watch_time(int $viewId, int $videoId, int $seconds, bool $playing): array {
+    if ($viewId < 1 || $videoId < 1 || $seconds < 1) {
+        return ['error' => 'Invalid parameters'];
+    }
+    
+    // Get view session
+    $view = db_fetch("SELECT id, user_id FROM video_views WHERE id = ? AND video_id = ?", [$viewId, $videoId]);
+    if (!$view) {
+        return ['error' => 'View session not found'];
+    }
+    
+    // Get video details
+    $video = db_fetch("SELECT id, user_id FROM videos WHERE id = ?", [$videoId]);
+    if (!$video) {
+        return ['error' => 'Video not found'];
+    }
+    
+    // Update view session
+    db_query("UPDATE video_views SET watch_seconds = watch_seconds + ? WHERE id = ?", [$seconds, $viewId]);
+    
+    // Update video stats
+    db_query("UPDATE videos SET watch_time = watch_time + ? WHERE id = ?", [$seconds, $videoId]);
+    
+    // Update creator stats
+    db_query("UPDATE users SET total_watch_seconds = total_watch_seconds + ? WHERE id = ?", [$seconds, $video['user_id']]);
+    
+    // Update viewer stats if logged in
+    if (!empty($view['user_id'])) {
+        db_query("UPDATE users SET total_watch_seconds = total_watch_seconds + ? WHERE id = ?", [$seconds, $view['user_id']]);
+    }
+    
+    return [
+        'success' => true,
+        'watch_seconds' => $seconds
+    ];
+}
 
 /**
  * Video card HTML for grids (homepage, search, channel).
  *
  * @param array<string,mixed> $v Video row (must include id, user_id, duration, etc.)
- * @param array<string,mixed> $opts ref, earnings_usd (float|null)
+ * @param array<string,mixed> $opts ref
  */
-/** Options for render_video_card (ref link + creator earnings). */
+/** Options for render_video_card (ref link). */
 function fh_video_card_opts(array $v, array $earningsMap = [], string $ref = ''): array {
-    $opts = ['ref' => $ref];
-    if (is_logged_in() && is_creator() && (int)($v['user_id'] ?? 0) === (int)auth_user()['id']) {
-        $opts['earnings_usd'] = $earningsMap[(int)$v['id']] ?? 0.0;
-    }
-    return $opts;
+    return ['ref' => $ref];
 }
 
 function render_video_card(array $v, array $opts = []): string {
@@ -611,7 +687,6 @@ function render_video_card(array $v, array $opts = []): string {
     if (!in_array($format, ['grid', 'side', 'full'], true)) {
         $format = 'grid';
     }
-    $earnings  = isset($opts['earnings_usd']) ? (float)$opts['earnings_usd'] : null;
     $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
     $url       = BASE_URL . '/watch.php?v=' . (int)$v['id'] . $ref_param;
     $channelUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=videos';
@@ -634,15 +709,6 @@ function render_video_card(array $v, array $opts = []): string {
     $formatClass = $format === 'full' ? ' video-card--full-width' : ($format === 'side' ? ' video-card--side' : '');
     $is_portrait = (int)($v['is_reel'] ?? 0) === 1;
     $portraitClass = $is_portrait ? ' is-portrait' : '';
-
-    $earningsHtml = '';
-    if ($earnings !== null && is_logged_in() && is_creator()) {
-        $currency = fh_user_currency();
-        $label    = e(fh_format_money($earnings, $currency));
-        $earningsHtml = '<div class="video-card-earnings-box" title="Watch-time earnings on this video">'
-            . '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'
-            . '<span>' . $label . ' earned</span></div>';
-    }
 
     $deleteBtnHtml = '';
     if (!empty($opts['show_delete'])) {
@@ -701,7 +767,6 @@ HTML;
       <span>·</span>
       <span>{$ago}</span>
     </div>
-    {$earningsHtml}
   </div>
 </article>
 HTML;

@@ -73,14 +73,8 @@ if ($view_uid) {
         redirect(BASE_URL . '/admin/users.php');
     }
     
-    $user_earnings = db_fetchAll(
-        "SELECT * FROM earnings WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
-        [$view_uid]
-    );
-    $user_withdrawals = db_fetchAll(
-        "SELECT * FROM withdrawal_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 20",
-        [$view_uid]
-    );
+    $user_earnings = [];
+    $user_withdrawals = [];
     $user_videos = db_fetchAll(
         "SELECT id, title, status, views, created_at FROM videos WHERE user_id=? ORDER BY created_at DESC LIMIT 20",
         [$view_uid]
@@ -93,14 +87,8 @@ if ($view_uid) {
             [$view_uid]
           )
         : [];
-    $total_earnings = (float)(db_fetch(
-        "SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE user_id=? AND status='approved'",
-        [$view_uid]
-    )['t'] ?? 0);
-    $total_withdrawn = (float)(db_fetch(
-        "SELECT COALESCE(SUM(amount),0) AS t FROM withdrawal_requests WHERE user_id=? AND status='paid'",
-        [$view_uid]
-    )['t'] ?? 0);
+    $total_earnings = 0.0;
+    $total_withdrawn = 0.0;
 
     $meta_title = 'User: ' . $view_user['username'];
     require_once __DIR__ . '/partials/admin_head.php';
@@ -144,35 +132,9 @@ if ($view_uid) {
             </div>
           </div>
 
-          <!-- Earnings Stats -->
-          <div class="stat-grid-3" style="margin-bottom:20px">
-            <div class="stat-card"><div class="stat-value" style="color:var(--green)">$<?= number_format((float)$view_user['balance'], 2) ?></div><div class="stat-label">Current Balance</div></div>
-            <div class="stat-card"><div class="stat-value">$<?= number_format($total_earnings, 2) ?></div><div class="stat-label">Total Earned</div></div>
-            <div class="stat-card"><div class="stat-value">$<?= number_format($total_withdrawn, 2) ?></div><div class="stat-label">Total Withdrawn</div></div>
-          </div>
 
-          <!-- Earnings History -->
-          <?php if ($user_earnings): ?>
-          <div class="card" style="margin-bottom:20px">
-            <h3 style="font-weight:700;margin-bottom:12px;font-size:.95rem">Earnings History</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Description</th><th>Date</th></tr></thead>
-                <tbody>
-                <?php foreach ($user_earnings as $e): ?>
-                <tr>
-                  <td><span class="badge badge-blue"><?= e($e['type']) ?></span></td>
-                  <td style="color:var(--green);font-weight:600">$<?= number_format((float)$e['amount'],4) ?></td>
-                  <td><span class="badge badge-<?= $e['status']==='approved'||$e['status']==='paid'?'green':($e['status']==='pending'?'yellow':'gray') ?>"><?= e($e['status']) ?></span></td>
-                  <td class="text-xs text-muted" style="max-width:180px"><?= e(truncate($e['description']??'',60)) ?></td>
-                  <td class="text-xs text-muted"><?= date('M j, Y', strtotime($e['created_at'])) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <?php endif; ?>
+
+
 
           <!-- Videos (Creators only) -->
           <?php if ($view_user['role'] === 'creator' && $user_videos): ?>
@@ -223,27 +185,7 @@ if ($view_uid) {
           </div>
           <?php endif; ?>
 
-          <!-- Withdrawal History -->
-          <?php if ($user_withdrawals): ?>
-          <div class="card" style="margin-bottom:20px">
-            <h3 style="font-weight:700;margin-bottom:12px;font-size:.95rem">Withdrawal History</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead>
-                <tbody>
-                <?php foreach ($user_withdrawals as $w): ?>
-                <tr>
-                  <td style="font-weight:600;color:var(--green)">$<?= number_format((float)$w['amount'],2) ?></td>
-                  <td class="text-sm"><?= e($w['payment_method']) ?></td>
-                  <td><span class="badge badge-<?= $w['status']==='paid'?'green':($w['status']==='pending'?'yellow':'red') ?>"><?= e($w['status']) ?></span></td>
-                  <td class="text-xs text-muted"><?= date('M j, Y', strtotime($w['created_at'])) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <?php endif; ?>
+
         </div>
 
         <!-- Right: Actions -->
@@ -305,9 +247,7 @@ if ($view_uid) {
             <div style="font-size:.82rem;display:flex;flex-direction:column;gap:8px">
               <div class="flex" style="justify-content:space-between"><span class="text-muted">ID</span><span>#{$view_uid}</span></div>
               <div class="flex" style="justify-content:space-between"><span class="text-muted">Role</span><span><?= e($view_user['role']) ?></span></div>
-              <div class="flex" style="justify-content:space-between"><span class="text-muted">Currency</span><span><?= e($view_user['preferred_currency'] ?? 'USD') ?></span></div>
               <div class="flex" style="justify-content:space-between"><span class="text-muted">Watch Time</span><span><?= round((int)($view_user['total_watch_seconds']??0)/3600, 2) ?>h</span></div>
-              <div class="flex" style="justify-content:space-between"><span class="text-muted">Lifetime Earned</span><span>$<?= number_format((float)($view_user['lifetime_watch_earnings']??0),2) ?></span></div>
             </div>
           </div>
         </div>
@@ -375,7 +315,7 @@ require_once __DIR__ . '/partials/admin_head.php';
     <table>
       <thead><tr>
         <th>User</th><th>Email</th><th>Role</th><th>Status</th>
-        <th>Balance</th><th>Watch Time</th><th>Joined</th><th>Actions</th>
+        <th>Watch Time</th><th>Joined</th><th>Actions</th>
       </tr></thead>
       <tbody>
       <?php foreach ($users as $u): ?>
@@ -400,7 +340,6 @@ require_once __DIR__ . '/partials/admin_head.php';
             <?= e($status_labels[$u['status']] ?? $u['status']) ?>
           </span>
         </td>
-        <td class="text-sm" style="color:var(--green);font-weight:600">$<?= number_format((float)$u['balance'],2) ?></td>
         <td class="text-sm text-muted"><?= round((int)($u['total_watch_seconds']??0)/3600, 1) ?>h</td>
         <td class="text-xs text-muted"><?= date('M j, Y', strtotime($u['created_at'])) ?></td>
         <td>

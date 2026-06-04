@@ -101,9 +101,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'set_vpn_session') {
 
 // ── POST: Track ad impression ────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'track_impression') {
-    if (fh_is_vpn_active()) {
-        json_error('VPN detected. Earnings disabled.');
-    }
     $ad_id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
     $video_id = (int)($_GET['video_id'] ?? $_POST['video_id'] ?? $_GET['v'] ?? $_POST['v'] ?? 0);
     $placement = trim($_GET['placement'] ?? $_POST['placement'] ?? '');
@@ -116,15 +113,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'track_impression') {
 
 // ── POST: Track ad click ─────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'track_click') {
-    if (fh_is_vpn_active()) {
-        json_error('VPN detected. Earnings disabled.');
-    }
     $ad_id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
     $video_id = (int)($_GET['video_id'] ?? $_POST['video_id'] ?? $_GET['v'] ?? $_POST['v'] ?? 0);
     $placement = trim($_GET['placement'] ?? $_POST['placement'] ?? '');
     if ($ad_id) {
         fh_track_ad_event($ad_id, 'click', $video_id, $placement);
-        fh_credit_admin_ad_revenue($ad_id);
         json_success(['tracked' => true]);
     }
     json_error('Invalid ad');

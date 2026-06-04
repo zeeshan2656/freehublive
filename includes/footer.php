@@ -21,9 +21,7 @@
 
 <script src="<?= fh_asset_url('assets/js/app.js') ?>" defer></script>
 <script src="<?= fh_asset_url('assets/js/ads.js') ?>" defer></script>
-<?php if (is_logged_in()): ?>
-<script src="<?= fh_asset_url('assets/js/earnings-poll.js') ?>" defer></script>
-<?php endif; ?>
+
 <?php require_once __DIR__ . '/partials/date_filter_modal.php'; ?>
 
 <?php if ($is_dashboard_page): ?>

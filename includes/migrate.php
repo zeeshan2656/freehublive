@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.06.03.1';
+    $migration_version = '2026.06.05.1';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -629,6 +629,23 @@ function fh_run_migrations(): void {
             ) ENGINE=InnoDB;");
         } catch (Throwable $e) {}
     }
+
+    // ── Drop monetization/earnings tables and settings (2026.06.05.1) ──
+    try {
+        db_query("DROP TABLE IF EXISTS earnings");
+    } catch (Throwable $e) {}
+    try {
+        db_query("DROP TABLE IF EXISTS withdrawal_requests");
+    } catch (Throwable $e) {}
+    try {
+        db_query("DROP TABLE IF EXISTS affiliate_clicks");
+    } catch (Throwable $e) {}
+    try {
+        db_query("DROP TABLE IF EXISTS referral_conversions");
+    } catch (Throwable $e) {}
+    try {
+        db_query("DELETE FROM settings WHERE `group` = 'earnings'");
+    } catch (Throwable $e) {}
 
     // ── All migrations passed — write flag to skip on next request ──
     if (!is_dir($cache_dir)) {

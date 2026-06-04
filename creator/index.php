@@ -10,11 +10,8 @@ $primary    = setting('primary_color', '#6366f1');
 $uid  = auth_user()['id'];
 $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
 
-$watch_stats = fh_user_watch_stats((int)$uid);
 $stats = [
     'videos'         => db_count('videos', "user_id=?", [$uid]),
-    'ad_impressions' => db_fetch("SELECT SUM(ad_impressions) as t FROM videos WHERE user_id=?", [$uid])['t'] ?? 0,
-    'ad_clicks'      => db_fetch("SELECT SUM(ad_clicks) as t FROM videos WHERE user_id=?", [$uid])['t'] ?? 0,
     'subscribers'    => $user['subscribers'],
 ];
 
@@ -28,7 +25,30 @@ require_once __DIR__ . '/../includes/header.php';
 
 <div class="container">
 
-    <?php $watch_stats_user_id = (int)$uid; $creator_context = true; require __DIR__ . '/../includes/partials/watch_earnings_stats.php'; ?>
+    <?php
+    $channel_videos_count = (int)$stats['videos'];
+    $channel_views = db_fetch("SELECT SUM(views) as t FROM videos WHERE user_id=?", [$uid])['t'] ?? 0;
+    $channel_watch_time = format_duration((int)($user['total_watch_seconds'] ?? 0));
+    $channel_subscribers = (int)$stats['subscribers'];
+    ?>
+    <div class="stat-grid-4" style="margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-value"><?= format_number($channel_videos_count) ?></div>
+        <div class="stat-label">Total Videos</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><?= format_number($channel_views) ?></div>
+        <div class="stat-label">Total Views</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><?= $channel_watch_time ?></div>
+        <div class="stat-label">Total Watch Time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><?= format_number($channel_subscribers) ?></div>
+        <div class="stat-label">Subscribers</div>
+      </div>
+    </div>
 
     <!-- My Videos list is displayed below -->
 

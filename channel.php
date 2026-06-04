@@ -48,26 +48,24 @@ $order = match($sort) { 'views'=>'views DESC', 'oldest'=>'created_at ASC', defau
 
 $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
 $is_owner_or_admin = is_logged_in() && ($is_owner || auth_user()['role'] === 'admin');
-if ($tab === 'reels') {
-    redirect(BASE_URL . '/channel.php?id=' . $channel_id . '&tab=videos');
-}
+$is_reel = ($tab === 'reels') ? 1 : 0;
 
 if ($is_owner) {
-    $total  = db_count('videos', "user_id=?", [$channel_id]);
+    $total  = db_count('videos', "user_id=? AND is_reel=?", [$channel_id, $is_reel]);
     $videos = db_fetchAll(
         "SELECT v.*, u.username, u.channel_name, u.avatar
          FROM videos v
          JOIN users u ON u.id = v.user_id
-         WHERE v.user_id = ?
-         ORDER BY $order LIMIT 52", [$channel_id]
+         WHERE v.user_id = ? AND v.is_reel = ?
+         ORDER BY $order LIMIT 52", [$channel_id, $is_reel]
     );
 } else {
-    $total  = db_count('videos', "user_id=? AND status='published' AND visibility='public'", [$channel_id]);
+    $total  = db_count('videos', "user_id=? AND status='published' AND visibility='public' AND is_reel=?", [$channel_id, $is_reel]);
     $videos = db_fetchAll(
         "SELECT v.*, u.username, u.channel_name, u.avatar
          FROM videos v JOIN users u ON u.id = v.user_id
-         WHERE v.user_id=? AND v.status='published' AND v.visibility='public'
-         ORDER BY $order LIMIT 52", [$channel_id]
+         WHERE v.user_id=? AND v.status='published' AND v.visibility='public' AND v.is_reel = ?
+         ORDER BY $order LIMIT 52", [$channel_id, $is_reel]
     );
 }
 
@@ -77,10 +75,6 @@ if (is_logged_in()) {
 }
 
 $earningsMap = [];
-if ($is_owner && is_creator() && $videos) {
-    // Duration sync removed for performance — synced via watch.php instead
-    $earningsMap = fh_creator_video_earnings_map($channel_id, array_column($videos, 'id'));
-}
 
 $ref = auth_user()['ref_code'] ?? '';
 
@@ -153,6 +147,7 @@ require_once __DIR__ . '/includes/header.php';
   <!-- Tabs -->
   <div class="channel-tabs">
     <a href="?id=<?= $channel_id ?>&tab=videos" class="channel-tab <?= $tab==='videos'?'active':'' ?>">Videos</a>
+    <a href="?id=<?= $channel_id ?>&tab=reels" class="channel-tab <?= $tab==='reels'?'active':'' ?>">Reels</a>
     <a href="?id=<?= $channel_id ?>&tab=playlists" class="channel-tab <?= $tab==='playlists'?'active':'' ?>">Playlists</a>
     <a href="?id=<?= $channel_id ?>&tab=about" class="channel-tab <?= $tab==='about'?'active':'' ?>">About</a>
     
@@ -200,7 +195,32 @@ require_once __DIR__ . '/includes/header.php';
   <?php endif; ?>
   <?php endif; ?>
 
+  <!-- Reels tab -->
+  <?php if ($tab==='reels'): ?>
+  <?php if ($videos): ?>
+  <div class="grid grid-4" id="video-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));">
+    <?php foreach ($videos as $v):
+      $card_opts = fh_video_card_opts($v, [], $ref);
+      if ($is_owner_or_admin) {
+          $card_opts['show_delete'] = true;
+      }
+      echo render_video_card($v, $card_opts);
+    endforeach; ?>
+  </div>
 
+  <?php if ($total > 52): ?>
+  <div style="text-align:center;margin-top:24px">
+    <button class="btn btn-outline" id="load-more" data-page="2" data-channel-id="<?= $channel_id ?>" data-sort="<?= e($sort) ?>" data-is-reel="1">Load More</button>
+  </div>
+  <?php endif; ?>
+
+  <?php else: ?>
+  <div style="text-align:center;padding:60px;color:var(--text2)">
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;opacity:.4"><rect x="6" y="2" width="12" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+    <p>No Reels yet</p>
+  </div>
+  <?php endif; ?>
+  <?php endif; ?>
 
   <!-- Playlists tab -->
   <?php if ($tab==='playlists'): ?>
@@ -386,7 +406,8 @@ function bindLoadMore() {
     btn.textContent = 'Loading…';
     btn.disabled = true;
     try {
-      const res = await fetch(`<?= BASE_URL ?>/api/videos.php?page=${page}&per_page=48&channel_id=${channelId}&sort=${sort}`);
+      const isReel = btn.dataset.isReel ? parseInt(btn.dataset.isReel) : 0;
+      const res = await fetch(`<?= BASE_URL ?>/api/videos.php?page=${page}&per_page=48&channel_id=${channelId}&sort=${sort}&is_reel=${isReel}`);
       const data = await res.json();
       const grid = document.getElementById('video-grid');
       if (data.videos && data.videos.length) {
@@ -399,9 +420,6 @@ function bindLoadMore() {
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`
             : `<span class="video-duration video-duration--pending">…</span>`;
-          const earnHtml = (FH_CREATOR_ID && v.user_id === FH_CREATOR_ID && v.earnings_fmt)
-            ? `<div class="video-card-earnings-box" title="Watch-time earnings on this video"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
-            : '';
           
           let deleteBtnHtml = '';
           if (IS_OWNER_OR_ADMIN) {
@@ -448,7 +466,6 @@ function bindLoadMore() {
                 <span>·</span>
                 <span>${v.ago}</span>
               </div>
-              ${earnHtml}
             </div>`;
           grid.appendChild(el);
         });

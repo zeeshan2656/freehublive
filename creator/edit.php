@@ -86,6 +86,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            if (empty($video['thumbnail']) && empty($updateData['thumbnail'])) {
+                $updateData['thumbnail'] = 'default-thumb.jpg';
+            }
+
             if (!$error) {
                 db_update('videos', $updateData, 'id=?', [$vid]);
                 

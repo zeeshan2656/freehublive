@@ -207,7 +207,7 @@ $is_home = ($current_page === 'index.php' && !isset($_GET['cat']));
 $is_trending = ($current_page === 'search.php' && ($current_q === 'trending' || $current_sort === 'views')) || ($current_page === 'index.php' && isset($_GET['sort']) && $_GET['sort'] === 'views');
 $is_latest = ($current_page === 'search.php' && $current_sort === 'latest') || ($current_page === 'index.php' && isset($_GET['sort']) && $_GET['sort'] === 'latest');
 $is_categories = ($current_page === 'categories.php');
-$is_reels = false;
+$is_reels = ($current_page === 'reels.php');
 $nav_cats = db_fetchAll(
     "SELECT id, name, slug, image, color FROM categories WHERE is_active=1 ORDER BY sort_order LIMIT ?",
     [$nav_cat_limit]
@@ -243,7 +243,6 @@ $is_dashboard_page = (
     str_contains($_SERVER['PHP_SELF'], '/creator/') ||
     str_contains($_SERVER['PHP_SELF'], '/affiliate/') ||
     basename($_SERVER['PHP_SELF']) === 'dashboard.php' ||
-    basename($_SERVER['PHP_SELF']) === 'withdrawal.php' ||
     basename($_SERVER['PHP_SELF']) === 'settings.php' ||
     basename($_SERVER['PHP_SELF']) === 'profile.php'
 );
@@ -286,7 +285,7 @@ $currency_symbol  = $currencies_list[$active_currency]['symbol'] ?? $active_curr
 <meta property="og:type"        content="website">
 <meta name="twitter:card"       content="summary_large_image">
 <meta name="base-url" content="<?= e(BASE_URL) ?>">
-<link rel="canonical" href="<?= e(BASE_URL . $_SERVER['REQUEST_URI']) ?>">
+<link rel="canonical" href="<?= e(BASE_URL . ($_SERVER['REQUEST_URI'] ?? '')) ?>">
 
 <!-- ── Resource Hints ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -943,17 +942,14 @@ endif;
         <a href="<?= BASE_URL ?>/creator/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">
           <span>📈 Analytics</span>
         </a>
-        <a href="<?= BASE_URL ?>/creator/upload.php" class="studio-nav-item <?= $current_page === 'upload.php' ? 'active' : '' ?>">
+        <a href="<?= BASE_URL ?>/creator/upload.php" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') !== 'reel' ? 'active' : '' ?>">
           <span>⬆️ Upload Video</span>
+        </a>
+        <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') === 'reel' ? 'active' : '' ?>">
+          <span>🎥 Upload Reel</span>
         </a>
         <a href="<?= BASE_URL ?>/creator/videos.php" class="studio-nav-item <?= $current_page === 'videos.php' || $current_page === 'edit.php' ? 'active' : '' ?>">
           <span>🎬 My Videos</span>
-        </a>
-        <a href="<?= BASE_URL ?>/creator/earnings.php" class="studio-nav-item <?= $current_page === 'earnings.php' ? 'active' : '' ?>">
-          <span>💰 Earnings</span>
-        </a>
-        <a href="<?= BASE_URL ?>/withdrawal.php" class="studio-nav-item <?= $current_page === 'withdrawal.php' ? 'active' : '' ?>">
-          <span>💳 Withdrawal</span>
         </a>
         <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
           <span>📥 Saved Videos</span>
@@ -975,9 +971,6 @@ endif;
         <!-- Viewer Menu -->
         <a href="<?= BASE_URL ?>/dashboard.php" class="studio-nav-item <?= $current_page === 'dashboard.php' ? 'active' : '' ?>">
           <span>🏠 Dashboard</span>
-        </a>
-        <a href="<?= BASE_URL ?>/withdrawal.php" class="studio-nav-item <?= $current_page === 'withdrawal.php' ? 'active' : '' ?>">
-          <span>💳 Withdrawal</span>
         </a>
         <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
           <span>📥 Saved Videos</span>
@@ -1063,10 +1056,6 @@ endif;
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                   <span>Dashboard</span>
                 </a>
-                <a href="<?= BASE_URL ?>/creator/earnings.php" class="dropdown-item" role="menuitem">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                  <span>Earnings</span>
-                </a>
                 <a href="<?= BASE_URL ?>/channel.php?id=<?= auth_user()['id'] ?>" class="dropdown-item" role="menuitem">
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   <span>My Channel</span>
@@ -1077,13 +1066,6 @@ endif;
                 <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                   <span>Dashboard</span>
-                </a>
-              <?php endif; ?>
-
-              <?php if (!is_admin()): ?>
-                <a href="<?= BASE_URL ?>/referral.php" class="dropdown-item" role="menuitem">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                  <span>Refer &amp; Earn</span>
                 </a>
               <?php endif; ?>
 
@@ -1137,7 +1119,7 @@ endif;
     <!-- DESKTOP: Nav Links -->
     <div class="header-nav-links desktop-only" style="display:flex; align-items:center; gap:8px; margin-left:16px">
       <a href="<?= BASE_URL ?>/" class="btn <?= $is_home ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Home</a>
-
+      <a href="<?= BASE_URL ?>/reels.php" class="btn <?= $is_reels ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Reels</a>
     </div>
 
     <!-- RIGHT: mobile user/login icon -->
@@ -1178,10 +1160,6 @@ endif;
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span>Dashboard</span>
               </a>
-              <a href="<?= BASE_URL ?>/creator/earnings.php" class="dropdown-item" role="menuitem">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                <span>Earnings</span>
-              </a>
               <a href="<?= BASE_URL ?>/channel.php?id=<?= $user['id'] ?>" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span>My Channel</span>
@@ -1192,13 +1170,6 @@ endif;
               <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span>Dashboard</span>
-              </a>
-            <?php endif; ?>
-            
-            <?php if (!is_admin()): ?>
-              <a href="<?= BASE_URL ?>/referral.php" class="dropdown-item" role="menuitem">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                <span>Refer &amp; Earn</span>
               </a>
             <?php endif; ?>
             
@@ -1277,10 +1248,6 @@ endif;
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span>Dashboard</span>
               </a>
-              <a href="<?= BASE_URL ?>/creator/earnings.php" class="dropdown-item" role="menuitem">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                <span>Earnings</span>
-              </a>
               <a href="<?= BASE_URL ?>/channel.php?id=<?= $user['id'] ?>" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span>My Channel</span>
@@ -1291,13 +1258,6 @@ endif;
               <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span>Dashboard</span>
-              </a>
-            <?php endif; ?>
-            
-            <?php if (!is_admin()): ?>
-              <a href="<?= BASE_URL ?>/referral.php" class="dropdown-item" role="menuitem">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                <span>Refer &amp; Earn</span>
               </a>
             <?php endif; ?>
             

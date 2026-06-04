@@ -14,7 +14,7 @@ require_once __DIR__ . '/includes/functions.php';
 $meta_title = ($q ? '"' . $q . '" — Search' : 'Search') . ' — ' . setting('site_name','FreeHub');
 $meta_desc  = $q ? "Search results for \"$q\" on " . setting('site_name','FreeHub') : 'Search videos';
 
-$where  = "v.status='published' AND v.visibility='public'";
+$where  = "v.status='published' AND v.visibility='public' AND v.is_reel = 0";
 $where_params = [];
 if ($q) {
     $where .= " AND MATCH(v.title,v.description,v.tags) AGAINST(? IN BOOLEAN MODE)";
@@ -49,18 +49,6 @@ $videos = db_fetchAll(
 $categories = db_fetchAll("SELECT * FROM categories WHERE is_active=1 ORDER BY sort_order");
 $ref = auth_user()['ref_code'] ?? '';
 $creatorId   = (is_logged_in() && is_creator()) ? (int)auth_user()['id'] : 0;
-$earningsMap = [];
-if ($creatorId && $videos) {
-    $ownIds = [];
-    foreach ($videos as $v) {
-        if ((int)($v['user_id'] ?? 0) === $creatorId) {
-            $ownIds[] = (int)$v['id'];
-        }
-    }
-    if ($ownIds) {
-        $earningsMap = fh_creator_video_earnings_map($creatorId, $ownIds);
-    }
-}
 
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -105,7 +93,7 @@ require_once __DIR__ . '/includes/header.php';
       $i = 0;
       foreach ($videos_subset as $v) {
           $i++;
-          echo render_video_card($v, fh_video_card_opts($v, $earningsMap, $ref));
+          echo render_video_card($v, fh_video_card_opts($v, [], $ref));
           if ($i % 10 === 0) {
               echo render_ad_card('search_grid_' . $i);
           }
@@ -166,9 +154,6 @@ function bindLoadMore() {
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`
             : `<span class="video-duration video-duration--pending">…</span>`;
-          const earnHtml = (FH_CREATOR_ID && v.user_id === FH_CREATOR_ID && v.earnings_fmt)
-            ? `<div class="video-card-earnings-box" title="Watch-time earnings on this video"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>${v.earnings_fmt} earned</span></div>`
-            : '';
           el.innerHTML = `
             <div class="video-thumb \${v.is_reel ? 'is-portrait' : ''}" style="position:relative">
               <img src="\${v.thumbnail}" alt="\${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
@@ -193,7 +178,6 @@ function bindLoadMore() {
                 <span>·</span>
                 <span>${v.ago}</span>
               </div>
-              ${earnHtml}
             </div>`;
           grid.appendChild(el);
         });

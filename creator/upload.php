@@ -188,6 +188,14 @@ require_once __DIR__ . '/../includes/header.php';
                   </select>
                 </div>
 
+                <div class="form-group" id="reels-checkbox-group" style="display:none; margin-top:16px;">
+                  <label style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;">
+                    <input type="checkbox" id="details-is-reel" name="is_reel" value="1">
+                    <span style="font-weight:600; font-size:0.9rem;">📱 Publish as Reel (Short Vertical Video)</span>
+                  </label>
+                  <small class="text-muted text-xs" style="display:block; margin-top:4px;">Only videos 60 seconds or less can be published as Reels.</small>
+                </div>
+
                 <div style="display:flex; gap:12px; margin-top:28px;">
                   <button type="submit" class="btn btn-primary" id="save-metadata-btn" style="flex:1; justify-content:center; padding:12px; font-weight:800; border-radius:8px;">
                     💾 Save Video Details
@@ -550,6 +558,8 @@ require_once __DIR__ . '/../includes/header.php';
   const detailsDesc = document.getElementById('details-desc');
   const detailsTags = document.getElementById('details-tags');
   const detailsVisibility = document.getElementById('details-visibility');
+  const reelsCheckboxGroup = document.getElementById('reels-checkbox-group');
+  const detailsIsReel = document.getElementById('details-is-reel');
   const saveMetadataBtn = document.getElementById('save-metadata-btn');
   const spaPlayer = document.getElementById('spa-player');
   const spaIframePlayer = document.getElementById('spa-iframe-player');
@@ -945,10 +955,15 @@ require_once __DIR__ . '/../includes/header.php';
       
       // read duration
       if (spaPlayer.duration) {
-        detailsPreviewDuration.textContent = formatTime(spaPlayer.duration);
+        const dur = Math.max(1, Math.floor(spaPlayer.duration || 0));
+        session.duration = dur;
+        detailsPreviewDuration.textContent = formatTime(dur);
       } else {
         spaPlayer.onloadedmetadata = () => {
-          detailsPreviewDuration.textContent = formatTime(spaPlayer.duration);
+          const dur = Math.max(1, Math.floor(spaPlayer.duration || 0));
+          session.duration = dur;
+          detailsPreviewDuration.textContent = formatTime(dur);
+          updateReelsUI(dur);
         };
       }
     }
@@ -966,6 +981,40 @@ require_once __DIR__ . '/../includes/header.php';
     detailsDesc.oninput = function() { session.description = this.value; };
     detailsTags.oninput = function() { session.tags = this.value; };
     detailsVisibility.onchange = function() { session.visibility = this.value; };
+
+    // Reels dynamic logic
+    const updateReelsUI = (dur) => {
+      if (!reelsCheckboxGroup || !detailsIsReel) return;
+      if (session.isEmbed) {
+        reelsCheckboxGroup.style.display = 'none';
+        return;
+      }
+      if (dur > 60) {
+        reelsCheckboxGroup.style.display = 'none';
+        session.isReel = 0;
+        detailsIsReel.checked = false;
+      } else {
+        reelsCheckboxGroup.style.display = 'block';
+        const urlParams = new URLSearchParams(window.location.search);
+        if (session.isReel === undefined || session.isReel === null) {
+          session.isReel = (urlParams.get('mode') === 'reel') ? 1 : 0;
+        }
+        detailsIsReel.checked = (parseInt(session.isReel) === 1);
+      }
+    };
+
+    const initialDur = session.duration || spaPlayer.duration || 0;
+    updateReelsUI(initialDur);
+
+    detailsIsReel.onchange = function() {
+      if (this.checked && (session.duration || spaPlayer.duration || 0) > 60) {
+        alert('Reels must be 60 seconds or less.');
+        this.checked = false;
+        session.isReel = 0;
+        return;
+      }
+      session.isReel = this.checked ? 1 : 0;
+    };
 
     // Setup Category & Playlists checkboxes
     document.querySelectorAll('.category-checkbox').forEach(cb => {
@@ -1412,12 +1461,19 @@ require_once __DIR__ . '/../includes/header.php';
       const vWidth = helperVideo.videoWidth || 640;
       const vHeight = helperVideo.videoHeight || 360;
       const isPortrait = vHeight > vWidth;
-      session.isReel = isPortrait ? 1 : 0;
+      session.duration = duration;
+      session.isReel = (isPortrait && duration <= 60) ? 1 : 0;
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('mode') === 'reel' && duration <= 60) {
+        session.isReel = 1;
+      }
+      
       await UploadDB.save(session);
 
-      // Save video orientation to backend session asynchronously
+      // Save video orientation and duration to backend session asynchronously
       if (session.sessionId) {
-        saveVideoOrientation(session);
+        saveVideoOrientationAndDuration(session);
       }
 
       const maxDim = 640;
@@ -1449,6 +1505,7 @@ require_once __DIR__ . '/../includes/header.php';
             if (miniThumb) {
               miniThumb.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;background:#000">`;
             }
+            saveCustomThumbnail(session, dataUrl);
           }
 
           await UploadDB.save(session);
@@ -1782,9 +1839,12 @@ require_once __DIR__ . '/../includes/header.php';
     ctx.drawImage(img, x, y, drawWidth, drawHeight);
   }
 
-  // Save orientation to session/DB asynchronously
-  async function saveVideoOrientation(session) {
-    const meta = { is_reel: session.isReel };
+  // Save orientation and duration to session/DB asynchronously
+  async function saveVideoOrientationAndDuration(session) {
+    const meta = { 
+      is_reel: session.isReel,
+      duration: session.duration
+    };
     if (session.videoId) {
       meta.video_id = session.videoId;
     } else if (session.sessionId) {

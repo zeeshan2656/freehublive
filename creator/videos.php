@@ -62,8 +62,7 @@ $filter = $_GET['status'] ?? 'all';
 $search = trim($_GET['search'] ?? '');
 $from   = trim($_GET['from'] ?? '');
 $to     = trim($_GET['to'] ?? '');
-$min_earn  = trim($_GET['min_earn'] ?? '');
-$max_earn  = trim($_GET['max_earn'] ?? '');
+
 
 $where  = "user_id = $uid";
 $params = [];
@@ -89,32 +88,12 @@ if ($from !== '' && $to !== '') {
     $params[] = $to;
 }
 
-if ($min_earn !== '' || $max_earn !== '') {
-    $c_placements = array_filter(array_map('trim', explode(',', setting('creator_eligible_placements', ''))), 'strlen');
-    if (!empty($c_placements)) {
-        $place_placeholders = implode(',', array_fill(0, count($c_placements), '?'));
-        $subquery = "(SELECT COALESCE(SUM(al.earnings_creator), 0) FROM ad_logs al WHERE al.video_id = id AND al.creator_id = user_id AND al.placement IN ($place_placeholders))";
-        
-        if ($min_earn !== '') {
-            $where .= " AND $subquery >= ?";
-            $params = array_merge($params, $c_placements, [(float)$min_earn]);
-        }
-        if ($max_earn !== '') {
-            $where .= " AND $subquery <= ?";
-            $params = array_merge($params, $c_placements, [(float)$max_earn]);
-        }
-    } else {
-        if ($min_earn !== '' && (float)$min_earn > 0) {
-            $where .= " AND 1=0";
-        }
-    }
-}
+
 
 $total  = db_count('videos', $where, $params);
 $pg     = paginate($total, 20, $page);
 $videos = db_fetchAll("SELECT * FROM videos WHERE $where ORDER BY created_at DESC LIMIT 20 OFFSET {$pg['offset']}", $params);
-$video_ids = array_column($videos, 'id');
-$earnings_map = fh_creator_video_earnings_map($uid, $video_ids);
+
 
 // Duration sync removed for performance — synced via watch.php instead
 $meta_title = 'My Videos';
@@ -210,15 +189,7 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
         </div>
 
-        <!-- Earnings Filter -->
-        <div class="form-group filter-earnings">
-          <label class="form-label" style="font-size:0.8rem; font-weight:600; margin-bottom:4px; display:block;">Earnings (USD)</label>
-          <div class="flex gap-2">
-            <input type="number" step="0.01" name="min_earn" value="<?= e($min_earn) ?>" placeholder="Min" class="form-input" style="flex:1; height:38px; font-size:0.85rem;">
-            <span class="text-muted" style="align-self:center; font-size:0.85rem;">-</span>
-            <input type="number" step="0.01" name="max_earn" value="<?= e($max_earn) ?>" placeholder="Max" class="form-input" style="flex:1; height:38px; font-size:0.85rem;">
-          </div>
-        </div>
+
 
         <!-- Filter Actions -->
         <div class="flex gap-2 filter-actions">
@@ -247,8 +218,7 @@ require_once __DIR__ . '/../includes/header.php';
             <th>Status</th>
             <th>Views &amp; Likes</th>
             <th>Duration</th>
-            <th>Ad Stats</th>
-            <th>Earnings</th>
+
             <th>Upload Date</th>
             <th style="width:120px">Actions</th>
           </tr></thead>
@@ -280,13 +250,7 @@ require_once __DIR__ . '/../includes/header.php';
               <div style="margin-top:2px">👍 <?= number_format((int)$v['likes']) ?> likes</div>
             </td>
             <td class="text-sm"><?= format_duration((int)$v['duration']) ?></td>
-            <td class="text-sm">
-              <div style="white-space:nowrap">📺 <?= number_format((int)$v['ad_impressions']) ?> imps</div>
-              <div style="white-space:nowrap; margin-top:2px">🖱️ <?= number_format((int)$v['ad_clicks']) ?> clicks</div>
-            </td>
-            <td class="text-sm font-bold" style="color:var(--green)">
-              <?= e(fh_format_money($earnings_map[$v['id']] ?? 0.0, fh_user_currency())) ?>
-            </td>
+
             <td class="text-xs text-muted"><?= date('M j, Y H:i', strtotime($v['created_at'])) ?></td>
             <td>
               <div class="flex gap-2" style="align-items:center">

@@ -31,13 +31,6 @@ $totals = [
     'videos_published'   => db_count('videos', "status='published'"),
     'videos_pending'     => db_count('videos', "status='pending'"),
     'total_views'        => (int)(db_fetch("SELECT COALESCE(SUM(views),0) AS t FROM videos")['t'] ?? 0),
-    'total_ad_impressions' => (int)(db_fetch("SELECT COALESCE(SUM(total_ad_impressions),0) AS t FROM users")['t'] ?? 0),
-    'total_ad_clicks'      => (int)(db_fetch("SELECT COALESCE(SUM(total_ad_clicks),0) AS t FROM users")['t'] ?? 0),
-    'earnings_total'     => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND status='approved'")['t'] ?? 0),
-    'earnings_paid'      => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM withdrawal_requests WHERE status='paid'")['t'] ?? 0),
-    'withdrawals_pending'=> (int)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM withdrawal_requests WHERE status='pending'")['t'] ?? 0),
-    'withdrawals_count'  => db_count('withdrawal_requests', "status='pending'"),
-    'referrals_total'    => fh_table_exists('referral_conversions') ? db_count('referral_conversions') : 0,
 ];
 
 // ── Period-based Trends ───────────────────────────────────────
@@ -51,7 +44,6 @@ if ($from && $to) {
             'date'     => date('M j', $ts),
             'views'    => db_count('video_views', "DATE(created_at)=?", [$d]),
             'users'    => db_count('users', "DATE(created_at)=?", [$d]),
-            'earnings' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND DATE(created_at)=?", [$d])['t'] ?? 0),
         ];
     }
 } else {
@@ -61,25 +53,21 @@ if ($from && $to) {
             'date'     => date('M j', strtotime("-$i days")),
             'views'    => db_count('video_views', "DATE(created_at)=?", [$d]),
             'users'    => db_count('users', "DATE(created_at)=?", [$d]),
-            'earnings' => (float)(db_fetch("SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND DATE(created_at)=?", [$d])['t'] ?? 0),
         ];
     }
 }
 
 $maxViews    = max(1, max(array_column($daily, 'views')));
 $maxUsers    = max(1, max(array_column($daily, 'users')));
-$maxEarnings = max(0.001, max(array_column($daily, 'earnings')));
 
 // ── Top Content ───────────────────────────────────────────────
 $top_videos = db_fetchAll(
-    "SELECT v.title, v.views, v.watch_time,
-            COALESCE((SELECT SUM(earnings_creator) FROM ad_logs WHERE video_id=v.id), 0) AS revenue,
-            u.channel_name
+    "SELECT v.title, v.views, v.watch_time, u.channel_name
      FROM videos v JOIN users u ON u.id=v.user_id WHERE v.status='published'
      ORDER BY v.views DESC LIMIT 10"
 );
 $top_creators = db_fetchAll(
-    "SELECT u.username, u.channel_name, u.balance,
+    "SELECT u.username, u.channel_name,
      (SELECT COUNT(*) FROM videos WHERE user_id=u.id AND status='published') AS vid_count,
      (SELECT COALESCE(SUM(views),0) FROM videos WHERE user_id=u.id) AS total_views
      FROM users u WHERE u.role='creator'
@@ -89,10 +77,6 @@ $top_creators = db_fetchAll(
 // ── New Users This Period ─────────────────────────────────────
 $period_new_users    = db_count('users', $dateWhere, $dateParams);
 $period_new_videos   = db_count('videos', $dateWhere, $dateParams);
-$period_new_earnings = (float)(db_fetch(
-    "SELECT COALESCE(SUM(amount),0) AS t FROM earnings WHERE type IN ('ad_impression', 'ad_click') AND $dateWhere",
-    $dateParams
-)['t'] ?? 0);
 
 $meta_title = 'Analytics';
 require_once __DIR__ . '/partials/admin_head.php';
@@ -139,20 +123,6 @@ require_once __DIR__ . '/partials/admin_head.php';
       <div class="text-xs text-muted" style="margin-top:4px">📺 Imps: <?= format_number($totals['total_ad_impressions']) ?> · 🖱️ Clicks: <?= format_number($totals['total_ad_clicks']) ?></div>
     </div>
     <div class="stat-card">
-      <div class="stat-value" style="color:var(--green)">$<?= number_format($totals['earnings_total'],2) ?></div>
-      <div class="stat-label">Total Earnings Distributed</div>
-      <div class="text-xs text-muted" style="margin-top:4px">💸 $<?= number_format($totals['earnings_paid'],2) ?> paid out</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value" style="color:var(--yellow)"><?= $totals['withdrawals_count'] ?></div>
-      <div class="stat-label">Pending Withdrawals</div>
-      <div class="text-xs text-muted" style="margin-top:4px">$<?= number_format($totals['withdrawals_pending'],2) ?> pending amount</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value"><?= $totals['referrals_total'] ?></div>
-      <div class="stat-label">Total Referrals</div>
-    </div>
-    <div class="stat-card">
       <div class="stat-value" style="color:var(--accent)"><?= $period_new_users ?></div>
       <div class="stat-label">New Users (<?= $label ?>)</div>
     </div>
@@ -162,10 +132,9 @@ require_once __DIR__ . '/partials/admin_head.php';
     </div>
   </div>
 
-  <!-- Period earnings highlight -->
+  <!-- Period Highlights -->
   <div class="card" style="margin-bottom:24px;background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.05));border-color:rgba(99,102,241,.3)">
     <div class="flex gap-4" style="flex-wrap:wrap;justify-content:space-around;text-align:center">
-      <div><div style="font-size:1.5rem;font-weight:800;color:var(--green)">$<?= number_format($period_new_earnings,2) ?></div><div class="text-sm text-muted">Earnings in Period</div></div>
       <div><div style="font-size:1.5rem;font-weight:800;color:var(--accent)"><?= $period_new_users ?></div><div class="text-sm text-muted">New Signups</div></div>
       <div><div style="font-size:1.5rem;font-weight:800"><?= $period_new_videos ?></div><div class="text-sm text-muted">Videos Uploaded</div></div>
     </div>
@@ -192,20 +161,6 @@ require_once __DIR__ . '/partials/admin_head.php';
     </div>
   </div>
 
-  <!-- Earnings Chart -->
-  <div class="card" style="margin-bottom:24px">
-    <h3 style="font-weight:700;margin-bottom:12px">Daily Earnings (USD) — <?= $label ?></h3>
-    <div style="display:flex;align-items:flex-end;gap:3px;height:100px;overflow-x:auto">
-      <?php foreach ($daily as $d):
-        $h = $maxEarnings > 0 ? round(($d['earnings']/$maxEarnings)*90) : 0;
-      ?>
-      <div style="flex:1;min-width:12px;display:flex;flex-direction:column;align-items:center;gap:2px;height:100px;justify-content:flex-end">
-        <div style="width:100%;height:<?= $h ?>px;background:var(--green);border-radius:3px 3px 0 0;opacity:.85"
-             title="<?= $d['date'] ?>: $<?= number_format($d['earnings'],4) ?>"></div>
-      </div>
-      <?php endforeach; ?>
-    </div>
-  </div>
 
   <!-- New Users Chart -->
   <div class="card" style="margin-bottom:24px">
@@ -229,7 +184,7 @@ require_once __DIR__ . '/partials/admin_head.php';
       <h3 style="font-weight:700;margin-bottom:16px">🏆 Top Videos by Views</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>#</th><th>Title</th><th>Creator</th><th>Views</th><th>Revenue</th></tr></thead>
+          <thead><tr><th>#</th><th>Title</th><th>Creator</th><th>Views</th></tr></thead>
           <tbody>
           <?php foreach ($top_videos as $i => $v): ?>
           <tr>
@@ -237,7 +192,6 @@ require_once __DIR__ . '/partials/admin_head.php';
             <td style="font-size:.83rem;font-weight:500;max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"><?= e($v['title']) ?></td>
             <td class="text-sm text-muted"><?= e($v['channel_name']) ?></td>
             <td class="text-sm"><?= format_number((int)$v['views']) ?></td>
-            <td class="text-sm" style="color:var(--green)">$<?= number_format((float)$v['revenue'],2) ?></td>
           </tr>
           <?php endforeach; ?>
           <?php if (!$top_videos): ?><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">No videos yet</td></tr><?php endif; ?>
@@ -251,14 +205,13 @@ require_once __DIR__ . '/partials/admin_head.php';
       <h3 style="font-weight:700;margin-bottom:16px">🎬 Top Creators</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Creator</th><th>Videos</th><th>Views</th><th>Balance</th></tr></thead>
+          <thead><tr><th>Creator</th><th>Videos</th><th>Views</th></tr></thead>
           <tbody>
           <?php foreach ($top_creators as $c): ?>
           <tr>
             <td style="font-size:.83rem;font-weight:600"><a href="<?= BASE_URL ?>/admin/users.php?role=creator&s=<?= urlencode($c['username']) ?>" style="color:var(--accent)"><?= e($c['channel_name']??$c['username']) ?></a></td>
             <td class="text-sm"><?= $c['vid_count'] ?></td>
             <td class="text-sm"><?= format_number((int)$c['total_views']) ?></td>
-            <td class="text-sm" style="color:var(--green)">$<?= number_format((float)$c['balance'],2) ?></td>
           </tr>
           <?php endforeach; ?>
           <?php if (!$top_creators): ?><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text3)">No creators yet</td></tr><?php endif; ?>

@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $ref        = $_GET['ref'] ?? '';
     $q          = trim($_GET['q'] ?? '');
     $channel_id = (int)($_GET['channel_id'] ?? 0);
+    $is_reel    = isset($_GET['is_reel']) ? (int)$_GET['is_reel'] : null;
 
     $where_params = [];
     if ($channel_id) {
@@ -32,6 +33,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
         $where_params[] = $channel_id;
     } else {
         $where = "v.status='published' AND v.visibility='public'";
+    }
+
+    if ($is_reel !== null) {
+        $where .= " AND v.is_reel = ?";
+        $where_params[] = $is_reel;
+    } else {
+        $where .= " AND v.is_reel = 0";
     }
 
     if ($q) {
@@ -68,23 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
         $all_params
     );
 
-    $creatorId   = (is_logged_in() && is_creator()) ? (int)auth_user()['id'] : 0;
-    $earningsMap = [];
-    if ($creatorId) {
-        $ownIds = [];
-        foreach ($videos as $v) {
-            if ((int)$v['user_id'] === $creatorId) {
-                $ownIds[] = (int)$v['id'];
-            }
-        }
-        if ($ownIds) {
-            $earningsMap = fh_creator_video_earnings_map($creatorId, $ownIds);
-        }
-    }
-
     $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
-    $currency  = fh_user_currency();
-    $out = array_map(function($v) use ($ref_param, $creatorId, $earningsMap, $currency) {
+    $out = array_map(function($v) use ($ref_param) {
         $durSec = (int)$v['duration'];
         $item   = [
             'id'           => $v['id'],
@@ -99,10 +92,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
             'url'          => BASE_URL . '/watch.php?v=' . $v['id'] . $ref_param,
             'is_reel'      => (int)($v['is_reel'] ?? 0),
         ];
-        if ($creatorId && (int)$v['user_id'] === $creatorId) {
-            $usd = $earningsMap[(int)$v['id']] ?? 0.0;
-            $item['earnings_fmt'] = fh_format_money($usd, $currency);
-        }
         return $item;
     }, $videos);
 
