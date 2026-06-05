@@ -1,5 +1,3 @@
-
-
 <?php
 /**
  * Hostinger database credentials (this file stays on the server only).

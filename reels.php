@@ -642,10 +642,59 @@ document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const startId = urlParams.get('id') || '';
 
+  // Background sync helper to refresh feed if cache is stale or empty
+  async function refreshFeedFromAPI() {
+    const url = `${FH_BASE}/api/videos.php?is_reel=1&page=1&per_page=10`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data && data.videos) {
+        const freshVideos = data.videos;
+        const currentIds = reelsList.map(v => v.id).join(',');
+        const freshIds = freshVideos.map(v => v.id).join(',');
+        
+        if (currentIds !== freshIds) {
+          console.log("Reels feed changed, refreshing feed...");
+          cache.saveFeed(freshVideos);
+          
+          const isStillAtStart = (currentActiveIndex === 0);
+          const activeVideo = container.querySelector('.reel-slide .reel-video');
+          if (activeVideo) activeVideo.pause();
+          
+          container.innerHTML = '';
+          reelsList = [];
+          
+          freshVideos.forEach(v => {
+            appendReelSlide(v);
+            reelsList.push(v);
+          });
+          
+          reelsPage = 2;
+          hasNextPage = data.has_next;
+          
+          if (reelsList.length === 0) {
+            document.getElementById('reels-empty-state').style.display = 'flex';
+          } else {
+            document.getElementById('reels-empty-state').style.display = 'none';
+          }
+          
+          if (isStillAtStart) {
+            updateMediaSources(0);
+          } else {
+            updateMediaSources(currentActiveIndex);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to background refresh reels feed:", err);
+    }
+  }
+
   if (startId) {
     await loadMoreReels();
   } else {
     // Load from cache first
+    let hasCache = false;
     try {
       const cachedFeed = await cache.getFeed();
       if (cachedFeed && cachedFeed.length) {
@@ -653,16 +702,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         reelsList.forEach(v => appendReelSlide(v));
         reelsPage = 2;
         hasNextPage = true;
+        hasCache = true;
+        updateMediaSources(0);
       }
     } catch (e) {
       console.warn("IndexedDB load error, fallback to API", e);
     }
 
     // Fetch from API if no cache
-    if (!reelsList.length) {
+    if (!hasCache) {
       await loadMoreReels();
     } else {
-      updateMediaSources(0);
+      // Sync cache with database in background
+      refreshFeedFromAPI();
     }
   }
 
