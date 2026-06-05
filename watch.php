@@ -933,11 +933,18 @@ if(player && typeof Hls!=='undefined'&&Hls.isSupported()&&player.dataset.hls){
 // ── Next-Video Prefetch (fires at 70% progress) ─────────────────────────────
 // Silently preloads the next recommended video so navigation is near-instant
 <?php
+// Safely get the next most recent video to prefetch
 $next_prefetch_id = null;
-if ($next_video_id) {
-    $next_prefetch_id = $next_video_id;
-} elseif (!empty($related)) {
-    $next_prefetch_id = (int)$related[0]['id'];
+try {
+    $next_vid = db_fetch(
+        "SELECT id FROM videos WHERE status='published' AND visibility='public' AND id != ? ORDER BY created_at DESC LIMIT 1",
+        [$vid]
+    );
+    if ($next_vid) {
+        $next_prefetch_id = (int)$next_vid['id'];
+    }
+} catch (\Throwable $e) {
+    // Silently ignore — prefetch is optional
 }
 ?>
 <?php if ($next_prefetch_id): ?>

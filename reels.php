@@ -14,43 +14,59 @@ $meta_desc  = 'Watch short vertical videos on FreeHub.';
 $_ssr_start_id = (int)($_GET['id'] ?? 0);
 $_ssr_reels = [];
 
-if ($_ssr_start_id > 0) {
-    // Load the specific reel first
-    $start_reel = db_fetch(
-        "SELECT v.id, v.video_url, v.title, v.views, v.likes, v.comments_count, v.created_at,
-                u.username, u.channel_name, u.avatar, u.id AS channel_id
-         FROM reels v JOIN users u ON u.id=v.user_id
-         WHERE v.id=? AND v.status='published'",
-        [$_ssr_start_id]
-    );
-    if ($start_reel) {
-        $_ssr_reels[] = $start_reel;
+try {
+    // Use same fields as api/videos.php to ensure compatibility
+    $ssr_fields = "v.id, v.video_url, v.user_id, u.username, u.channel_name, u.avatar, v.title, v.views, v.likes, COALESCE(v.comments_count, 0) AS comments_count, v.created_at";
+
+    if ($_ssr_start_id > 0) {
+        $start_reel = db_fetch(
+            "SELECT $ssr_fields
+             FROM reels v JOIN users u ON u.id=v.user_id
+             WHERE v.id=? AND v.status='published'",
+            [$_ssr_start_id]
+        );
+        if ($start_reel) {
+            $_ssr_reels[] = $start_reel;
+        }
+        // Load a few more reels after the start one
+        if ($_ssr_reels) {
+            $more = db_fetchAll(
+                "SELECT $ssr_fields
+                 FROM reels v JOIN users u ON u.id=v.user_id
+                 WHERE v.status='published' AND v.id != ?
+                 ORDER BY v.created_at DESC LIMIT 2",
+                [$_ssr_start_id]
+            );
+            $_ssr_reels = array_merge($_ssr_reels, $more);
+        }
+    } else {
+        // Load latest 3 reels for SSR bootstrap
+        $_ssr_reels = db_fetchAll(
+            "SELECT $ssr_fields
+             FROM reels v JOIN users u ON u.id=v.user_id
+             WHERE v.status='published'
+             ORDER BY v.created_at DESC LIMIT 3"
+        );
     }
-} else {
-    // Load latest 3 reels for SSR bootstrap
-    $_ssr_reels = db_fetchAll(
-        "SELECT v.id, v.video_url, v.title, v.views, v.likes, v.comments_count, v.created_at,
-                u.username, u.channel_name, u.avatar, u.id AS channel_id
-         FROM reels v JOIN users u ON u.id=v.user_id
-         WHERE v.status='published'
-         ORDER BY v.created_at DESC LIMIT 3"
-    );
+} catch (\Throwable $e) {
+    // Silently fall back — JS will load reels from IndexedDB or API
+    $_ssr_reels = [];
 }
 
 // Format SSR reels for JS consumption
 $_ssr_feed = array_map(function($v) {
     return [
         'id'          => (int)$v['id'],
-        'user_id'     => (int)$v['channel_id'],
+        'user_id'     => (int)$v['user_id'],
         'video_src'   => reel_url($v['video_url']),
-        'channel'     => $v['channel_name'] ?? $v['username'],
-        'avatar'      => avatar_url($v['avatar']),
+        'channel'     => $v['channel_name'] ?? $v['username'] ?? '',
+        'avatar'      => avatar_url($v['avatar'] ?? null),
         'description' => $v['title'] ?? '',
         'title'       => $v['title'] ?? '',
-        'views'       => (int)$v['views'],
-        'likes'       => (int)$v['likes'],
-        'comments'    => (int)$v['comments_count'],
-        'ago'         => time_ago($v['created_at'] ?? ''),
+        'views'       => format_number((int)($v['views'] ?? 0)),
+        'likes'       => format_number((int)($v['likes'] ?? 0)),
+        'comments'    => format_number((int)($v['comments_count'] ?? 0)),
+        'ago'         => time_ago($v['created_at'] ?? date('Y-m-d H:i:s')),
         'is_reel'     => 1,
         'url'         => BASE_URL . '/reels.php?id=' . $v['id'],
     ];

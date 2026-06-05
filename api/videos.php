@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
         $start_id = isset($_GET['start_id']) ? (int)$_GET['start_id'] : 0;
         $offset = ($page - 1) * $per;
 
-        $select_fields = "v.id, v.video_url, v.user_id, u.username, u.channel_name, u.avatar, v.title, v.views, v.likes, v.comments_count, v.created_at";
+        $select_fields = "v.id, v.video_url, v.user_id, u.username, u.channel_name, u.avatar, v.title, v.views, v.likes, COALESCE(v.comments_count, 0) AS comments_count, v.created_at";
 
         if ($start_id > 0 && $page === 1) {
             $videos_start = db_fetchAll(
