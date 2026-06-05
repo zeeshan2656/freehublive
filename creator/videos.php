@@ -3,7 +3,7 @@
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_role(['admin']);
+require_role(['admin', 'creator']);
 $site_theme = setting('active_theme', 'dark-minimal');
 $primary    = setting('primary_color', '#6366f1');
 $uid = auth_user()['id'];
