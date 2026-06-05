@@ -87,6 +87,11 @@ function time_ago(string $datetime): string {
 
 define('CAT_PATH',    __DIR__ . '/../uploads/categories/');
 
+// CDN-ready media URL prefix — change this one setting to point all media to CDN
+if (!defined('MEDIA_CDN_URL')) {
+    define('MEDIA_CDN_URL', rtrim(setting('media_cdn_url', BASE_URL), '/'));
+}
+
 // ── File helpers ────────────────────────────────────────────
 function thumb_url(?string $thumb): string {
     if (!$thumb) return BASE_URL . '/assets/img/default-thumb.jpg';
@@ -101,7 +106,7 @@ function thumb_url(?string $thumb): string {
             }
         }
     }
-    return BASE_URL . '/uploads/thumbnails/' . $thumb;
+    return MEDIA_CDN_URL . '/uploads/thumbnails/' . $thumb;
 }
 
 function avatar_url(?string $avatar): string {
@@ -133,11 +138,6 @@ function category_image_url(?string $img): string {
     return BASE_URL . '/uploads/categories/' . $img;
 }
 
-// CDN-ready media URL prefix — change this one setting to point all media to CDN
-if (!defined('MEDIA_CDN_URL')) {
-    define('MEDIA_CDN_URL', rtrim(setting('media_cdn_url', BASE_URL), '/'));
-}
-
 function video_url(?string $url): string {
     if (!$url) return '';
     if (str_starts_with($url, 'http')) return $url;
@@ -148,12 +148,6 @@ function reel_url(?string $url): string {
     if (!$url) return '';
     if (str_starts_with($url, 'http')) return $url;
     return MEDIA_CDN_URL . '/uploads/reels/' . $url;
-}
-
-function thumb_url(?string $url): string {
-    if (!$url) return BASE_URL . '/assets/img/default-thumb.jpg';
-    if (str_starts_with($url, 'http')) return $url;
-    return MEDIA_CDN_URL . '/uploads/thumbnails/' . $url;
 }
 
 function format_filesize(int $bytes): string {
