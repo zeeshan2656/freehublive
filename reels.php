@@ -10,18 +10,6 @@ require_once __DIR__ . '/includes/functions.php';
 $meta_title = 'Reels — FreeHub';
 $meta_desc  = 'Watch short vertical videos on FreeHub.';
 require_once __DIR__ . '/includes/header.php';
-
-// Fetch initial reels randomly
-$reels = db_fetchAll(
-    "SELECT v.*, u.username, u.channel_name, u.avatar,
-            (SELECT COUNT(*) FROM comments WHERE video_id = v.id AND status = 'visible') AS comments_count,
-            (SELECT type FROM video_reactions WHERE video_id = v.id AND user_id = ?) AS user_reaction
-     FROM videos v
-     JOIN users u ON u.id = v.user_id
-     WHERE v.status = 'published' AND v.visibility = 'public' AND v.is_reel = 1
-     ORDER BY RAND() LIMIT 15",
-    [is_logged_in() ? (int)auth_user()['id'] : 0]
-);
 ?>
 
 <div class="reels-feed-container">
@@ -32,131 +20,44 @@ $reels = db_fetchAll(
     </svg>
   </a>
     
-    <?php if (empty($reels)): ?>
-      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text2); text-align:center; padding: 20px;">
-        <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.4; margin-bottom:16px;">
-          <rect x="6" y="2" width="12" height="20" rx="2" ry="2"/>
-          <line x1="12" y1="18" x2="12.01" y2="18"/>
-        </svg>
-        <h2 style="font-size:1.3rem; margin-bottom:8px; color:#fff;">No Reels Yet</h2>
-        <p style="font-size:0.9rem; margin-bottom:20px; max-width: 320px;">Be the first to upload a short vertical video (under 60s) to kickstart the Reels feed!</p>
-        <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="btn btn-primary" style="font-weight:700;">Create a Reel</a>
-      </div>
-    <?php else: ?>
-      
-      <!-- Reels feed slider -->
-      <div class="reels-container" id="reels-slider">
-        <?php foreach ($reels as $r): 
-          $is_liked = ($r['user_reaction'] ?? '') === 'like';
-          $video_src = video_url($r['video_url']);
-        ?>
-          <div class="reel-slide" data-id="<?= $r['id'] ?>" data-title="<?= e($r['title']) ?>" data-views="<?= $r['views'] ?>" data-likes="<?= $r['likes'] ?>" data-comments="<?= $r['comments_count'] ?>">
-            
-            <!-- Video tag -->
-            <video class="reel-video" data-src="<?= e($video_src) ?>" loop playsinline style="width:100%; height:100%; object-fit:cover; background:#000;"></video>
-            
-            <!-- Top Ad Banner Overlay -->
-            <?php if (function_exists('render_ad_placeholder') && !empty($ad_html = render_ad_placeholder('reels_top_overlay'))): ?>
-              <div class="reel-ad-overlay">
-                <?= $ad_html ?>
-              </div>
-            <?php endif; ?>
-            
-            <!-- Tap to play/pause indicator overlay -->
-            <div class="reel-play-overlay" onclick="togglePlay(this)">
-              <div class="play-icon-shape">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              </div>
-            </div>
+  <!-- Reels feed slider -->
+  <div class="reels-container" id="reels-slider">
+    <!-- Dynamic slides will be injected here instantly from IndexedDB -->
+  </div>
 
-            <!-- Double-tap like animation anchor -->
-            <div class="double-tap-zone" onclick="handleTapOrDoubleTap(this, <?= $r['id'] ?>)"></div>
+  <!-- Dynamic Empty State (hidden by default) -->
+  <div id="reels-empty-state" style="display:none; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text2); text-align:center; padding: 20px;">
+    <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.4; margin-bottom:16px;">
+      <rect x="6" y="2" width="12" height="20" rx="2" ry="2"/>
+      <line x1="12" y1="18" x2="12.01" y2="18"/>
+    </svg>
+    <h2 style="font-size:1.3rem; margin-bottom:8px; color:#fff;">No Reels Yet</h2>
+    <p style="font-size:0.9rem; margin-bottom:20px; max-width: 320px;">Be the first to upload a short vertical video (under 60s) to kickstart the Reels feed!</p>
+    <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="btn btn-primary" style="font-weight:700;">Create a Reel</a>
+  </div>
 
-            <!-- Bottom Left Info Overlay -->
-            <div class="reel-info-overlay">
-              <div class="reel-creator-row">
-                <a href="<?= BASE_URL ?>/channel.php?id=<?= $r['user_id'] ?>&tab=videos" style="display:flex; align-items:center; gap:10px; color:#fff; font-weight:700; text-decoration:none;">
-                  <img class="reel-creator-avatar" src="<?= avatar_url($r['avatar']) ?>" alt="<?= e($r['channel_name']??$r['username']) ?>">
-                  <span><?= e($r['channel_name'] ?: $r['username']) ?></span>
-                </a>
-              </div>
-              <h2 class="reel-title"><?= e($r['title']) ?></h2>
-              <?php if (!empty($r['description'])): ?>
-                <p class="reel-desc"><?= e(truncate($r['description'], 120)) ?></p>
-              <?php endif; ?>
-            </div>
-
-            <!-- Right Sidebar Action Controls -->
-            <div class="reel-sidebar-actions">
-              <!-- Creator profile -->
-              <a href="<?= BASE_URL ?>/channel.php?id=<?= $r['user_id'] ?>&tab=videos" class="reel-side-btn creator-profile-btn" title="Visit Channel">
-                <img src="<?= avatar_url($r['avatar']) ?>" alt="Creator">
-              </a>
-
-              <!-- Like button -->
-              <button type="button" class="reel-side-btn like-btn <?= $is_liked ? 'liked' : '' ?>" onclick="toggleLike(this, <?= $r['id'] ?>)" title="Like">
-                <div class="action-icon-wrap">
-                  <svg class="heart-icon" viewBox="0 0 24 24" fill="<?= $is_liked ? 'var(--red)' : 'none' ?>" stroke="<?= $is_liked ? 'var(--red)' : 'currentColor' ?>" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                </div>
-                <span class="like-count"><?= format_number((int)$r['likes']) ?></span>
-              </button>
-
-              <!-- Comments button -->
-              <button type="button" class="reel-side-btn comment-trigger-btn" onclick="openComments(<?= $r['id'] ?>)" title="Comments">
-                <div class="action-icon-wrap">
-                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <span class="comment-count"><?= format_number((int)$r['comments_count']) ?></span>
-              </button>
-
-              <!-- Share button -->
-              <button type="button" class="reel-side-btn share-btn" onclick="shareReel(<?= $r['id'] ?>, this)" title="Copy Link">
-                <div class="action-icon-wrap">
-                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                </div>
-                <span>Share</span>
-              </button>
-
-              <!-- Mute/Unmute state controller -->
-              <button type="button" class="reel-side-btn mute-btn" onclick="toggleMuteState()" title="Mute/Unmute">
-                <div class="action-icon-wrap">
-                  <svg class="mute-icon-svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                    <path class="volume-waves" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                  </svg>
-                </div>
-              </button>
-            </div>
-
-          </div>
-        <?php endforeach; ?>
-      </div>
-
-    <?php endif; ?>
-
-    <!-- Comments Sliding Overlay Panel -->
-    <div id="reels-comments-panel">
-      <div class="comments-panel-header">
-        <h3>Comments</h3>
-        <button type="button" class="close-panel-btn" onclick="closeComments()">&times;</button>
-      </div>
-      <div class="comments-panel-list" id="comments-list-container">
-        <!-- Injected dynamically -->
-      </div>
-      <div class="comments-panel-footer">
-        <?php if (is_logged_in()): ?>
-          <form onsubmit="postReelComment(event)">
-            <input type="text" id="new-comment-field" placeholder="Add a comment..." required autocomplete="off">
-            <button type="submit" class="post-comment-btn">Post</button>
-          </form>
-        <?php else: ?>
-          <div style="text-align:center; padding: 10px; font-size: 0.85rem; color: var(--text2);">
-            Please <a href="<?= BASE_URL ?>/auth/login.php" style="color:var(--accent); font-weight:700;">login</a> to comment.
-          </div>
-        <?php endif; ?>
-      </div>
+  <!-- Comments Sliding Overlay Panel -->
+  <div id="reels-comments-panel">
+    <div class="comments-panel-header">
+      <h3>Comments</h3>
+      <button type="button" class="close-panel-btn" onclick="closeComments()">&times;</button>
     </div>
-
+    <div class="comments-panel-list" id="comments-list-container">
+      <!-- Injected dynamically -->
+    </div>
+    <div class="comments-panel-footer">
+      <?php if (is_logged_in()): ?>
+        <form onsubmit="postReelComment(event)">
+          <input type="text" id="new-comment-field" placeholder="Add a comment..." required autocomplete="off">
+          <button type="submit" class="post-comment-btn">Post</button>
+        </form>
+      <?php else: ?>
+        <div style="text-align:center; padding: 10px; font-size: 0.85rem; color: var(--text2);">
+          Please <a href="<?= BASE_URL ?>/auth/login.php" style="color:var(--accent); font-weight:700;">login</a> to comment.
+        </div>
+      <?php endif; ?>
+    </div>
+  </div>
 </div> <!-- /reels-feed-container -->
 
 <style>
@@ -198,7 +99,6 @@ html, body {
   background: rgba(0, 0, 0, 0.6);
   transform: scale(1.05);
 }
-/* Reels Feed Style Customizations */
 .reels-container {
   height: 100%;
   width: 100%;
@@ -221,19 +121,6 @@ html, body {
   scroll-snap-stop: always;
   position: relative;
   overflow: hidden;
-}
-.reel-ad-overlay {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 24px);
-  max-width: 340px;
-  z-index: 10;
-  display: flex;
-  justify-content: center;
-  pointer-events: auto;
-  text-align: center;
 }
 .double-tap-zone {
   position: absolute;
@@ -297,14 +184,6 @@ html, body {
   text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   pointer-events: auto;
 }
-.reel-desc {
-  font-size: 0.82rem;
-  color: #e2e8f0;
-  line-height: 1.4;
-  margin: 0;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  pointer-events: auto;
-}
 .reel-sidebar-actions {
   position: absolute;
   right: 12px;
@@ -359,7 +238,6 @@ html, body {
   animation: heartPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* Floating double-tap heart animation style */
 @keyframes heartPop {
   0% { transform: scale(1); }
   50% { transform: scale(1.3); }
@@ -380,7 +258,6 @@ html, body {
   100% { transform: translate(-50%, -60px) scale(0.6); opacity: 0; }
 }
 
-/* Comments slide-in panel */
 #reels-comments-panel {
   position: absolute;
   bottom: 0;
@@ -493,78 +370,206 @@ let activeCommentVideoId = null;
 let isMutedGlobal = localStorage.getItem('reels_muted') === 'true';
 let currentActiveIndex = 0;
 let isReelsLoading = false;
-let reelsPage = 2; // Initial random load is page 1
+let reelsPage = 1;
 let hasNextPage = true;
+let reelsList = [];
 
-// API Cache System
-const apiCache = {};
-async function cachedFetch(url) {
-  if (apiCache[url]) return apiCache[url];
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    apiCache[url] = data;
-    return data;
-  } catch (e) {
-    return null;
-  }
+// Track created Blob URLs to prevent memory leaks
+const activeBlobUrls = {};
+
+const cache = new ReelsCache();
+
+function format_number(num) {
+  num = parseInt(num, 10) || 0;
+  if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return num;
 }
 
-// Update source files dynamically to optimize memory & background preloading
-function updateMediaSources(activeIndex) {
-  const slides = document.querySelectorAll('.reel-slide');
-  slides.forEach((slide, idx) => {
-    const video = slide.querySelector('.reel-video');
-    if (!video) return;
-    
-    // Ensure data-src is saved
-    if (!video.getAttribute('data-src') && video.src) {
-      video.setAttribute('data-src', video.src);
-    }
-    
-    const realSrc = video.getAttribute('data-src');
-    if (!realSrc) return;
+function appendReelSlide(v) {
+  const container = document.getElementById('reels-slider');
+  const slide = renderReelSlide(v);
+  container.appendChild(slide);
+  if (observer) observer.observe(slide);
+}
 
-    // Active range: [activeIndex - 1, activeIndex + 2]
-    if (idx >= activeIndex - 1 && idx <= activeIndex + 2) {
-      if (!video.src || video.src === '' || video.src !== realSrc) {
-        video.src = realSrc;
+function renderReelSlide(v) {
+  const slide = document.createElement('div');
+  slide.className = 'reel-slide';
+  slide.setAttribute('data-id', v.id);
+  slide.setAttribute('data-title', v.description || v.title || '');
+  slide.setAttribute('data-views', v.views || 0);
+
+  const avatarUrl = v.avatar || '<?= BASE_URL ?>/assets/img/default-avatar.jpg';
+  const channelUrl = v.user_id ? `<?= BASE_URL ?>/channel.php?id=${v.user_id}&tab=videos` : `<?= BASE_URL ?>/search.php?q=${encodeURIComponent(v.channel)}`;
+
+  slide.innerHTML = `
+    <video class="reel-video" data-src="${v.video_src}" loop playsinline style="width:100%; height:100%; object-fit:cover; background:#000;"></video>
+    
+    <div class="reel-play-overlay" onclick="togglePlay(this)">
+      <div class="play-icon-shape">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </div>
+    </div>
+
+    <div class="double-tap-zone" onclick="handleTapOrDoubleTap(this, ${v.id})"></div>
+
+    <div class="reel-info-overlay">
+      <div class="reel-creator-row">
+        <a href="${channelUrl}" style="display:flex; align-items:center; gap:10px; color:#fff; font-weight:700; text-decoration:none;">
+          <img class="reel-creator-avatar" src="${avatarUrl}" alt="${escapeHtml(v.channel)}">
+          <span>${escapeHtml(v.channel)}</span>
+        </a>
+      </div>
+      <h2 class="reel-title">${escapeHtml(v.description || v.title || '')}</h2>
+    </div>
+
+    <div class="reel-sidebar-actions">
+      <a href="${channelUrl}" class="reel-side-btn creator-profile-btn" title="Visit Channel">
+        <img src="${avatarUrl}" alt="Creator">
+      </a>
+
+      <button type="button" class="reel-side-btn like-btn" onclick="toggleLike(this, ${v.id})" title="Like">
+        <div class="action-icon-wrap">
+          <svg class="heart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </div>
+        <span class="like-count"></span>
+      </button>
+
+      <button type="button" class="reel-side-btn comment-trigger-btn" onclick="openComments(${v.id})" title="Comments">
+        <div class="action-icon-wrap">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <span class="comment-count"></span>
+      </button>
+
+      <button type="button" class="reel-side-btn share-btn" onclick="shareReel(${v.id}, this)" title="Copy Link">
+        <div class="action-icon-wrap">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </div>
+        <span>Share</span>
+      </button>
+
+      <button type="button" class="reel-side-btn mute-btn" onclick="toggleMuteState()" title="Mute/Unmute">
+        <div class="action-icon-wrap">
+          <svg class="mute-icon-svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path class="volume-waves" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
+        </div>
+      </button>
+    </div>
+  `;
+  return slide;
+}
+
+async function updateMediaSources(activeIndex) {
+  const slides = document.querySelectorAll('.reel-slide');
+  const keepIds = [];
+
+  for (let idx = 0; idx < slides.length; idx++) {
+    const slide = slides[idx];
+    const video = slide.querySelector('.reel-video');
+    if (!video) continue;
+
+    const reelId = parseInt(slide.getAttribute('data-id'), 10);
+    const realSrc = video.getAttribute('data-src');
+
+    // Rolling cache window range: [activeIndex - 2, activeIndex + 10]
+    if (idx >= activeIndex - 2 && idx <= activeIndex + 10) {
+      keepIds.push(reelId);
+    }
+
+    // Active DOM range: [activeIndex - 2, activeIndex + 5]
+    if (idx >= activeIndex - 2 && idx <= activeIndex + 5) {
+      if (!video.src || video.src === '') {
+        const localBlob = await cache.getVideoBlob(reelId);
+        if (localBlob) {
+          const blobUrl = URL.createObjectURL(localBlob);
+          activeBlobUrls[reelId] = blobUrl;
+          video.src = blobUrl;
+        } else {
+          video.src = realSrc;
+        }
       }
-      
+
       if (idx === activeIndex) {
         video.setAttribute('preload', 'auto');
       } else if (idx > activeIndex) {
-        // Preload next 2 slides in background
         video.setAttribute('preload', 'auto');
         if (video.paused && video.readyState < 2) {
-          video.load(); // Trigger progressive download
+          video.load();
         }
       } else {
         video.setAttribute('preload', 'metadata');
       }
     } else {
-      // Release video buffer memory completely
+      video.removeAttribute('preload');
       video.removeAttribute('src');
-      video.setAttribute('preload', 'none');
       video.load();
+
+      if (activeBlobUrls[reelId]) {
+        URL.revokeObjectURL(activeBlobUrls[reelId]);
+        delete activeBlobUrls[reelId];
+      }
     }
-  });
+  }
+
+  // Preload upcoming reels binary video files
+  precacheRange(activeIndex + 1, activeIndex + 10);
+
+  // Evict old unused video blobs
+  cache.cleanOldBlobs(keepIds);
+}
+
+async function precacheRange(startIdx, endIdx) {
+  const slides = document.querySelectorAll('.reel-slide');
+  for (let idx = startIdx; idx <= endIdx; idx++) {
+    if (idx >= slides.length) break;
+    const slide = slides[idx];
+    const reelId = parseInt(slide.getAttribute('data-id'), 10);
+    const video = slide.querySelector('.reel-video');
+    if (!video) continue;
+
+    const realSrc = video.getAttribute('data-src');
+
+    try {
+      const existing = await cache.getVideoBlob(reelId);
+      if (!existing) {
+        const res = await fetch(realSrc);
+        const blob = await res.blob();
+        await cache.saveVideoBlob(reelId, blob);
+        
+        // Dynamic swap to blob if active in viewport buffer range
+        const activeSlides = document.querySelectorAll('.reel-slide');
+        const currentActive = parseInt(activeSlides[currentActiveIndex].getAttribute('data-id'), 10);
+        const selfIdx = Array.from(activeSlides).indexOf(slide);
+        if (selfIdx >= currentActiveIndex - 2 && selfIdx <= currentActiveIndex + 5) {
+          if (video.src === realSrc || !video.src) {
+            const blobUrl = URL.createObjectURL(blob);
+            activeBlobUrls[reelId] = blobUrl;
+            video.src = blobUrl;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`Failed to preload video blob for reel ${reelId}:`, e);
+    }
+  }
 }
 
 let observer;
 
-// Initialize IntersectionObserver to handle vertical swipe autoplay
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const container = document.getElementById('reels-slider');
   if (!container) return;
 
-  // Set initial volume/mute settings
   updateMuteIcons();
 
   const observerOptions = {
     root: container,
     rootMargin: '0px',
-    threshold: 0.6 // Autoplay when 60% of the slide is visible
+    threshold: 0.6
   };
 
   observer = new IntersectionObserver((entries) => {
@@ -576,20 +581,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const slides = Array.from(container.querySelectorAll('.reel-slide'));
         currentActiveIndex = slides.indexOf(entry.target);
         
-        // Dynamic loading & preloading
         updateMediaSources(currentActiveIndex);
 
-        // Play active video
         video.muted = isMutedGlobal;
         const playPromise = video.play();
         if (playPromise !== undefined) {
           playPromise.catch(error => {
-            // Auto-play was prevented (browser restrictions), show paused icon
             entry.target.querySelector('.reel-play-overlay').classList.add('paused');
           });
         }
       } else {
-        // Pause offscreen video & reset position
         video.pause();
         video.currentTime = 0;
         entry.target.querySelector('.reel-play-overlay').classList.remove('paused');
@@ -597,22 +598,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }, observerOptions);
 
-  // Observe existing slides
-  const slides = container.querySelectorAll('.reel-slide');
-  slides.forEach(slide => observer.observe(slide));
+  // Load from cache first
+  try {
+    const cachedFeed = await cache.getFeed();
+    if (cachedFeed && cachedFeed.length) {
+      reelsList = cachedFeed;
+      reelsList.forEach(v => appendReelSlide(v));
+      reelsPage = 2;
+      hasNextPage = true;
+    }
+  } catch (e) {
+    console.warn("IndexedDB load error, fallback to API", e);
+  }
 
-  // Initialize media sources for the first time
-  updateMediaSources(0);
+  // Fetch from API if no cache
+  if (!reelsList.length) {
+    await loadMoreReels();
+  } else {
+    updateMediaSources(0);
+  }
 
-  // Infinite Scroll lazy loading handler
+  if (!reelsList.length) {
+    document.getElementById('reels-empty-state').style.display = 'flex';
+  }
+
   container.addEventListener('scroll', () => {
-    const threshold = container.scrollHeight - container.clientHeight - 800; // 800px before end
+    const threshold = container.scrollHeight - container.clientHeight - 800;
     if (container.scrollTop >= threshold) {
       loadMoreReels();
     }
   });
 
-  // Keyboard navigation support
   window.addEventListener('keydown', (e) => {
     if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
       return;
@@ -627,101 +643,39 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// Load more Reels dynamically in the background (Lazy Loading)
 async function loadMoreReels() {
   if (isReelsLoading || !hasNextPage) return;
   isReelsLoading = true;
 
-  const url = `<?= BASE_URL ?>/api/videos.php?is_reel=1&page=${reelsPage}&per_page=10`;
-  const data = await cachedFetch(url);
-  
-  if (data && data.videos && data.videos.length) {
-    const container = document.getElementById('reels-slider');
-    data.videos.forEach(v => {
-      // Check if this reel is already rendered to prevent duplicates
-      if (container.querySelector(`.reel-slide[data-id="${v.id}"]`)) return;
+  const url = `${FH_BASE}/api/videos.php?is_reel=1&page=${reelsPage}&per_page=10`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data && data.videos && data.videos.length) {
+      const container = document.getElementById('reels-slider');
+      data.videos.forEach(v => {
+        if (container.querySelector(`.reel-slide[data-id="${v.id}"]`)) return;
+        appendReelSlide(v);
+        reelsList.push(v);
+      });
 
-      const slide = document.createElement('div');
-      slide.className = 'reel-slide';
-      slide.setAttribute('data-id', v.id);
-      slide.setAttribute('data-title', v.title);
-      slide.setAttribute('data-views', v.views);
-      slide.setAttribute('data-likes', v.likes || 0);
-      slide.setAttribute('data-comments', v.comments || 0);
+      reelsPage++;
+      hasNextPage = data.has_next;
+      
+      cache.saveFeed(reelsList);
 
-      slide.innerHTML = `
-        <video class="reel-video" data-src="${v.video_src}" loop playsinline style="width:100%; height:100%; object-fit:cover; background:#000;"></video>
-        
-        <div class="reel-play-overlay" onclick="togglePlay(this)">
-          <div class="play-icon-shape">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </div>
-        </div>
-
-        <div class="double-tap-zone" onclick="handleTapOrDoubleTap(this, ${v.id})"></div>
-
-        <div class="reel-info-overlay">
-          <div class="reel-creator-row">
-            <a href="<?= BASE_URL ?>/channel.php?id=${v.user_id}&tab=videos" style="display:flex; align-items:center; gap:10px; color:#fff; font-weight:700; text-decoration:none;">
-              <img class="reel-creator-avatar" src="${v.avatar}" alt="${v.channel}">
-              <span>${v.channel}</span>
-            </a>
-          </div>
-          <h2 class="reel-title">${escapeHtml(v.title)}</h2>
-        </div>
-
-        <div class="reel-sidebar-actions">
-          <a href="<?= BASE_URL ?>/channel.php?id=${v.user_id}&tab=videos" class="reel-side-btn creator-profile-btn" title="Visit Channel">
-            <img src="${v.avatar}" alt="Creator">
-          </a>
-
-          <button type="button" class="reel-side-btn like-btn" onclick="toggleLike(this, ${v.id})" title="Like">
-            <div class="action-icon-wrap">
-              <svg class="heart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            </div>
-            <span class="like-count">${v.likes || 0}</span>
-          </button>
-
-          <button type="button" class="reel-side-btn comment-trigger-btn" onclick="openComments(${v.id})" title="Comments">
-            <div class="action-icon-wrap">
-              <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </div>
-            <span class="comment-count">${v.comments || 0}</span>
-          </button>
-
-          <button type="button" class="reel-side-btn share-btn" onclick="shareReel(${v.id}, this)" title="Copy Link">
-            <div class="action-icon-wrap">
-              <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            </div>
-            <span>Share</span>
-          </button>
-
-          <button type="button" class="reel-side-btn mute-btn" onclick="toggleMuteState()" title="Mute/Unmute">
-            <div class="action-icon-wrap">
-              <svg class="mute-icon-svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                <path class="volume-waves" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
-              </svg>
-            </div>
-          </button>
-        </div>
-      `;
-
-      container.appendChild(slide);
-      observer.observe(slide);
-    });
-
-    reelsPage++;
-    hasNextPage = data.has_next;
-    updateMediaSources(currentActiveIndex);
-  } else {
+      updateMediaSources(currentActiveIndex);
+    } else {
+      hasNextPage = false;
+    }
+  } catch (err) {
+    console.warn("API fetch error for loadMoreReels", err);
     hasNextPage = false;
   }
 
   isReelsLoading = false;
 }
 
-// Toggle play/pause state of active video
 function togglePlay(overlay) {
   const slide = overlay.closest('.reel-slide');
   const video = slide.querySelector('.reel-video');
@@ -736,7 +690,6 @@ function togglePlay(overlay) {
   }
 }
 
-// Global synced volume/mute controller
 function toggleMuteState() {
   isMutedGlobal = !isMutedGlobal;
   localStorage.setItem('reels_muted', isMutedGlobal ? 'true' : 'false');
@@ -763,7 +716,6 @@ function updateMuteIcons() {
   });
 }
 
-// Toggle Like logic via API
 async function toggleLike(btn, id) {
   const liked = btn.classList.contains('liked');
   btn.classList.toggle('liked');
@@ -774,22 +726,22 @@ async function toggleLike(btn, id) {
   if (liked) {
     heart.setAttribute('fill', 'none');
     heart.setAttribute('stroke', 'currentColor');
-    countSpan.textContent = Math.max(0, currentCount - 1);
+    countSpan.textContent = currentCount > 1 ? format_number(currentCount - 1) : '';
   } else {
     heart.setAttribute('fill', 'var(--red)');
     heart.setAttribute('stroke', 'var(--red)');
-    countSpan.textContent = currentCount + 1;
+    countSpan.textContent = format_number(currentCount + 1);
   }
 
   try {
-    const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=react', {
+    const res = await fetch(`${FH_BASE}/api/videos.php?action=react`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ video_id: id, type: 'like' })
     });
     const d = await res.json();
     if (d.success && d.data) {
-      countSpan.textContent = d.data.likes;
+      countSpan.textContent = format_number(d.data.likes);
       if (d.data.user_reaction === 'like') {
         btn.classList.add('liked');
         heart.setAttribute('fill', 'var(--red)');
@@ -803,7 +755,6 @@ async function toggleLike(btn, id) {
   } catch (e) {}
 }
 
-// Handle Tap / Double Tap on video screen
 let lastTapTime = 0;
 function handleTapOrDoubleTap(zone, id) {
   const now = Date.now();
@@ -816,7 +767,6 @@ function handleTapOrDoubleTap(zone, id) {
   lastTapTime = now;
 }
 
-// Double tap zone handler
 function handleDoubleTap(zone, id) {
   const slide = zone.closest('.reel-slide');
   const rect = zone.getBoundingClientRect();
@@ -846,7 +796,6 @@ function handleDoubleTap(zone, id) {
   setTimeout(() => heart.remove(), 800);
 }
 
-// Copy Share link
 function shareReel(id, btn) {
   const url = `${window.location.origin}${window.location.pathname.replace('reels.php', 'watch.php')}?v=${id}`;
   navigator.clipboard.writeText(url).then(() => {
@@ -859,7 +808,6 @@ function shareReel(id, btn) {
   });
 }
 
-// Open Comments Sliding Panel
 async function openComments(id) {
   activeCommentVideoId = id;
   const panel = document.getElementById('reels-comments-panel');
@@ -869,7 +817,7 @@ async function openComments(id) {
   container.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text2);">Loading comments...</div>';
 
   try {
-    const res = await fetch(`<?= BASE_URL ?>/api/videos.php?action=comments&video_id=${id}`);
+    const res = await fetch(`${FH_BASE}/api/videos.php?action=comments&video_id=${id}`);
     const d = await res.json();
     
     if (d.success && d.data) {
@@ -882,10 +830,10 @@ async function openComments(id) {
         const item = document.createElement('div');
         item.className = 'comment-item';
         item.innerHTML = `
-          <img class="comment-avatar" src="${c.avatar || '<?= BASE_URL ?>/assets/img/default-avatar.jpg'}" alt="${c.username}">
+          <img class="comment-avatar" src="${c.avatar || '<?= BASE_URL ?>/assets/img/default-avatar.jpg'}" alt="${escapeHtml(c.username)}">
           <div class="comment-body">
-            <div class="comment-username">${c.username}</div>
-            <div class="comment-content">${c.content}</div>
+            <div class="comment-username">${escapeHtml(c.username)}</div>
+            <div class="comment-content">${escapeHtml(c.content)}</div>
           </div>
         `;
         container.appendChild(item);
@@ -898,14 +846,12 @@ async function openComments(id) {
   }
 }
 
-// Close Comments Sliding Panel
 function closeComments() {
   const panel = document.getElementById('reels-comments-panel');
   panel.classList.remove('open');
   activeCommentVideoId = null;
 }
 
-// Post Comment
 async function postReelComment(e) {
   e.preventDefault();
   const input = document.getElementById('new-comment-field');
@@ -917,7 +863,7 @@ async function postReelComment(e) {
   btn.textContent = '...';
 
   try {
-    const res = await fetch('<?= BASE_URL ?>/api/videos.php?action=comment', {
+    const res = await fetch(`${FH_BASE}/api/videos.php?action=comment`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ video_id: activeCommentVideoId, content: content })
@@ -932,7 +878,7 @@ async function postReelComment(e) {
         const countSpan = slide.querySelector('.comment-count');
         if (countSpan) {
           const currentCount = parseInt(countSpan.textContent) || 0;
-          countSpan.textContent = currentCount + 1;
+          countSpan.textContent = format_number(currentCount + 1);
         }
       }
 

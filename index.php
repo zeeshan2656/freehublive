@@ -185,5 +185,48 @@ function bindLoadMore() {
 }
 bindLoadMore();
 window.bindLoadMore = bindLoadMore;
+
+// ── Reels Background Pre-Caching ──
+window.addEventListener('load', () => {
+  const triggerPrecache = async () => {
+    try {
+      if (typeof ReelsCache === 'undefined') return;
+      const cache = new ReelsCache();
+      const res = await fetch(`${FH_BASE}/api/videos.php?is_reel=1&page=1&per_page=10`);
+      const data = await res.json();
+      if (data && data.videos && data.videos.length) {
+        await cache.saveFeed(data.videos);
+
+        const fetchBlob = async (video) => {
+          try {
+            const existing = await cache.getVideoBlob(video.id);
+            if (!existing) {
+              const vRes = await fetch(video.video_src);
+              const blob = await vRes.blob();
+              await cache.saveVideoBlob(video.id, blob);
+            }
+          } catch (err) {
+            console.warn(`Failed to cache reel ${video.id}:`, err);
+          }
+        };
+
+        // Cache first 10 reels in parallel batches of 2 to protect CPU/network
+        const videosToCache = data.videos.slice(0, 10);
+        for (let i = 0; i < videosToCache.length; i += 2) {
+          const batch = videosToCache.slice(i, i + 2).map(v => fetchBlob(v));
+          await Promise.all(batch);
+        }
+      }
+    } catch (e) {
+      console.warn('Reels pre-cache worker failed:', e);
+    }
+  };
+
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(triggerPrecache);
+  } else {
+    setTimeout(triggerPrecache, 1500);
+  }
+});
 </script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

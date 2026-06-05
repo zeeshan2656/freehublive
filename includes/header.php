@@ -332,6 +332,7 @@ input,select,textarea{font-family:inherit;outline:none}
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap">
 <link rel="icon" type="image/svg+xml" href="<?= BASE_URL ?>/assets/img/logo.svg">
+<script src="<?= fh_asset_url('assets/js/reels-cache.js') ?>"></script>
 <style>
 :root{--accent:<?= e($primary) ?>;--accent2:<?= e($primary) ?>cc}
 /* Responsive Header Right Actions */
@@ -1095,6 +1096,7 @@ endif;
     <!-- AJAX Content Area -->
     <div class="dashboard-content-scroll" id="dashboard-ajax-content">
 <?php else: ?>
+<?php if (!isset($is_reels) || !$is_reels): ?>
 
 <!-- ── Navbar ── -->
 <nav class="navbar" id="main-navbar" role="navigation" aria-label="Main navigation">
@@ -1133,6 +1135,15 @@ endif;
       <button class="btn btn-outline btn-sm btn-icon" id="search-toggle-mobile" aria-label="Toggle Search" title="Toggle Search" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3)">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       </button>
+
+      <!-- Mobile Reels toggle -->
+      <a href="<?= BASE_URL ?>/reels.php" class="btn btn-outline btn-sm btn-icon reels-mobile-btn" id="reels-toggle-mobile" aria-label="Open Reels" title="Open Reels" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3);margin-left:6px">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect width="18" height="18" x="3" y="3" rx="4" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="m10 9 5 3-5 3V9Z" fill="currentColor"/>
+          <path d="M3 7h18M3 17h18M7 3v4M17 3v4M7 17v5M17 17v5"/>
+        </svg>
+      </a>
 
       <!-- Mobile theme toggle -->
       <button class="btn btn-outline btn-sm btn-icon theme-toggle-btn" id="theme-toggle-mobile" aria-label="Change theme" title="Change theme" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3)">
@@ -1307,6 +1318,7 @@ endif;
 </div>
 
 <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<?php endif; ?>
 <?php endif; ?>
 
 <script>

@@ -68,16 +68,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $offset = ($page - 1) * $per;
     $total  = db_count('videos v', $where, $where_params);
     $all_params = array_merge($where_params, $order_params);
+
+    $select_fields = "v.id,v.user_id,v.title,v.thumbnail,v.duration,v.views,v.published_at,v.is_reel,v.video_url,
+                      u.username,u.channel_name,u.avatar";
+    if ($is_reel === 1) {
+        $select_fields = "v.id, v.video_url, u.username, u.channel_name, v.title, v.views";
+    }
+
     $videos = db_fetchAll(
-        "SELECT v.id,v.user_id,v.title,v.thumbnail,v.duration,v.views,v.published_at,v.is_reel,v.video_url,
-                u.username,u.channel_name,u.avatar
+        "SELECT $select_fields
          FROM videos v JOIN users u ON u.id=v.user_id
          WHERE $where ORDER BY $order LIMIT $per OFFSET $offset",
         $all_params
     );
 
     $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
-    $out = array_map(function($v) use ($ref_param) {
+    $out = array_map(function($v) use ($ref_param, $is_reel) {
+        if ($is_reel === 1) {
+            return [
+                'id'          => $v['id'],
+                'video_src'   => video_url($v['video_url']),
+                'channel'     => $v['channel_name'] ?? $v['username'],
+                'description' => $v['title'],
+                'views'       => format_number((int)$v['views']),
+            ];
+        }
         $durSec = (int)$v['duration'];
         $item   = [
             'id'           => $v['id'],
