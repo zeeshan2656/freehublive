@@ -1192,7 +1192,8 @@ require_once __DIR__ . '/../includes/header.php';
         description: session.description,
         tags: session.tags,
         visibility: session.visibility,
-        category_ids: session.categoryIds
+        category_ids: session.categoryIds,
+        is_reel: session.isReel || 0
       };
 
       // 1. Init session if not already initialized
@@ -1388,7 +1389,8 @@ require_once __DIR__ . '/../includes/header.php';
         description: session.description,
         tags: session.tags,
         visibility: session.visibility,
-        category_ids: session.categoryIds
+        category_ids: session.categoryIds,
+        is_reel: session.isReel || 0
       };
 
       // 1. Init session if not already initialized

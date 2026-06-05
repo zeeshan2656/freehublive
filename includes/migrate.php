@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.06.05.1';
+    $migration_version = '2026.06.05.2';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -101,7 +101,7 @@ function fh_run_migrations(): void {
             due_by DATE DEFAULT NULL,
             processed_at DATETIME DEFAULT NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_user (user_id),
+            INDEX idx_user (user_id)
         ) ENGINE=InnoDB");
     }
 
@@ -646,6 +646,116 @@ function fh_run_migrations(): void {
     try {
         db_query("DELETE FROM settings WHERE `group` = 'earnings'");
     } catch (Throwable $e) {}
+
+    // ── Separate Reels System migration (2026.06.05.2) ──
+    if (!fh_table_exists('reels')) {
+        db_query("CREATE TABLE reels (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            video_url VARCHAR(500) NOT NULL,
+            title VARCHAR(200) DEFAULT NULL,
+            views BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            likes INT UNSIGNED NOT NULL DEFAULT 0,
+            comments_count INT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(20) NOT NULL DEFAULT 'published',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_user (user_id),
+            INDEX idx_created (created_at DESC),
+            INDEX idx_status (status),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    if (!fh_table_exists('reel_comments')) {
+        db_query("CREATE TABLE reel_comments (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            reel_id INT UNSIGNED NOT NULL,
+            user_id INT UNSIGNED NOT NULL,
+            parent_id INT UNSIGNED DEFAULT NULL,
+            content TEXT NOT NULL,
+            status ENUM('visible','hidden','spam') NOT NULL DEFAULT 'visible',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_reel (reel_id),
+            INDEX idx_user (user_id),
+            FOREIGN KEY (reel_id) REFERENCES reels(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    if (!fh_table_exists('reel_reactions')) {
+        db_query("CREATE TABLE reel_reactions (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            reel_id INT UNSIGNED NOT NULL,
+            user_id INT UNSIGNED NOT NULL,
+            type ENUM('like','dislike') NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_reel_reaction (reel_id, user_id),
+            FOREIGN KEY (reel_id) REFERENCES reels(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    // Migrate existing reels from videos table
+    if (fh_column_exists('videos', 'is_reel')) {
+        $existing_reels = db_fetchAll("SELECT * FROM videos WHERE is_reel = 1");
+        
+        $uploads_dir = __DIR__ . '/../uploads/';
+        $videos_dir = $uploads_dir . 'videos/';
+        $reels_dir = $uploads_dir . 'reels/';
+        $thumbs_dir = $uploads_dir . 'thumbnails/';
+        
+        if (!is_dir($reels_dir)) {
+            @mkdir($reels_dir, 0755, true);
+        }
+
+        foreach ($existing_reels as $r) {
+            // Check if already in reels table
+            $exists = db_fetch("SELECT id FROM reels WHERE id = ?", [$r['id']]);
+            if (!$exists) {
+                db_insert('reels', [
+                    'id'             => $r['id'],
+                    'user_id'        => $r['user_id'],
+                    'video_url'      => $r['video_url'],
+                    'title'          => $r['title'],
+                    'views'          => $r['views'],
+                    'likes'          => $r['likes'],
+                    'comments_count' => $r['comments_count'],
+                    'status'         => ($r['status'] === 'published') ? 'published' : 'draft',
+                    'created_at'     => $r['created_at'] ?: date('Y-m-d H:i:s')
+                ]);
+                
+                // Copy reactions
+                db_query("INSERT IGNORE INTO reel_reactions (reel_id, user_id, type, created_at)
+                          SELECT ?, user_id, type, created_at FROM video_reactions WHERE video_id = ?", [$r['id'], $r['id']]);
+                          
+                // Copy comments
+                db_query("INSERT IGNORE INTO reel_comments (reel_id, user_id, parent_id, content, status, created_at)
+                          SELECT ?, user_id, parent_id, content, status, created_at FROM comments WHERE video_id = ?", [$r['id'], $r['id']]);
+            }
+            
+            // Move file in file system
+            $filename = $r['video_url'];
+            if ($filename && !str_starts_with($filename, 'http')) {
+                $old_file = $videos_dir . $filename;
+                $new_file = $reels_dir . $filename;
+                if (is_file($old_file)) {
+                    @rename($old_file, $new_file);
+                }
+            }
+            
+            // Delete old thumbnail
+            $thumb = $r['thumbnail'];
+            if ($thumb && !str_starts_with($thumb, 'http') && $thumb !== 'default-thumb.jpg') {
+                $thumb_file = $thumbs_dir . $thumb;
+                if (is_file($thumb_file)) {
+                    @unlink($thumb_file);
+                }
+            }
+        }
+        
+        // Delete records from videos
+        db_query("DELETE FROM videos WHERE is_reel = 1");
+    }
 
     // ── All migrations passed — write flag to skip on next request ──
     if (!is_dir($cache_dir)) {

@@ -38,6 +38,7 @@ if (!defined('BASE_URL')) {
 define('UPLOAD_PATH', __DIR__ . '/../uploads/');
 define('THUMB_PATH',  __DIR__ . '/../uploads/thumbnails/');
 define('VIDEO_PATH',  __DIR__ . '/../uploads/videos/');
+define('REEL_PATH',   __DIR__ . '/../uploads/reels/');
 define('CACHE_PATH',  __DIR__ . '/../cache/');
 define('VERSION',     '1.0.0');
 
@@ -136,6 +137,12 @@ function video_url(?string $url): string {
     if (!$url) return '';
     if (str_starts_with($url, 'http')) return $url;
     return BASE_URL . '/uploads/videos/' . $url;
+}
+
+function reel_url(?string $url): string {
+    if (!$url) return '';
+    if (str_starts_with($url, 'http')) return $url;
+    return BASE_URL . '/uploads/reels/' . $url;
 }
 
 function format_filesize(int $bytes): string {

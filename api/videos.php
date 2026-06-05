@@ -164,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $category_ids = $meta['category_ids'] ?? [];
 
+        $is_reel = isset($meta['is_reel']) ? (int)$meta['is_reel'] : 0;
         $upload_token = bin2hex(random_bytes(32));
 
         // Store all metadata as JSON in upload_sessions — no videos row yet
@@ -173,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'tags'         => $tags,
             'visibility'   => $visibility,
             'category_ids' => $category_ids,
-            'is_reel'      => 0,
+            'is_reel'      => $is_reel,
             'duration'     => 0,
         ], JSON_UNESCAPED_UNICODE);
 
