@@ -51,6 +51,13 @@ $reels = db_fetchAll(
             <!-- Video tag -->
             <video class="reel-video" src="<?= e($video_src) ?>" loop playsinline preload="auto" style="width:100%; height:100%; object-fit:cover; background:#000;"></video>
             
+            <!-- Top Ad Banner Overlay -->
+            <?php if (function_exists('render_ad_placeholder') && !empty($ad_html = render_ad_placeholder('reels_top_overlay'))): ?>
+              <div class="reel-ad-overlay">
+                <?= $ad_html ?>
+              </div>
+            <?php endif; ?>
+            
             <!-- Tap to play/pause indicator overlay -->
             <div class="reel-play-overlay" onclick="togglePlay(this)">
               <div class="play-icon-shape">
@@ -173,6 +180,19 @@ $reels = db_fetchAll(
   scroll-snap-stop: always;
   position: relative;
   overflow: hidden;
+}
+.reel-ad-overlay {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 340px;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  pointer-events: auto;
+  text-align: center;
 }
 .double-tap-zone {
   position: absolute;
