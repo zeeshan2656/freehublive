@@ -1,17 +1,22 @@
 <?php
+// ============================================================
+// FreeHub.Live — Turbo Chunked Upload API (Deferred-Publish)
+// ============================================================
+// Optimized for speed: large chunks, parallel writes, minimal overhead.
+// POST?session_id=...&token=...           : upload chunk
+// POST?session_id=...&token=...&finalize=1 : finalize + publish
+// GET?session_id=...&action=status         : returns uploaded bytes
+// ============================================================
+
+// ── Runtime PHP tuning for large uploads ──
+@ini_set('max_execution_time', 0);
+@ini_set('memory_limit', '512M');
+@ini_set('upload_max_filesize', '256M');
+@ini_set('post_max_size', '260M');
+
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-
-// ============================================================
-// FreeHub.Live — Chunked Upload API (Deferred-Publish Workflow)
-// ============================================================
-// Chunks are uploaded against an upload_sessions row.
-// NO videos record exists until finalization succeeds.
-// POST?session_id=...&token=...           : upload chunk
-// POST?session_id=...&token=...&finalize=1 : finalize + publish in transaction
-// GET?session_id=...&action=status         : returns uploaded bytes
-// ============================================================
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -22,11 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'status') {
     if (!is_logged_in()) json_error('Unauthorized', 401);
     $sid = (int)($_GET['session_id'] ?? 0);
     if (!$sid) json_error('Missing session_id');
-    $session = db_fetch('SELECT id, user_id, token FROM upload_sessions WHERE id=?', [$sid]);
+    $session = db_fetch('SELECT id, user_id, token, meta_json FROM upload_sessions WHERE id=?', [$sid]);
     if (!$session) json_error('Not found', 404);
     if ($session['token'] !== ($_GET['token'] ?? '')) json_error('Forbidden', 403);
     if ((int)$session['user_id'] !== (int)auth_user()['id'] && !is_admin()) json_error('Forbidden', 403);
-    $temp = VIDEO_PATH . '._upload_' . $sid . '.part';
+    $meta = json_decode($session['meta_json'] ?? '{}', true) ?: [];
+    $basePath = ((int)($meta['is_reel'] ?? 0) === 1) ? REEL_PATH : VIDEO_PATH;
+    $temp = $basePath . '._upload_' . $sid . '.part';
     $size = is_file($temp) ? filesize($temp) : 0;
     json_success(['uploaded' => $size]);
 }
@@ -59,10 +66,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (!$in) json_error('No chunk data');
 
-    // Append to temp file
-    $out = fopen($tempPath, file_exists($tempPath) ? 'ab' : 'wb');
-    if (!$out) { fclose($in); json_error('Server file error'); }
-    stream_copy_to_stream($in, $out);
+    // ── Write chunk: support Content-Range for parallel offset writes ──
+    $rangeHeader = $_SERVER['HTTP_CONTENT_RANGE'] ?? '';
+    if ($rangeHeader && preg_match('/bytes (\d+)-(\d+)\//', $rangeHeader, $m)) {
+        // Parallel write at specific offset — use c+b (create-or-open, no truncate)
+        $offset = (int)$m[1];
+        $out = fopen($tempPath, 'c+b');
+        if (!$out) { fclose($in); json_error('Server file error'); }
+        // Lock the region we're writing to avoid corruption
+        flock($out, LOCK_EX);
+        fseek($out, $offset);
+    } else {
+        // Sequential append (default)
+        $out = fopen($tempPath, 'ab');
+        if (!$out) { fclose($in); json_error('Server file error'); }
+        flock($out, LOCK_EX);
+    }
+    // Use large buffer for faster streaming (256KB reads)
+    $bufSize = 262144;
+    while (!feof($in)) {
+        $data = fread($in, $bufSize);
+        if ($data !== false && $data !== '') fwrite($out, $data);
+    }
+    flock($out, LOCK_UN);
     fclose($in); fclose($out);
 
     // ── Finalize: create video or reel record in a single transaction ──
@@ -176,8 +202,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     }
 
-    // Non-finalize chunk: return current uploaded size
-    json_success(['uploaded' => is_file($tempPath) ? filesize($tempPath) : 0]);
+    // Non-finalize chunk: return current uploaded size immediately
+    // Flush response ASAP so client can send next chunk without waiting
+    $response = json_encode(['success' => true, 'data' => ['uploaded' => is_file($tempPath) ? filesize($tempPath) : 0]]);
+    header('Content-Length: ' . strlen($response));
+    echo $response;
+    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    exit;
 }
 
 json_error('Invalid request', 400);
