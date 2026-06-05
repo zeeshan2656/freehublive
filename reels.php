@@ -463,6 +463,33 @@ function renderReelSlide(v) {
   return slide;
 }
 
+function playActiveVideo(video, slide) {
+  if (!video || !video.src || video.src === '') return;
+
+  const playOverlay = slide ? slide.querySelector('.reel-play-overlay') : null;
+  if (playOverlay) {
+    playOverlay.classList.remove('paused');
+  }
+
+  video.muted = isMutedGlobal;
+  const playPromise = video.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(error => {
+      console.log("Autoplay failed, trying muted fallback...", error);
+      video.muted = true;
+      const mutedPlayPromise = video.play();
+      if (mutedPlayPromise !== undefined) {
+        mutedPlayPromise.catch(err => {
+          console.warn("Muted autoplay also blocked", err);
+          if (playOverlay) {
+            playOverlay.classList.add('paused');
+          }
+        });
+      }
+    });
+  }
+}
+
 async function updateMediaSources(activeIndex) {
   const slides = document.querySelectorAll('.reel-slide');
   const keepIds = [];
@@ -482,6 +509,7 @@ async function updateMediaSources(activeIndex) {
 
     // Active DOM range: [activeIndex - 2, activeIndex + 5]
     if (idx >= activeIndex - 2 && idx <= activeIndex + 5) {
+      let srcJustSet = false;
       if (!video.src || video.src === '') {
         const localBlob = await cache.getVideoBlob(reelId);
         if (localBlob) {
@@ -491,10 +519,14 @@ async function updateMediaSources(activeIndex) {
         } else {
           video.src = realSrc;
         }
+        srcJustSet = true;
       }
 
       if (idx === activeIndex) {
         video.setAttribute('preload', 'auto');
+        if (srcJustSet || video.paused) {
+          playActiveVideo(video, slide);
+        }
       } else if (idx > activeIndex) {
         video.setAttribute('preload', 'auto');
         if (video.paused && video.readyState < 2) {
@@ -596,12 +628,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        video.muted = isMutedGlobal;
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            entry.target.querySelector('.reel-play-overlay').classList.add('paused');
-          });
+        if (video.src && video.src !== '') {
+          playActiveVideo(video, entry.target);
         }
       } else {
         video.pause();
@@ -923,16 +951,8 @@ function handleVideoError(video) {
     console.warn("Blob URL playback failed, falling back to direct stream:", rawSrc);
     video.src = rawSrc;
     video.load();
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(e => {
-        const slide = video.closest('.reel-slide');
-        if (slide) {
-          const playOverlay = slide.querySelector('.reel-play-overlay');
-          if (playOverlay) playOverlay.classList.add('paused');
-        }
-      });
-    }
+    const slide = video.closest('.reel-slide');
+    playActiveVideo(video, slide);
   }
 }
 
