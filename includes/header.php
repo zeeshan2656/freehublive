@@ -954,6 +954,9 @@ endif;
         <a href="<?= BASE_URL ?>/creator/videos.php" class="studio-nav-item <?= $current_page === 'videos.php' || $current_page === 'edit.php' ? 'active' : '' ?>">
           <span>🎬 My Videos</span>
         </a>
+        <a href="<?= BASE_URL ?>/creator/reels.php" class="studio-nav-item <?= $current_page === 'reels.php' || $current_page === 'edit_reel.php' ? 'active' : '' ?>">
+          <span>📱 My Reels</span>
+        </a>
         <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
           <span>📥 Saved Videos</span>
         </a>
@@ -1070,6 +1073,14 @@ endif;
                 <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="dropdown-item" role="menuitem">
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
                   <span>Upload Reel</span>
+                </a>
+                <a href="<?= BASE_URL ?>/creator/videos.php" class="dropdown-item" role="menuitem">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                  <span>My Videos</span>
+                </a>
+                <a href="<?= BASE_URL ?>/creator/reels.php" class="dropdown-item" role="menuitem">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
+                  <span>My Reels</span>
                 </a>
               <?php endif; ?>
 
@@ -1193,6 +1204,14 @@ endif;
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
                 <span>Upload Reel</span>
               </a>
+              <a href="<?= BASE_URL ?>/creator/videos.php" class="dropdown-item" role="menuitem">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                <span>My Videos</span>
+              </a>
+              <a href="<?= BASE_URL ?>/creator/reels.php" class="dropdown-item" role="menuitem">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
+                <span>My Reels</span>
+              </a>
             <?php endif; ?>
             
             <?php if (!is_admin() && !is_creator()): ?>
@@ -1288,6 +1307,14 @@ endif;
               <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
                 <span>Upload Reel</span>
+              </a>
+              <a href="<?= BASE_URL ?>/creator/videos.php" class="dropdown-item" role="menuitem">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                <span>My Videos</span>
+              </a>
+              <a href="<?= BASE_URL ?>/creator/reels.php" class="dropdown-item" role="menuitem">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
+                <span>My Reels</span>
               </a>
             <?php endif; ?>
             

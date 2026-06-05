@@ -124,16 +124,16 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label">Title *</label>
+                  <label class="form-label" id="details-title-label">Title *</label>
                   <input class="form-input" type="text" id="details-title" name="title" required placeholder="Add a descriptive title" style="border-radius:8px">
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="details-desc-group">
                   <label class="form-label">Description</label>
                   <textarea class="form-input" id="details-desc" name="description" rows="4" placeholder="Tell viewers what your video is about…" style="resize:vertical; border-radius:8px"></textarea>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="details-tags-group">
                   <label class="form-label">Tags <span class="text-muted">(comma separated)</span></label>
                   <input class="form-input" type="text" id="details-tags" name="tags" placeholder="gaming, music, vlog" style="border-radius:8px">
                 </div>
@@ -156,7 +156,7 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
 
                 <!-- Categories and Playlist lists -->
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
+                <div id="details-cat-playlist-group" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
                   <div class="form-group">
                     <label class="form-label">Categories</label>
                     <div style="display:flex; flex-direction:column; gap:8px; background:var(--bg3); padding:12px; border-radius:8px; border:1px solid var(--border); max-height:140px; overflow-y:auto" id="details-categories-box">
@@ -186,7 +186,7 @@ require_once __DIR__ . '/../includes/header.php';
                   </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="details-visibility-group">
                   <label class="form-label">Visibility</label>
                   <select class="form-input form-select" id="details-visibility" name="visibility" style="border-radius: 8px">
                     <option value="public" selected>Public (Instantly published)</option>
@@ -1042,6 +1042,26 @@ require_once __DIR__ . '/../includes/header.php';
       if (thumbPanel) {
         thumbPanel.style.display = isReelMode ? 'none' : 'block';
       }
+      
+      const titleLabel = document.getElementById('details-title-label');
+      if (titleLabel) {
+        titleLabel.textContent = isReelMode ? 'Title (Optional)' : 'Title *';
+      }
+      if (detailsTitle) {
+        detailsTitle.required = !isReelMode;
+      }
+      
+      const descGroup = document.getElementById('details-desc-group');
+      if (descGroup) descGroup.style.display = isReelMode ? 'none' : 'block';
+      
+      const tagsGroup = document.getElementById('details-tags-group');
+      if (tagsGroup) tagsGroup.style.display = isReelMode ? 'none' : 'block';
+      
+      const catPlaylistGroup = document.getElementById('details-cat-playlist-group');
+      if (catPlaylistGroup) catPlaylistGroup.style.display = isReelMode ? 'none' : 'grid';
+      
+      const visibilityGroup = document.getElementById('details-visibility-group');
+      if (visibilityGroup) visibilityGroup.style.display = isReelMode ? 'none' : 'block';
     };
 
     const initialDur = session.duration || spaPlayer.duration || 0;

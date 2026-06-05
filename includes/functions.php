@@ -694,8 +694,9 @@ function render_video_card(array $v, array $opts = []): string {
     if (!in_array($format, ['grid', 'side', 'full'], true)) {
         $format = 'grid';
     }
+    $is_portrait = (int)($v['is_reel'] ?? 0) === 1;
     $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
-    $url       = BASE_URL . '/watch.php?v=' . (int)$v['id'] . $ref_param;
+    $url       = $is_portrait ? BASE_URL . '/reels.php?id=' . (int)$v['id'] : BASE_URL . '/watch.php?v=' . (int)$v['id'] . $ref_param;
     $channelUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=videos';
     $thumb     = thumb_url($v['thumbnail'] ?? null);
     $durSec    = (int)($v['duration'] ?? 0);
@@ -708,16 +709,19 @@ function render_video_card(array $v, array $opts = []): string {
     $comments  = format_number((int)($v['comments_count'] ?? $v['comments'] ?? 0));
     $ago       = time_ago($v['published_at'] ?? $v['created_at'] ?? 'now');
 
-    $srcAttr  = !empty($v['video_url']) ? ' data-video-src="' . e(video_url($v['video_url'])) . '"' : '';
-    $durBadge = $dur !== ''
-         ? '<span class="video-duration">' . $dur . '</span>'
-         : '<span class="video-duration video-duration--pending" data-video-id="' . (int)$v['id'] . '"' . $srcAttr . '>…</span>';
+    $video_src = !empty($v['video_url']) ? ($is_portrait ? reel_url($v['video_url']) : video_url($v['video_url'])) : '';
+    $srcAttr  = !empty($v['video_url']) ? ' data-video-src="' . e($video_src) . '"' : '';
+    
+    $durBadge = '';
+    if (!$is_portrait) {
+        $durBadge = $dur !== ''
+             ? '<span class="video-duration">' . $dur . '</span>'
+             : '<span class="video-duration video-duration--pending" data-video-id="' . (int)$v['id'] . '"' . $srcAttr . '>…</span>';
+    }
 
     $formatClass = $format === 'full' ? ' video-card--full-width' : ($format === 'side' ? ' video-card--side' : '');
-    $is_portrait = (int)($v['is_reel'] ?? 0) === 1;
     $portraitClass = $is_portrait ? ' is-portrait' : '';
 
-    $video_src = !empty($v['video_url']) ? video_url($v['video_url']) : '';
     if ($is_portrait) {
         $thumbMedia = '<video src="' . e($video_src) . '#t=0.1" muted playsinline preload="metadata" class="thumb-main" style="width:100%; height:100%; object-fit:cover; aspect-ratio:9/16;"></video>';
     } else {
@@ -727,17 +731,20 @@ function render_video_card(array $v, array $opts = []): string {
     $deleteBtnHtml = '';
     if (!empty($opts['show_delete'])) {
         $csrfToken = csrf_token();
-        $deleteActionUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=videos';
-        $editUrl = BASE_URL . '/creator/edit.php?id=' . (int)$v['id'];
+        $deleteActionUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . ($is_portrait ? '&tab=reels' : '&tab=videos');
+        $editUrl = $is_portrait ? BASE_URL . '/creator/reels.php' : BASE_URL . '/creator/edit.php?id=' . (int)$v['id'];
+        $editTitle = $is_portrait ? 'Edit Reel' : 'Edit Video';
+        $deleteConfirm = $is_portrait ? 'Delete this reel?' : 'Delete this video?';
+        $deleteTitle = $is_portrait ? 'Delete Reel' : 'Delete Video';
         $deleteBtnHtml = <<<HTML
 <div class="video-owner-actions" style="position:absolute; top:8px; right:8px; z-index:15; display:flex; gap:6px;" onclick="event.stopPropagation();">
-  <a href="{$editUrl}" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.65); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="Edit Video">
+  <a href="{$editUrl}" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.65); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="{$editTitle}">
     <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
   </a>
-  <form method="POST" action="{$deleteActionUrl}" style="margin:0;" onsubmit="return confirm('Delete this video?');">
+  <form method="POST" action="{$deleteActionUrl}" style="margin:0;" onsubmit="return confirm('{$deleteConfirm}');">
     <input type="hidden" name="csrf" value="{$csrfToken}">
     <input type="hidden" name="video_id" value="{$v['id']}">
-    <button type="submit" name="action" value="delete_video" class="btn btn-sm btn-icon" style="background:rgba(239,68,68,0.85); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="Delete Video">
+    <button type="submit" name="action" value="delete_video" class="btn btn-sm btn-icon" style="background:rgba(239,68,68,0.85); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="{$deleteTitle}">
       <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
     </button>
   </form>

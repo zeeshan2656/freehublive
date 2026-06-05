@@ -404,7 +404,7 @@ function renderReelSlide(v) {
   const channelUrl = v.user_id ? `<?= BASE_URL ?>/channel.php?id=${v.user_id}&tab=videos` : `<?= BASE_URL ?>/search.php?q=${encodeURIComponent(v.channel)}`;
 
   slide.innerHTML = `
-    <video class="reel-video" data-src="${v.video_src}" loop playsinline style="width:100%; height:100%; object-fit:cover; background:#000;"></video>
+    <video class="reel-video" data-src="${v.video_src}" loop playsinline style="width:100%; height:100%; object-fit:cover; background:#000;" onerror="handleVideoError(this)"></video>
     
     <div class="reel-play-overlay" onclick="togglePlay(this)">
       <div class="play-icon-shape">
@@ -583,6 +583,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         updateMediaSources(currentActiveIndex);
 
+        // Pause all other videos in the document
+        document.querySelectorAll('.reel-video').forEach(v => {
+          if (v !== video) {
+            v.pause();
+            v.currentTime = 0;
+            const slide = v.closest('.reel-slide');
+            if (slide) {
+              const playOverlay = slide.querySelector('.reel-play-overlay');
+              if (playOverlay) playOverlay.classList.remove('paused');
+            }
+          }
+        });
+
         video.muted = isMutedGlobal;
         const playPromise = video.play();
         if (playPromise !== undefined) {
@@ -598,24 +611,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }, observerOptions);
 
-  // Load from cache first
-  try {
-    const cachedFeed = await cache.getFeed();
-    if (cachedFeed && cachedFeed.length) {
-      reelsList = cachedFeed;
-      reelsList.forEach(v => appendReelSlide(v));
-      reelsPage = 2;
-      hasNextPage = true;
-    }
-  } catch (e) {
-    console.warn("IndexedDB load error, fallback to API", e);
-  }
+  const urlParams = new URLSearchParams(window.location.search);
+  const startId = urlParams.get('id') || '';
 
-  // Fetch from API if no cache
-  if (!reelsList.length) {
+  if (startId) {
     await loadMoreReels();
   } else {
-    updateMediaSources(0);
+    // Load from cache first
+    try {
+      const cachedFeed = await cache.getFeed();
+      if (cachedFeed && cachedFeed.length) {
+        reelsList = cachedFeed;
+        reelsList.forEach(v => appendReelSlide(v));
+        reelsPage = 2;
+        hasNextPage = true;
+      }
+    } catch (e) {
+      console.warn("IndexedDB load error, fallback to API", e);
+    }
+
+    // Fetch from API if no cache
+    if (!reelsList.length) {
+      await loadMoreReels();
+    } else {
+      updateMediaSources(0);
+    }
   }
 
   if (!reelsList.length) {
@@ -647,7 +667,10 @@ async function loadMoreReels() {
   if (isReelsLoading || !hasNextPage) return;
   isReelsLoading = true;
 
-  const url = `${FH_BASE}/api/videos.php?is_reel=1&page=${reelsPage}&per_page=10`;
+  const urlParams = new URLSearchParams(window.location.search);
+  const startId = urlParams.get('id') || '';
+  const startIdParam = (startId && reelsPage === 1) ? `&start_id=${startId}` : '';
+  const url = `${FH_BASE}/api/videos.php?is_reel=1&page=${reelsPage}&per_page=10${startIdParam}`;
   try {
     const res = await fetch(url);
     const data = await res.json();
@@ -734,7 +757,7 @@ async function toggleLike(btn, id) {
   }
 
   try {
-    const res = await fetch(`${FH_BASE}/api/videos.php?action=react`, {
+    const res = await fetch(`${FH_BASE}/api/videos.php?action=reel_react`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ video_id: id, type: 'like' })
@@ -797,7 +820,7 @@ function handleDoubleTap(zone, id) {
 }
 
 function shareReel(id, btn) {
-  const url = `${window.location.origin}${window.location.pathname.replace('reels.php', 'watch.php')}?v=${id}`;
+  const url = `${window.location.origin}${window.location.pathname}?id=${id}`;
   navigator.clipboard.writeText(url).then(() => {
     const textSpan = btn.querySelector('span');
     const originalText = textSpan.textContent;
@@ -817,7 +840,7 @@ async function openComments(id) {
   container.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text2);">Loading comments...</div>';
 
   try {
-    const res = await fetch(`${FH_BASE}/api/videos.php?action=comments&video_id=${id}`);
+    const res = await fetch(`${FH_BASE}/api/videos.php?action=reel_comments&video_id=${id}`);
     const d = await res.json();
     
     if (d.success && d.data) {
@@ -863,7 +886,7 @@ async function postReelComment(e) {
   btn.textContent = '...';
 
   try {
-    const res = await fetch(`${FH_BASE}/api/videos.php?action=comment`, {
+    const res = await fetch(`${FH_BASE}/api/videos.php?action=reel_comment`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ video_id: activeCommentVideoId, content: content })
@@ -891,6 +914,25 @@ async function postReelComment(e) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Post';
+  }
+}
+
+function handleVideoError(video) {
+  const rawSrc = video.getAttribute('data-src');
+  if (rawSrc && video.src !== rawSrc) {
+    console.warn("Blob URL playback failed, falling back to direct stream:", rawSrc);
+    video.src = rawSrc;
+    video.load();
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(e => {
+        const slide = video.closest('.reel-slide');
+        if (slide) {
+          const playOverlay = slide.querySelector('.reel-play-overlay');
+          if (playOverlay) playOverlay.classList.add('paused');
+        }
+      });
+    }
   }
 }
 

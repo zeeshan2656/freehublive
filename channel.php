@@ -7,7 +7,7 @@ require_once __DIR__ . '/includes/functions.php';
 $channel_id = (int)($_GET['id'] ?? 0);
 if (!$channel_id) { redirect(BASE_URL . '/'); }
 
-// Handle POST actions (like deleting a video)
+// Handle POST actions (like deleting a video or reel)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in() && verify_csrf($_POST['csrf'] ?? '')) {
     $action = $_POST['action'] ?? '';
     if ($action === 'delete_video') {
@@ -22,6 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in() && verify_csrf($_POS
             }
             db_query("DELETE FROM videos WHERE id=?", [$vid]);
             redirect(BASE_URL . '/channel.php?id=' . $channel_id . '&tab=videos');
+        } else {
+            // Try deleting from reels
+            $reel = db_fetch("SELECT id, user_id, video_url FROM reels WHERE id=?", [$vid]);
+            if ($reel && ($reel['user_id'] == auth_user()['id'] || auth_user()['role'] === 'admin')) {
+                if ($reel['video_url'] && !str_starts_with($reel['video_url'], 'http')) {
+                    @unlink(REEL_PATH . $reel['video_url']);
+                }
+                db_query("DELETE FROM reels WHERE id=?", [$vid]);
+                redirect(BASE_URL . '/channel.php?id=' . $channel_id . '&tab=reels');
+            }
         }
     }
 }
@@ -29,8 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_logged_in() && verify_csrf($_POS
 $channel = db_fetch("SELECT * FROM users WHERE id=? AND status='active'", [$channel_id]);
 $is_self = is_logged_in() && auth_user()['id'] == $channel_id;
 
-$total_videos = db_count('videos', "user_id=?" . ($is_self ? "" : " AND status='published' AND visibility='public'"), [$channel_id]);
-$has_videos = $total_videos > 0;
+$total_videos = db_count('videos', "user_id=? AND is_reel=0" . ($is_self ? "" : " AND status='published' AND visibility='public'"), [$channel_id]);
+$total_reels = db_count('reels', "user_id=?" . ($is_self ? "" : " AND status='published'"), [$channel_id]);
+$has_videos = ($total_videos + $total_reels) > 0;
 
 if (!$channel || $channel['role'] === 'viewer' || (!$is_self && !$has_videos && !in_array($channel['role'],['creator','admin']))) {
     if ($channel && $is_self && $channel['role'] === 'viewer') {
@@ -44,29 +55,51 @@ $tab  = $_GET['tab'] ?? 'videos';
 $sort = $_GET['sort'] ?? 'latest';
 $page = max(1,(int)($_GET['page']??1));
 
-$order = match($sort) { 'views'=>'views DESC', 'oldest'=>'created_at ASC', default=>'created_at DESC' };
+$order_col = match($sort) { 'views'=>'views', 'oldest'=>'created_at', default=>'created_at' };
+$order_dir = ($sort === 'oldest') ? 'ASC' : 'DESC';
 
 $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
 $is_owner_or_admin = is_logged_in() && ($is_owner || auth_user()['role'] === 'admin');
 $is_reel = ($tab === 'reels') ? 1 : 0;
 
-if ($is_owner) {
-    $total  = db_count('videos', "user_id=? AND is_reel=?", [$channel_id, $is_reel]);
-    $videos = db_fetchAll(
-        "SELECT v.*, u.username, u.channel_name, u.avatar
-         FROM videos v
-         JOIN users u ON u.id = v.user_id
-         WHERE v.user_id = ? AND v.is_reel = ?
-         ORDER BY $order LIMIT 52", [$channel_id, $is_reel]
-    );
+if ($is_reel) {
+    if ($is_owner) {
+        $total  = db_count('reels', "user_id=?", [$channel_id]);
+        $videos = db_fetchAll(
+            "SELECT r.*, u.username, u.channel_name, u.avatar, 1 AS is_reel
+             FROM reels r
+             JOIN users u ON u.id = r.user_id
+             WHERE r.user_id = ?
+             ORDER BY r.$order_col $order_dir LIMIT 52", [$channel_id]
+        );
+    } else {
+        $total  = db_count('reels', "user_id=? AND status='published'", [$channel_id]);
+        $videos = db_fetchAll(
+            "SELECT r.*, u.username, u.channel_name, u.avatar, 1 AS is_reel
+             FROM reels r JOIN users u ON u.id = r.user_id
+             WHERE r.user_id=? AND r.status='published'
+             ORDER BY r.$order_col $order_dir LIMIT 52", [$channel_id]
+        );
+    }
 } else {
-    $total  = db_count('videos', "user_id=? AND status='published' AND visibility='public' AND is_reel=?", [$channel_id, $is_reel]);
-    $videos = db_fetchAll(
-        "SELECT v.*, u.username, u.channel_name, u.avatar
-         FROM videos v JOIN users u ON u.id = v.user_id
-         WHERE v.user_id=? AND v.status='published' AND v.visibility='public' AND v.is_reel = ?
-         ORDER BY $order LIMIT 52", [$channel_id, $is_reel]
-    );
+    if ($is_owner) {
+        $total  = db_count('videos', "user_id=? AND is_reel=0", [$channel_id]);
+        $videos = db_fetchAll(
+            "SELECT v.*, u.username, u.channel_name, u.avatar
+             FROM videos v
+             JOIN users u ON u.id = v.user_id
+             WHERE v.user_id = ? AND v.is_reel = 0
+             ORDER BY v.$order_col $order_dir LIMIT 52", [$channel_id]
+        );
+    } else {
+        $total  = db_count('videos', "user_id=? AND status='published' AND visibility='public' AND is_reel=0", [$channel_id]);
+        $videos = db_fetchAll(
+            "SELECT v.*, u.username, u.channel_name, u.avatar
+             FROM videos v JOIN users u ON u.id = v.user_id
+             WHERE v.user_id=? AND v.status='published' AND v.visibility='public' AND v.is_reel = 0
+             ORDER BY v.$order_col $order_dir LIMIT 52", [$channel_id]
+        );
+    }
 }
 
 $is_subscribed = false;
@@ -111,6 +144,9 @@ require_once __DIR__ . '/includes/header.php';
         <a href="<?= BASE_URL ?>/creator/upload.php" class="btn btn-primary" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
           Upload Video
         </a>
+        <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="btn btn-outline" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
+          Upload Reel
+        </a>
       </div>
       <?php endif; ?>
     </div>
@@ -121,6 +157,7 @@ require_once __DIR__ . '/includes/header.php';
         <div class="channel-meta-stats text-muted text-sm" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
           <span class="stat-subscribers">Subscriber <?= format_number((int)$channel['subscribers']) ?>.</span>
           <span class="stat-videos">Videos <?= $total_videos ?>.</span>
+          <span class="stat-reels">Reels <?= $total_reels ?>.</span>
           <span class="joined-date">Joined <?= date('M Y', strtotime($channel['created_at'])) ?></span>
         </div>
       </div>
@@ -138,6 +175,9 @@ require_once __DIR__ . '/includes/header.php';
       <div style="display:flex; gap:8px;">
         <a href="<?= BASE_URL ?>/creator/upload.php" class="btn btn-primary" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
           Upload Video
+        </a>
+        <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="btn btn-outline" style="display: inline-flex; align-items: center; justify-content: center; text-decoration: none">
+          Upload Reel
         </a>
       </div>
       <?php endif; ?>
@@ -303,6 +343,8 @@ require_once __DIR__ . '/includes/header.php';
         <span>&#128337; Joined <?= date('F Y', strtotime($channel['created_at'])) ?></span>
         <span>·</span>
         <span>&#128250; <?= $total_videos ?> videos</span>
+        <span>·</span>
+        <span>&#128241; <?= $total_reels ?> reels</span>
         <span>·</span>
         <span>&#128065; <?= format_number((int)$channel['total_views']) ?> total views</span>
       </div>

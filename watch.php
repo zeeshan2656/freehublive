@@ -6,6 +6,12 @@ require_once __DIR__ . '/includes/functions.php';
 $vid = (int)($_GET['v'] ?? 0);
 if (!$vid) { redirect(BASE_URL . '/'); }
 
+// Redirect to reels page if the ID belongs to a reel
+$reel = db_fetch("SELECT id FROM reels WHERE id = ?", [$vid]);
+if ($reel) {
+    redirect(BASE_URL . '/reels.php?id=' . $vid);
+}
+
 $video = db_fetch(
     "SELECT v.*,u.username,u.channel_name,u.avatar,u.subscribers,u.bio
      FROM videos v JOIN users u ON u.id=v.user_id

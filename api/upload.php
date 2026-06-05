@@ -43,8 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($session['token'] !== $token) json_error('Forbidden', 403);
     if ((int)$session['user_id'] !== (int)auth_user()['id'] && !is_admin()) json_error('Forbidden', 403);
 
-    if (!is_dir(VIDEO_PATH)) mkdir(VIDEO_PATH, 0755, true);
-    $tempPath = VIDEO_PATH . '._upload_' . $sid . '.part';
+    $meta = json_decode($session['meta_json'] ?? '{}', true) ?: [];
+    $is_reel = (int)($meta['is_reel'] ?? 0);
+    $targetPath = ($is_reel === 1) ? REEL_PATH : VIDEO_PATH;
+    if (!is_dir($targetPath)) mkdir($targetPath, 0755, true);
+    $tempPath = $targetPath . '._upload_' . $sid . '.part';
 
     // Read chunk data
     if (isset($_FILES['chunk'])) {
@@ -62,11 +65,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     stream_copy_to_stream($in, $out);
     fclose($in); fclose($out);
 
-    // ── Finalize: create video record in a single transaction ──
+    // ── Finalize: create video or reel record in a single transaction ──
     if (!empty($_GET['finalize'])) {
         $ext = pathinfo($_GET['filename'] ?? '', PATHINFO_EXTENSION) ?: 'mp4';
         $finalName = unique_filename($ext);
-        $finalPath = VIDEO_PATH . $finalName;
+        $finalPath = $targetPath . $finalName;
         if (!rename($tempPath, $finalPath)) json_error('Could not finalize upload', 500);
 
         $fsize = filesize($finalPath);
@@ -78,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Read metadata from session
         $meta = json_decode($session['meta_json'] ?? '{}', true) ?: [];
-        $title       = $meta['title'] ?? 'Untitled Video';
+        $title       = $meta['title'] ?? '';
         $description = $meta['description'] ?? '';
         $tags        = $meta['tags'] ?? '';
         $visibility  = $meta['visibility'] ?? 'public';
@@ -95,44 +98,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $thumbnail   = !empty($session['temp_thumb']) ? $session['temp_thumb'] : 'default-thumb.jpg';
         }
 
-        // Generate unique slug
-        $slug = slugify($title);
-        $base_slug = $slug;
-        $i = 1;
-        while (db_fetch("SELECT id FROM videos WHERE slug=?", [$slug])) {
-            $slug = $base_slug . '-' . $i++;
-        }
-
         $uid = (int)$session['user_id'];
 
-        // ── BEGIN TRANSACTION: create video + categories atomically ──
+        // ── BEGIN TRANSACTION: create video or reel record atomically ──
         global $pdo;
         $pdo->beginTransaction();
         try {
-            $video_id = db_insert('videos', [
-                'user_id'      => $uid,
-                'category_id'  => $first_cat,
-                'title'        => $title,
-                'slug'         => $slug,
-                'description'  => $description,
-                'tags'         => $tags,
-                'video_url'    => $finalName,
-                'thumbnail'    => $thumbnail,
-                'file_size'    => $fsize,
-                'duration'     => $duration,
-                'visibility'   => $visibility,
-                'status'       => 'published',
-                'published_at' => date('Y-m-d H:i:s'),
-                'is_reel'      => $is_reel,
-            ]);
+            if ($is_reel === 1) {
+                $video_id = db_insert('reels', [
+                    'user_id'    => $uid,
+                    'video_url'  => $finalName,
+                    'title'      => empty($title) ? null : $title,
+                    'status'     => 'published',
+                    'created_at' => date('Y-m-d H:i:s'),
+                ]);
+            } else {
+                // Generate unique slug
+                $slug = slugify($title ?: 'Untitled Video');
+                $base_slug = $slug;
+                $i = 1;
+                while (db_fetch("SELECT id FROM videos WHERE slug=?", [$slug])) {
+                    $slug = $base_slug . '-' . $i++;
+                }
 
-            // Insert category mappings
-            if ($video_id && !empty($category_ids)) {
-                foreach ($category_ids as $cid) {
-                    db_insert('video_categories', [
-                        'video_id'    => $video_id,
-                        'category_id' => (int)$cid,
-                    ]);
+                $video_id = db_insert('videos', [
+                    'user_id'      => $uid,
+                    'category_id'  => $first_cat,
+                    'title'        => $title ?: 'Untitled Video',
+                    'slug'         => $slug,
+                    'description'  => $description,
+                    'tags'         => $tags,
+                    'video_url'    => $finalName,
+                    'thumbnail'    => $thumbnail,
+                    'file_size'    => $fsize,
+                    'duration'     => $duration,
+                    'visibility'   => $visibility,
+                    'status'       => 'published',
+                    'published_at' => date('Y-m-d H:i:s'),
+                    'is_reel'      => 0,
+                ]);
+
+                // Insert category mappings
+                if ($video_id && !empty($category_ids)) {
+                    foreach ($category_ids as $cid) {
+                        db_insert('video_categories', [
+                            'video_id'    => $video_id,
+                            'category_id' => (int)$cid,
+                        ]);
+                    }
                 }
             }
 
@@ -158,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         json_success([
             'finalized'  => true,
             'video_id'   => $video_id,
-            'video_url'  => video_url($finalName),
+            'video_url'  => $is_reel === 1 ? reel_url($finalName) : video_url($finalName),
             'file_size'  => $fsize,
         ]);
     }

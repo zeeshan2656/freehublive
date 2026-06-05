@@ -22,6 +22,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $channel_id = (int)($_GET['channel_id'] ?? 0);
     $is_reel    = isset($_GET['is_reel']) ? (int)$_GET['is_reel'] : null;
 
+    if ($is_reel === 1) {
+        $where_params = [];
+        if ($channel_id) {
+            $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
+            if ($is_owner) {
+                $where = "v.user_id=?";
+            } else {
+                $where = "v.user_id=? AND v.status='published'";
+            }
+            $where_params[] = $channel_id;
+        } else {
+            $where = "v.status='published'";
+        }
+        
+        $start_id = isset($_GET['start_id']) ? (int)$_GET['start_id'] : 0;
+        $offset = ($page - 1) * $per;
+
+        $select_fields = "v.id, v.video_url, v.user_id, u.username, u.channel_name, u.avatar, v.title, v.views, v.likes, v.comments_count, v.created_at";
+
+        if ($start_id > 0 && $page === 1) {
+            $videos_start = db_fetchAll(
+                "SELECT $select_fields
+                 FROM reels v JOIN users u ON u.id=v.user_id
+                 WHERE v.id=? AND v.status='published'", [$start_id]
+            );
+            $rest_limit = max(0, $per - count($videos_start));
+            $videos_rest = db_fetchAll(
+                "SELECT $select_fields
+                 FROM reels v JOIN users u ON u.id=v.user_id
+                 WHERE $where AND v.id!=?
+                 ORDER BY v.created_at DESC LIMIT $rest_limit OFFSET 0", array_merge($where_params, [$start_id])
+            );
+            $videos = array_merge($videos_start, $videos_rest);
+            $total  = db_count('reels v', $where, $where_params);
+        } else {
+            $total  = db_count('reels v', $where, $where_params);
+            if ($start_id > 0) {
+                $where .= " AND v.id!=?";
+                $where_params[] = $start_id;
+            }
+            $videos = db_fetchAll(
+                "SELECT $select_fields
+                 FROM reels v JOIN users u ON u.id=v.user_id
+                 WHERE $where ORDER BY v.created_at DESC LIMIT $per OFFSET $offset",
+                $where_params
+            );
+        }
+        
+        $out = array_map(function($v) {
+            return [
+                'id'          => $v['id'],
+                'user_id'     => (int)$v['user_id'],
+                'video_src'   => reel_url($v['video_url']),
+                'channel'     => $v['channel_name'] ?? $v['username'],
+                'avatar'      => avatar_url($v['avatar']),
+                'description' => $v['title'] ?? '',
+                'title'       => $v['title'] ?? '',
+                'views'       => format_number((int)$v['views']),
+                'likes'       => format_number((int)$v['likes']),
+                'comments'    => format_number((int)$v['comments_count']),
+                'ago'         => time_ago($v['created_at'] ?? ''),
+                'is_reel'     => 1,
+                'url'         => BASE_URL . '/reels.php?id=' . $v['id'],
+            ];
+        }, $videos);
+
+        json_response(['videos' => $out, 'has_next' => ($offset + $per) < $total]);
+    }
+
     $where_params = [];
     if ($channel_id) {
         $is_owner = is_logged_in() && auth_user()['id'] == $channel_id;
@@ -35,12 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
         $where = "v.status='published' AND v.visibility='public'";
     }
 
-    if ($is_reel !== null) {
-        $where .= " AND v.is_reel = ?";
-        $where_params[] = $is_reel;
-    } else {
-        $where .= " AND v.is_reel = 0";
-    }
+    $where .= " AND v.is_reel = 0";
 
     if ($q) {
         $where .= " AND MATCH(v.title,v.description,v.tags) AGAINST(? IN BOOLEAN MODE)";
@@ -71,9 +135,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
 
     $select_fields = "v.id,v.user_id,v.title,v.thumbnail,v.duration,v.views,v.published_at,v.is_reel,v.video_url,
                       u.username,u.channel_name,u.avatar";
-    if ($is_reel === 1) {
-        $select_fields = "v.id, v.video_url, u.username, u.channel_name, v.title, v.views";
-    }
 
     $videos = db_fetchAll(
         "SELECT $select_fields
@@ -83,16 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     );
 
     $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
-    $out = array_map(function($v) use ($ref_param, $is_reel) {
-        if ($is_reel === 1) {
-            return [
-                'id'          => $v['id'],
-                'video_src'   => video_url($v['video_url']),
-                'channel'     => $v['channel_name'] ?? $v['username'],
-                'description' => $v['title'],
-                'views'       => format_number((int)$v['views']),
-            ];
-        }
+    $out = array_map(function($v) use ($ref_param) {
         $durSec = (int)$v['duration'];
         $item   = [
             'id'           => $v['id'],
@@ -105,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
             'channel'      => $v['channel_name'] ?? $v['username'],
             'avatar'       => avatar_url($v['avatar']),
             'url'          => BASE_URL . '/watch.php?v=' . $v['id'] . $ref_param,
-            'is_reel'      => (int)($v['is_reel'] ?? 0),
+            'is_reel'      => 0,
             'video_src'    => video_url($v['video_url']),
         ];
         return $item;
@@ -222,8 +274,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             json_success(['updated' => true, 'session_id' => $session_id]);
         }
 
-        // ── Post-publish: update videos table directly ──
+        // ── Post-publish: update videos or reels table directly ──
         if (!$video_id) json_error('Missing video_id or session_id');
+        
+        $reel = db_fetch('SELECT id, user_id FROM reels WHERE id=?', [$video_id]);
+        if ($reel) {
+            if ((int)$reel['user_id'] !== $uid && !is_admin()) json_error('Forbidden', 403);
+            $fields = [];
+            if (isset($meta['title'])) {
+                $fields['title'] = trim($meta['title']) ?: null;
+            }
+            if ($fields) db_update('reels', $fields, 'id=?', [$video_id]);
+            json_success(['updated' => true, 'video_id' => $video_id]);
+        }
+
         $video = db_fetch('SELECT id,user_id FROM videos WHERE id=?', [$video_id]);
         if (!$video) json_error('Not found', 404);
         if ((int)$video['user_id'] !== $uid && !is_admin()) json_error('Forbidden', 403);
@@ -242,9 +306,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($meta['category_ids']) && is_array($meta['category_ids'])) {
             $first = (int)($meta['category_ids'][0] ?? 0);
             if ($first > 0) $fields['category_id'] = $first;
-        }
-        if (isset($meta['is_reel'])) {
-            $fields['is_reel'] = (int)$meta['is_reel'] === 1 ? 1 : 0;
         }
 
         if ($fields) db_update('videos', $fields, 'id=?', [$video_id]);
@@ -338,6 +399,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         json_success(['message' => 'Playlist deleted']);
     }
 
+    // Reel React (like/dislike)
+    if ($action === 'reel_react') {
+        $reel_id = (int)($body['video_id'] ?? 0);
+        if (!$reel_id) json_error('Invalid reel');
+
+        $existing = db_fetch("SELECT id, type FROM reel_reactions WHERE reel_id=? AND user_id=?", [$reel_id, $uid]);
+        $new_reaction = 'like';
+        if ($existing) {
+            db_query("DELETE FROM reel_reactions WHERE id=?", [$existing['id']]);
+            $new_reaction = 'none';
+        } else {
+            db_insert('reel_reactions', ['reel_id'=>$reel_id, 'user_id'=>$uid, 'type'=>'like']);
+        }
+        
+        $likes = db_count('reel_reactions', "reel_id=? AND type='like'", [$reel_id]);
+        db_update('reels', ['likes'=>$likes], 'id=?', [$reel_id]);
+        json_success(['likes' => format_number($likes), 'user_reaction' => $new_reaction]);
+    }
+
+    // Reel Comments
+    if ($action === 'reel_comment') {
+        $reel_id = (int)($body['video_id'] ?? 0);
+        $content = trim($body['content'] ?? '');
+        if (!$reel_id || strlen($content) < 1) json_error('Invalid data');
+        if (!rate_limit('comment_'.$uid, 10, 60)) json_error('Slow down!');
+        $content = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
+        db_insert('reel_comments', ['reel_id'=>$reel_id, 'user_id'=>$uid, 'content'=>$content]);
+        db_query("UPDATE reels SET comments_count=comments_count+1 WHERE id=?", [$reel_id]);
+        json_success(null, 'Comment posted');
+    }
+
     json_error('Unknown action', 404);
 }
 
@@ -350,6 +442,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'comments') {
          JOIN users u ON u.id=c.user_id
          WHERE c.video_id=? AND c.status='visible'
          ORDER BY c.is_pinned DESC, c.created_at DESC LIMIT 30", [$vid]
+    );
+    $out = array_map(fn($c) => [
+        'username' => htmlspecialchars($c['username']),
+        'avatar'   => avatar_url($c['avatar']),
+        'content'  => htmlspecialchars($c['content']),
+        'ago'      => time_ago($c['created_at']),
+    ], $comments);
+    json_success($out);
+}
+
+// ── GET: reel comments ────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'reel_comments') {
+    $reel_id = (int)($_GET['video_id'] ?? 0);
+    if (!$reel_id) json_error('Invalid reel');
+    $comments = db_fetchAll(
+        "SELECT c.*,u.username,u.avatar FROM reel_comments c
+         JOIN users u ON u.id=c.user_id
+         WHERE c.reel_id=? AND c.status='visible'
+         ORDER BY c.created_at DESC LIMIT 30", [$reel_id]
     );
     $out = array_map(fn($c) => [
         'username' => htmlspecialchars($c['username']),
