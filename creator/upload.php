@@ -470,10 +470,62 @@ require_once __DIR__ . '/../includes/header.php';
   const uploads = {}; // Map of uploadId -> uploadObject
   let selectedUploadId = null;
   let sourceType = 'file'; // file or embed
-  const MAX_CONCURRENT_UPLOADS = 2;  // Allow 2 parallel uploads
+  const MAX_CONCURRENT_UPLOADS = 3;  // Allow 3 parallel uploads
   const PARALLEL_CHUNKS = 3;         // 3 chunks in-flight per upload
   const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks (optimal for shared hosting)
   const DB_SAVE_INTERVAL = 5;        // Save to IndexedDB every N chunks
+
+  // ── Page unload protection (prevent accidental navigation during upload) ──────────────
+  window.addEventListener('beforeunload', (e) => {
+    const activeUploads = Object.values(uploads).filter(s =>
+      s.status === 'uploading' || s.status === 'processing' || s.status === 'retrying'
+    );
+    if (activeUploads.length > 0) {
+      e.preventDefault();
+      return e.returnValue = `${activeUploads.length} upload(s) still in progress. Leave anyway?`;
+    }
+  });
+
+  // ── Network Disconnect / Reconnect Detection ────────────────────────────────
+  let _wasOffline = false;
+  window.addEventListener('offline', () => {
+    _wasOffline = true;
+    // Pause all active uploads — network is gone
+    Object.values(uploads).forEach(session => {
+      if (session.status === 'uploading' || session.status === 'retrying') {
+        session.status = 'paused';
+        session.activeLoopRunning = false;
+        if (session.abortController) {
+          session.abortController.abort();
+          session.abortController = new AbortController();
+        }
+        updateCardProgress(session, '📡 Offline — will resume on reconnect', 'paused');
+        UploadDB.save(session);
+      }
+    });
+    showToast('Network disconnected. Uploads paused.', 'yellow');
+  });
+
+  window.addEventListener('online', () => {
+    if (!_wasOffline) return;
+    _wasOffline = false;
+    // Auto-resume paused uploads
+    let resumed = 0;
+    Object.values(uploads).forEach(session => {
+      if (session.status === 'paused' && session.sessionId) {
+        session.status = 'queued';
+        session.activeLoopRunning = false;
+        UploadDB.save(session);
+        resumed++;
+      }
+    });
+    if (resumed > 0) {
+      showToast(`Network restored. Resuming ${resumed} upload(s)...`, 'green');
+      processQueue();
+    } else {
+      showToast('Network restored.', 'green');
+    }
+  });
 
   // ── IndexedDB Helper Class for persistent queues ──
   class UploadDB {

@@ -192,41 +192,59 @@ window.addEventListener('load', () => {
     try {
       if (typeof ReelsCache === 'undefined') return;
       const cache = new ReelsCache();
-      const res = await fetch(`${FH_BASE}/api/videos.php?is_reel=1&page=1&per_page=10`);
-      const data = await res.json();
-      if (data && data.videos && data.videos.length) {
-        await cache.saveFeed(data.videos);
 
-        const fetchBlob = async (video) => {
-          try {
-            const existing = await cache.getVideoBlob(video.id);
-            if (!existing) {
-              const vRes = await fetch(video.video_src);
-              const blob = await vRes.blob();
-              await cache.saveVideoBlob(video.id, blob);
-            }
-          } catch (err) {
-            console.warn(`Failed to cache reel ${video.id}:`, err);
-          }
-        };
+      // Check if feed is already fresh in cache — skip API if so
+      const isFresh = await cache.isFeedFresh().catch(() => false);
+      
+      let videosToCache = [];
 
-        // Cache first 10 reels in parallel batches of 2 to protect CPU/network
-        const videosToCache = data.videos.slice(0, 10);
-        for (let i = 0; i < videosToCache.length; i += 2) {
-          const batch = videosToCache.slice(i, i + 2).map(v => fetchBlob(v));
-          await Promise.all(batch);
+      if (isFresh) {
+        // Feed is fresh — just make sure blobs are cached
+        const cachedFeed = await cache.getFeed().catch(() => []);
+        videosToCache = cachedFeed.slice(0, 15);
+      } else {
+        // Fetch fresh feed from API
+        const res = await fetch(`${FH_BASE}/api/videos.php?is_reel=1&page=1&per_page=15`);
+        const data = await res.json();
+        if (data && data.videos && data.videos.length) {
+          await cache.saveFeed(data.videos);
+          videosToCache = data.videos;
         }
+      }
+
+      if (!videosToCache.length) return;
+
+      const fetchBlob = async (video) => {
+        try {
+          // Skip if already cached
+          const existing = await cache.getVideoBlob(video.id);
+          if (existing) return;
+          const vRes = await fetch(video.video_src);
+          if (!vRes.ok) return;
+          const blob = await vRes.blob();
+          await cache.saveVideoBlob(video.id, blob);
+        } catch (err) {
+          console.warn(`Failed to cache reel ${video.id}:`, err);
+        }
+      };
+
+      // Cache first 3 reels in parallel immediately (fastest possible warmup)
+      const priority = videosToCache.slice(0, 3).map(v => fetchBlob(v));
+      await Promise.all(priority);
+
+      // Then cache the remaining reels in batches of 2 (network-friendly)
+      const remaining = videosToCache.slice(3);
+      for (let i = 0; i < remaining.length; i += 2) {
+        const batch = remaining.slice(i, i + 2).map(v => fetchBlob(v));
+        await Promise.all(batch);
       }
     } catch (e) {
       console.warn('Reels pre-cache worker failed:', e);
     }
   };
 
-  if (window.requestIdleCallback) {
-    window.requestIdleCallback(triggerPrecache);
-  } else {
-    setTimeout(triggerPrecache, 1500);
-  }
+  // Fire fast: 200ms after load (not idle — idle can take 10+ seconds)
+  setTimeout(triggerPrecache, 200);
 });
 </script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

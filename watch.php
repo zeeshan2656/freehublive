@@ -148,7 +148,22 @@ $meta_title = $video['title'] . ' — ' . setting('site_name','FreeHub');
 $meta_desc  = truncate(strip_tags($video['description'] ?? ''), 160);
 $meta_image = thumb_url($video['thumbnail']);
 $is_watch = true;
+
+// Build preload hint for local video files (speeds up first-frame time)
+$_fh_video_preload_url = '';
+$_fh_is_local_video = false;
+if (!empty($video['video_url']) && !str_starts_with($video['video_url'], 'http')) {
+    // Use the streaming endpoint for proper byte-range support
+    $_fh_video_preload_url = BASE_URL . '/api/stream.php?v=' . (int)$vid;
+    $_fh_is_local_video = true;
+}
+
 require_once __DIR__ . '/includes/header.php';
+
+// Emit <link rel="preload"> AFTER header (so it goes into the <head> via output buffer)
+if ($_fh_is_local_video && $_fh_video_preload_url) {
+    echo '<link rel="preload" href="' . e($_fh_video_preload_url) . '" as="video" fetchpriority="high">' . "\n";
+}
 ?>
 
 <div class="layout">
@@ -191,13 +206,19 @@ require_once __DIR__ . '/includes/header.php';
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowfullscreen style="width:100%;height:100%;border:none;display:block"></iframe>
         <?php else: ?>
-          <video id="fh-player" playsinline preload="metadata"
+          <video id="fh-player" playsinline preload="auto"
                  poster="<?= thumb_url($video['thumbnail']) ?>"
-                 style="width:100%;height:100%;display:block">
+                 style="width:100%;height:100%;display:block"
+                 fetchpriority="high">
             <?php if ($video['hls_url']): ?>
               <source src="<?= e($video['hls_url']) ?>" type="application/x-mpegURL">
             <?php endif; ?>
-            <source src="<?= video_url($video['video_url']) ?>" type="video/mp4">
+            <?php if ($_fh_is_local_video): ?>
+              <!-- Use streaming endpoint for byte-range support (seek without re-download) -->
+              <source src="<?= e($_fh_video_preload_url) ?>" type="video/mp4">
+            <?php else: ?>
+              <source src="<?= video_url($video['video_url']) ?>" type="video/mp4">
+            <?php endif; ?>
             Your browser does not support video playback.
           </video>
           
@@ -908,6 +929,51 @@ if(player && typeof Hls!=='undefined'&&Hls.isSupported()&&player.dataset.hls){
   hls.loadSource(player.dataset.hls);
   hls.attachMedia(player);
 }
+
+// ── Next-Video Prefetch (fires at 70% progress) ─────────────────────────────
+// Silently preloads the next recommended video so navigation is near-instant
+<?php
+$next_prefetch_id = null;
+if ($next_video_id) {
+    $next_prefetch_id = $next_video_id;
+} elseif (!empty($related)) {
+    $next_prefetch_id = (int)$related[0]['id'];
+}
+?>
+<?php if ($next_prefetch_id): ?>
+(function() {
+  const nextVideoId = <?= (int)$next_prefetch_id ?>;
+  const nextVideoStreamUrl = '<?= BASE_URL ?>/api/stream.php?v=' + nextVideoId;
+  let prefetchTriggered = false;
+
+  function triggerPrefetch() {
+    if (prefetchTriggered) return;
+    prefetchTriggered = true;
+    // Prefetch first 256KB of the next video (enough for instant start)
+    fetch(nextVideoStreamUrl, {
+      headers: { Range: 'bytes=0-262143' },
+      credentials: 'same-origin'
+    }).catch(() => {});
+    // Also warm the metadata
+    const preloadLink = document.createElement('link');
+    preloadLink.rel = 'prefetch';
+    preloadLink.href = nextVideoStreamUrl;
+    preloadLink.as = 'video';
+    document.head.appendChild(preloadLink);
+  }
+
+  if (player) {
+    player.addEventListener('timeupdate', function() {
+      if (!prefetchTriggered && player.duration > 0) {
+        const progress = player.currentTime / player.duration;
+        if (progress >= 0.70) triggerPrefetch();
+      }
+    });
+    // Also trigger when video ends
+    player.addEventListener('ended', triggerPrefetch);
+  }
+})();
+<?php endif; ?>
 </script>
 <script>
 window.FH_WATCH = {

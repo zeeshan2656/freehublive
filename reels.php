@@ -9,6 +9,53 @@ require_once __DIR__ . '/includes/functions.php';
 
 $meta_title = 'Reels — FreeHub';
 $meta_desc  = 'Watch short vertical videos on FreeHub.';
+
+// ── SSR: Fetch first reel for instant display (no JS round-trip needed) ──
+$_ssr_start_id = (int)($_GET['id'] ?? 0);
+$_ssr_reels = [];
+
+if ($_ssr_start_id > 0) {
+    // Load the specific reel first
+    $start_reel = db_fetch(
+        "SELECT v.id, v.video_url, v.title, v.views, v.likes, v.comments_count, v.created_at,
+                u.username, u.channel_name, u.avatar, u.id AS channel_id
+         FROM reels v JOIN users u ON u.id=v.user_id
+         WHERE v.id=? AND v.status='published'",
+        [$_ssr_start_id]
+    );
+    if ($start_reel) {
+        $_ssr_reels[] = $start_reel;
+    }
+} else {
+    // Load latest 3 reels for SSR bootstrap
+    $_ssr_reels = db_fetchAll(
+        "SELECT v.id, v.video_url, v.title, v.views, v.likes, v.comments_count, v.created_at,
+                u.username, u.channel_name, u.avatar, u.id AS channel_id
+         FROM reels v JOIN users u ON u.id=v.user_id
+         WHERE v.status='published'
+         ORDER BY v.created_at DESC LIMIT 3"
+    );
+}
+
+// Format SSR reels for JS consumption
+$_ssr_feed = array_map(function($v) {
+    return [
+        'id'          => (int)$v['id'],
+        'user_id'     => (int)$v['channel_id'],
+        'video_src'   => reel_url($v['video_url']),
+        'channel'     => $v['channel_name'] ?? $v['username'],
+        'avatar'      => avatar_url($v['avatar']),
+        'description' => $v['title'] ?? '',
+        'title'       => $v['title'] ?? '',
+        'views'       => (int)$v['views'],
+        'likes'       => (int)$v['likes'],
+        'comments'    => (int)$v['comments_count'],
+        'ago'         => time_ago($v['created_at'] ?? ''),
+        'is_reel'     => 1,
+        'url'         => BASE_URL . '/reels.php?id=' . $v['id'],
+    ];
+}, $_ssr_reels);
+
 require_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -22,8 +69,11 @@ require_once __DIR__ . '/includes/header.php';
     
   <!-- Reels feed slider -->
   <div class="reels-container" id="reels-slider">
-    <!-- Dynamic slides will be injected here instantly from IndexedDB -->
+    <!-- Dynamic slides injected here from SSR bootstrap or IndexedDB -->
   </div>
+
+  <!-- SSR Bootstrap Data (inlined for zero-latency first render) -->
+  <script id="ssr-reels-data" type="application/json"><?= json_encode($_ssr_feed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
 
   <!-- Dynamic Empty State (hidden by default) -->
   <div id="reels-empty-state" style="display:none; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text2); text-align:center; padding: 20px;">
@@ -642,9 +692,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const startId = urlParams.get('id') || '';
 
+  // ── Read SSR-injected reel data (zero network latency bootstrap) ──────────────
+  let ssrReels = [];
+  try {
+    const ssrEl = document.getElementById('ssr-reels-data');
+    if (ssrEl && ssrEl.textContent) {
+      ssrReels = JSON.parse(ssrEl.textContent) || [];
+    }
+  } catch (e) {
+    console.warn('SSR reels data parse error:', e);
+  }
+
   // Background sync helper to refresh feed if cache is stale or empty
   async function refreshFeedFromAPI() {
-    const url = `${FH_BASE}/api/videos.php?is_reel=1&page=1&per_page=10`;
+    const url = `${FH_BASE}/api/videos.php?is_reel=1&page=1&per_page=15`;
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -654,7 +715,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const freshIds = freshVideos.map(v => v.id).join(',');
         
         if (currentIds !== freshIds) {
-          console.log("Reels feed changed, refreshing feed...");
           cache.saveFeed(freshVideos);
           
           const isStillAtStart = (currentActiveIndex === 0);
@@ -691,30 +751,65 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   if (startId) {
-    await loadMoreReels();
+    // Specific reel requested — SSR may have it, check first
+    if (ssrReels.length && ssrReels[0].id == startId) {
+      ssrReels.forEach(v => {
+        appendReelSlide(v);
+        reelsList.push(v);
+      });
+      reelsPage = 2;
+      hasNextPage = true;
+      updateMediaSources(0);
+      // Load more in background
+      loadMoreReels();
+    } else {
+      await loadMoreReels();
+    }
   } else {
-    // Load from cache first
+    // ── Priority 1: SSR data (already in page, zero latency) ──
+    if (ssrReels.length) {
+      ssrReels.forEach(v => {
+        appendReelSlide(v);
+        reelsList.push(v);
+      });
+      reelsPage = 1; // Will be overwritten when cache/API loads
+      hasNextPage = true;
+      updateMediaSources(0);
+    }
+
+    // ── Priority 2: IndexedDB cache (if fresh within 30 min) ──
     let hasCache = false;
     try {
+      const isFresh = await cache.isFeedFresh();
       const cachedFeed = await cache.getFeed();
       if (cachedFeed && cachedFeed.length) {
-        reelsList = cachedFeed;
-        reelsList.forEach(v => appendReelSlide(v));
+        // Replace SSR data with fuller cached feed
+        container.innerHTML = '';
+        reelsList = [];
+        cachedFeed.forEach(v => {
+          appendReelSlide(v);
+          reelsList.push(v);
+        });
         reelsPage = 2;
         hasNextPage = true;
         hasCache = true;
         updateMediaSources(0);
+
+        if (!isFresh) {
+          // Cache is stale — refresh silently in background
+          refreshFeedFromAPI();
+        }
       }
     } catch (e) {
       console.warn("IndexedDB load error, fallback to API", e);
     }
 
-    // Fetch from API if no cache
-    if (!hasCache) {
+    // ── Priority 3: Live API (if no cache or SSR had nothing) ──
+    if (!hasCache && !ssrReels.length) {
       await loadMoreReels();
-    } else {
-      // Sync cache with database in background
-      refreshFeedFromAPI();
+    } else if (!hasCache) {
+      // Had SSR but no cache — load full feed from API
+      loadMoreReels();
     }
   }
 
@@ -722,8 +817,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('reels-empty-state').style.display = 'flex';
   }
 
+  // Increase preload threshold to 2 full reel heights (prevents empty buffer)
   container.addEventListener('scroll', () => {
-    const threshold = container.scrollHeight - container.clientHeight - 800;
+    const threshold = container.scrollHeight - container.clientHeight - 2000;
     if (container.scrollTop >= threshold) {
       loadMoreReels();
     }

@@ -61,8 +61,10 @@ Options -Indexes
     ExpiresByType font/otf    "access plus 1 year"
     ExpiresByType application/font-woff  "access plus 1 year"
     ExpiresByType application/font-woff2 "access plus 1 year"
-    # Video
-    ExpiresByType video/mp4  "access plus 7 days"
+    # Video — extended to 30 days with byte-range support
+    ExpiresByType video/mp4   "access plus 30 days"
+    ExpiresByType video/webm  "access plus 30 days"
+    ExpiresByType video/ogg   "access plus 30 days"
 </IfModule>
 
 # ── Cache-Control for versioned static assets ────────────────
@@ -75,6 +77,14 @@ Options -Indexes
     </FilesMatch>
     <FilesMatch "\.(woff|woff2|ttf|otf|eot)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    # ── Video byte-range streaming support ──
+    <FilesMatch "\.(mp4|webm|ogg|mov)$">
+        Header always set Accept-Ranges bytes
+        Header set Cache-Control "public, max-age=2592000"
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Headers "Range"
+        Header always set Access-Control-Expose-Headers "Content-Range, Content-Length, Accept-Ranges"
     </FilesMatch>
 </IfModule>
 

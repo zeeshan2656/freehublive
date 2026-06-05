@@ -10,17 +10,21 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
 $action = $_GET['action'] ?? '';
+$is_reel_feed = isset($_GET['is_reel']) && (int)$_GET['is_reel'] === 1;
+$channel_id = (int)($_GET['channel_id'] ?? 0);
+$is_public_feed = !$action && !$channel_id && !is_logged_in();
 
 // ── GET: paginated video list ────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $page    = max(1, (int)($_GET['page'] ?? 1));
-    $per     = min(100, max(4, (int)($_GET['per_page'] ?? 50)));
+    $per     = min(100, max(4, (int)($_GET['per_page'] ?? 24))); // reduced from 50 to 24
     $cat        = (int)($_GET['cat'] ?? 0);
     $sort       = $_GET['sort'] ?? 'latest';
     $ref        = $_GET['ref'] ?? '';
     $q          = trim($_GET['q'] ?? '');
     $channel_id = (int)($_GET['channel_id'] ?? 0);
     $is_reel    = isset($_GET['is_reel']) ? (int)$_GET['is_reel'] : null;
+    $is_public_feed = !$channel_id && !is_logged_in();
 
     if ($is_reel === 1) {
         $where_params = [];
@@ -88,7 +92,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
             ];
         }, $videos);
 
-        json_response(['videos' => $out, 'has_next' => ($offset + $per) < $total]);
+        $response = ['videos' => $out, 'has_next' => ($offset + $per) < $total];
+
+        // Add HTTP cache headers for public reel feeds (60s browser cache)
+        if ($is_public_feed && $page === 1 && !$start_id) {
+            $etag = '"reels_' . md5(serialize($out)) . '"';
+            header('Cache-Control: public, max-age=60, stale-while-revalidate=30');
+            header('ETag: ' . $etag);
+            if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && $_SERVER['HTTP_IF_NONE_MATCH'] === $etag) {
+                http_response_code(304);
+                exit;
+            }
+        }
+
+        json_response($response);
     }
 
     $where_params = [];
@@ -163,7 +180,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
         return $item;
     }, $videos);
 
-    json_response(['videos' => $out, 'has_next' => ($offset + $per) < $total]);
+    $response = ['videos' => $out, 'has_next' => ($offset + $per) < $total];
+
+    // Add HTTP cache headers for public video feeds
+    if ($is_public_feed && $page === 1 && !$q) {
+        $etag = '"videos_' . md5(serialize($out)) . '"';
+        header('Cache-Control: public, max-age=60, stale-while-revalidate=30');
+        header('ETag: ' . $etag);
+        if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && $_SERVER['HTTP_IF_NONE_MATCH'] === $etag) {
+            http_response_code(304);
+            exit;
+        }
+    }
+
+    json_response($response);
 }
 
 // ── POST actions ─────────────────────────────────────────────
