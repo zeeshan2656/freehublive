@@ -2,6 +2,7 @@
 // ============================================================
 // FreeHub.Live — Reels Feed Page
 // ============================================================
+$is_reels = true;
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
@@ -23,10 +24,13 @@ $reels = db_fetchAll(
 );
 ?>
 
-<div class="layout">
-  <?php require_once __DIR__ . '/includes/sidebar.php'; ?>
-
-  <main class="main-content" style="padding: 0; background: #000; overflow: hidden; height: calc(100vh - 56px); position: relative;">
+<div class="reels-feed-container">
+  <!-- Sleek Floating Back Button -->
+  <a href="<?= BASE_URL ?>/" class="reels-back-button" title="Back to Home">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+      <path d="M19 12H5M12 19l-7-7 7-7"/>
+    </svg>
+  </a>
     
     <?php if (empty($reels)): ?>
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text2); text-align:center; padding: 20px;">
@@ -49,7 +53,7 @@ $reels = db_fetchAll(
           <div class="reel-slide" data-id="<?= $r['id'] ?>" data-title="<?= e($r['title']) ?>" data-views="<?= $r['views'] ?>" data-likes="<?= $r['likes'] ?>" data-comments="<?= $r['comments_count'] ?>">
             
             <!-- Video tag -->
-            <video class="reel-video" src="<?= e($video_src) ?>" loop playsinline preload="auto" style="width:100%; height:100%; object-fit:cover; background:#000;"></video>
+            <video class="reel-video" data-src="<?= e($video_src) ?>" loop playsinline style="width:100%; height:100%; object-fit:cover; background:#000;"></video>
             
             <!-- Top Ad Banner Overlay -->
             <?php if (function_exists('render_ad_placeholder') && !empty($ad_html = render_ad_placeholder('reels_top_overlay'))): ?>
@@ -66,7 +70,7 @@ $reels = db_fetchAll(
             </div>
 
             <!-- Double-tap like animation anchor -->
-            <div class="double-tap-zone" ondblclick="handleDoubleTap(this, <?= $r['id'] ?>)"></div>
+            <div class="double-tap-zone" onclick="handleTapOrDoubleTap(this, <?= $r['id'] ?>)"></div>
 
             <!-- Bottom Left Info Overlay -->
             <div class="reel-info-overlay">
@@ -153,10 +157,47 @@ $reels = db_fetchAll(
       </div>
     </div>
 
-  </main>
-</div>
+</div> <!-- /reels-feed-container -->
 
 <style>
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+.reels-feed-container {
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+.reels-back-button {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 150;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+.reels-back-button:hover {
+  background: rgba(0, 0, 0, 0.6);
+  transform: scale(1.05);
+}
 /* Reels Feed Style Customizations */
 .reels-container {
   height: 100%;
@@ -450,14 +491,73 @@ $reels = db_fetchAll(
 // Reels Logic Controller
 let activeCommentVideoId = null;
 let isMutedGlobal = localStorage.getItem('reels_muted') === 'true';
+let currentActiveIndex = 0;
+let isReelsLoading = false;
+let reelsPage = 2; // Initial random load is page 1
+let hasNextPage = true;
+
+// API Cache System
+const apiCache = {};
+async function cachedFetch(url) {
+  if (apiCache[url]) return apiCache[url];
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    apiCache[url] = data;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Update source files dynamically to optimize memory & background preloading
+function updateMediaSources(activeIndex) {
+  const slides = document.querySelectorAll('.reel-slide');
+  slides.forEach((slide, idx) => {
+    const video = slide.querySelector('.reel-video');
+    if (!video) return;
+    
+    // Ensure data-src is saved
+    if (!video.getAttribute('data-src') && video.src) {
+      video.setAttribute('data-src', video.src);
+    }
+    
+    const realSrc = video.getAttribute('data-src');
+    if (!realSrc) return;
+
+    // Active range: [activeIndex - 1, activeIndex + 2]
+    if (idx >= activeIndex - 1 && idx <= activeIndex + 2) {
+      if (!video.src || video.src === '' || video.src !== realSrc) {
+        video.src = realSrc;
+      }
+      
+      if (idx === activeIndex) {
+        video.setAttribute('preload', 'auto');
+      } else if (idx > activeIndex) {
+        // Preload next 2 slides in background
+        video.setAttribute('preload', 'auto');
+        if (video.paused && video.readyState < 2) {
+          video.load(); // Trigger progressive download
+        }
+      } else {
+        video.setAttribute('preload', 'metadata');
+      }
+    } else {
+      // Release video buffer memory completely
+      video.removeAttribute('src');
+      video.setAttribute('preload', 'none');
+      video.load();
+    }
+  });
+}
+
+let observer;
 
 // Initialize IntersectionObserver to handle vertical swipe autoplay
 document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('reels-slider');
   if (!container) return;
 
-  const slides = container.querySelectorAll('.reel-slide');
-  
   // Set initial volume/mute settings
   updateMuteIcons();
 
@@ -467,13 +567,19 @@ document.addEventListener('DOMContentLoaded', () => {
     threshold: 0.6 // Autoplay when 60% of the slide is visible
   };
 
-  const observer = new IntersectionObserver((entries) => {
+  observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       const video = entry.target.querySelector('.reel-video');
       if (!video) return;
 
       if (entry.isIntersecting) {
-        // Play video
+        const slides = Array.from(container.querySelectorAll('.reel-slide'));
+        currentActiveIndex = slides.indexOf(entry.target);
+        
+        // Dynamic loading & preloading
+        updateMediaSources(currentActiveIndex);
+
+        // Play active video
         video.muted = isMutedGlobal;
         const playPromise = video.play();
         if (playPromise !== undefined) {
@@ -483,7 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         }
       } else {
-        // Pause video & reset
+        // Pause offscreen video & reset position
         video.pause();
         video.currentTime = 0;
         entry.target.querySelector('.reel-play-overlay').classList.remove('paused');
@@ -491,7 +597,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }, observerOptions);
 
+  // Observe existing slides
+  const slides = container.querySelectorAll('.reel-slide');
   slides.forEach(slide => observer.observe(slide));
+
+  // Initialize media sources for the first time
+  updateMediaSources(0);
+
+  // Infinite Scroll lazy loading handler
+  container.addEventListener('scroll', () => {
+    const threshold = container.scrollHeight - container.clientHeight - 800; // 800px before end
+    if (container.scrollTop >= threshold) {
+      loadMoreReels();
+    }
+  });
 
   // Keyboard navigation support
   window.addEventListener('keydown', (e) => {
@@ -507,6 +626,100 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// Load more Reels dynamically in the background (Lazy Loading)
+async function loadMoreReels() {
+  if (isReelsLoading || !hasNextPage) return;
+  isReelsLoading = true;
+
+  const url = `<?= BASE_URL ?>/api/videos.php?is_reel=1&page=${reelsPage}&per_page=10`;
+  const data = await cachedFetch(url);
+  
+  if (data && data.videos && data.videos.length) {
+    const container = document.getElementById('reels-slider');
+    data.videos.forEach(v => {
+      // Check if this reel is already rendered to prevent duplicates
+      if (container.querySelector(`.reel-slide[data-id="${v.id}"]`)) return;
+
+      const slide = document.createElement('div');
+      slide.className = 'reel-slide';
+      slide.setAttribute('data-id', v.id);
+      slide.setAttribute('data-title', v.title);
+      slide.setAttribute('data-views', v.views);
+      slide.setAttribute('data-likes', v.likes || 0);
+      slide.setAttribute('data-comments', v.comments || 0);
+
+      slide.innerHTML = `
+        <video class="reel-video" data-src="${v.video_src}" loop playsinline style="width:100%; height:100%; object-fit:cover; background:#000;"></video>
+        
+        <div class="reel-play-overlay" onclick="togglePlay(this)">
+          <div class="play-icon-shape">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+        </div>
+
+        <div class="double-tap-zone" onclick="handleTapOrDoubleTap(this, ${v.id})"></div>
+
+        <div class="reel-info-overlay">
+          <div class="reel-creator-row">
+            <a href="<?= BASE_URL ?>/channel.php?id=${v.user_id}&tab=videos" style="display:flex; align-items:center; gap:10px; color:#fff; font-weight:700; text-decoration:none;">
+              <img class="reel-creator-avatar" src="${v.avatar}" alt="${v.channel}">
+              <span>${v.channel}</span>
+            </a>
+          </div>
+          <h2 class="reel-title">${escapeHtml(v.title)}</h2>
+        </div>
+
+        <div class="reel-sidebar-actions">
+          <a href="<?= BASE_URL ?>/channel.php?id=${v.user_id}&tab=videos" class="reel-side-btn creator-profile-btn" title="Visit Channel">
+            <img src="${v.avatar}" alt="Creator">
+          </a>
+
+          <button type="button" class="reel-side-btn like-btn" onclick="toggleLike(this, ${v.id})" title="Like">
+            <div class="action-icon-wrap">
+              <svg class="heart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </div>
+            <span class="like-count">${v.likes || 0}</span>
+          </button>
+
+          <button type="button" class="reel-side-btn comment-trigger-btn" onclick="openComments(${v.id})" title="Comments">
+            <div class="action-icon-wrap">
+              <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <span class="comment-count">${v.comments || 0}</span>
+          </button>
+
+          <button type="button" class="reel-side-btn share-btn" onclick="shareReel(${v.id}, this)" title="Copy Link">
+            <div class="action-icon-wrap">
+              <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            </div>
+            <span>Share</span>
+          </button>
+
+          <button type="button" class="reel-side-btn mute-btn" onclick="toggleMuteState()" title="Mute/Unmute">
+            <div class="action-icon-wrap">
+              <svg class="mute-icon-svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path class="volume-waves" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+            </div>
+          </button>
+        </div>
+      `;
+
+      container.appendChild(slide);
+      observer.observe(slide);
+    });
+
+    reelsPage++;
+    hasNextPage = data.has_next;
+    updateMediaSources(currentActiveIndex);
+  } else {
+    hasNextPage = false;
+  }
+
+  isReelsLoading = false;
+}
 
 // Toggle play/pause state of active video
 function togglePlay(overlay) {
@@ -553,20 +766,16 @@ function updateMuteIcons() {
 // Toggle Like logic via API
 async function toggleLike(btn, id) {
   const liked = btn.classList.contains('liked');
-  const actionType = liked ? 'like' : 'like'; // Reacting toggles
-  
   btn.classList.toggle('liked');
   const heart = btn.querySelector('.heart-icon');
   const countSpan = btn.querySelector('.like-count');
   let currentCount = parseInt(countSpan.textContent) || 0;
 
   if (liked) {
-    // Unlike
     heart.setAttribute('fill', 'none');
     heart.setAttribute('stroke', 'currentColor');
     countSpan.textContent = Math.max(0, currentCount - 1);
   } else {
-    // Like
     heart.setAttribute('fill', 'var(--red)');
     heart.setAttribute('stroke', 'var(--red)');
     countSpan.textContent = currentCount + 1;
@@ -579,7 +788,6 @@ async function toggleLike(btn, id) {
       body: JSON.stringify({ video_id: id, type: 'like' })
     });
     const d = await res.json();
-    // Sync actual counts if backend returns it
     if (d.success && d.data) {
       countSpan.textContent = d.data.likes;
       if (d.data.user_reaction === 'like') {
@@ -595,16 +803,31 @@ async function toggleLike(btn, id) {
   } catch (e) {}
 }
 
+// Handle Tap / Double Tap on video screen
+let lastTapTime = 0;
+function handleTapOrDoubleTap(zone, id) {
+  const now = Date.now();
+  if (now - lastTapTime < 300) {
+    handleDoubleTap(zone, id);
+  } else {
+    const overlay = zone.closest('.reel-slide').querySelector('.reel-play-overlay');
+    if (overlay) togglePlay(overlay);
+  }
+  lastTapTime = now;
+}
+
 // Double tap zone handler
 function handleDoubleTap(zone, id) {
-  // Create animated floating heart at tap coordinate
   const slide = zone.closest('.reel-slide');
   const rect = zone.getBoundingClientRect();
   const e = window.event;
   
-  // Coordinates relative to zone
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  let x = rect.width / 2;
+  let y = rect.height / 2;
+  if (e && e.clientX) {
+    x = e.clientX - rect.left;
+    y = e.clientY - rect.top;
+  }
 
   const heart = document.createElement('div');
   heart.className = 'floating-heart';
@@ -615,13 +838,11 @@ function handleDoubleTap(zone, id) {
   `;
   zone.appendChild(heart);
 
-  // Trigger like button toggle
   const likeBtn = slide.querySelector('.like-btn');
   if (likeBtn && !likeBtn.classList.contains('liked')) {
     toggleLike(likeBtn, id);
   }
 
-  // Remove heart element after animation completes
   setTimeout(() => heart.remove(), 800);
 }
 
@@ -706,7 +927,6 @@ async function postReelComment(e) {
     if (d.success) {
       input.value = '';
       
-      // Update comment count on slide
       const slide = document.querySelector(`.reel-slide[data-id="${activeCommentVideoId}"]`);
       if (slide) {
         const countSpan = slide.querySelector('.comment-count');
@@ -716,7 +936,6 @@ async function postReelComment(e) {
         }
       }
 
-      // Reload comments list
       await openComments(activeCommentVideoId);
     } else {
       alert('Failed to post comment: ' + (d.message || 'Server error'));
@@ -727,6 +946,11 @@ async function postReelComment(e) {
     btn.disabled = false;
     btn.textContent = 'Post';
   }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 </script>
 

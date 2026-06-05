@@ -710,6 +710,13 @@ function render_video_card(array $v, array $opts = []): string {
     $is_portrait = (int)($v['is_reel'] ?? 0) === 1;
     $portraitClass = $is_portrait ? ' is-portrait' : '';
 
+    $video_src = !empty($v['video_url']) ? video_url($v['video_url']) : '';
+    if ($is_portrait) {
+        $thumbMedia = '<video src="' . e($video_src) . '#t=0.1" muted playsinline preload="metadata" class="thumb-main" style="width:100%; height:100%; object-fit:cover; aspect-ratio:9/16;"></video>';
+    } else {
+        $thumbMedia = '<img src="' . $thumb . '" alt="' . $title . '" loading="lazy" decoding="async" width="320" height="180" class="thumb-main">';
+    }
+
     $deleteBtnHtml = '';
     if (!empty($opts['show_delete'])) {
         $csrfToken = csrf_token();
@@ -734,7 +741,7 @@ HTML;
     return <<<HTML
 <article class="video-card fade-in{$formatClass}" onclick="location.href='{$url}'">
   <div class="video-thumb{$portraitClass}" style="position:relative">
-    <img src="{$thumb}" alt="{$title}" loading="lazy" decoding="async" width="320" height="180" class="thumb-main">
+    {$thumbMedia}
     {$durBadge}
     {$deleteBtnHtml}
   </div>

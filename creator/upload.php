@@ -13,7 +13,10 @@ $primary    = setting('primary_color', '#6366f1');
 $uid     = auth_user()['id'];
 $categories = db_fetchAll("SELECT * FROM categories WHERE is_active=1 ORDER BY sort_order");
 $user_playlists = db_fetchAll("SELECT id, title FROM playlists WHERE user_id = ? ORDER BY title ASC", [$uid]);
-$meta_title = 'Upload Studio';
+
+$mode = ($_GET['mode'] ?? '') === 'reel' ? 'reel' : 'video';
+$page_title = $mode === 'reel' ? 'Upload Reel' : 'Upload Video';
+$meta_title = $page_title . ' — Studio';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
@@ -22,8 +25,12 @@ require_once __DIR__ . '/../includes/header.php';
   <!-- Page Header -->
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:16px;">
     <div>
-      <h1 style="font-size:1.8rem; font-weight:800; background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin:0;">Upload Studio</h1>
-      <p style="color:var(--text2); font-size:0.9rem; margin-top:4px;">Upload and publish multiple videos simultaneously in the background.</p>
+      <h1 style="font-size:1.8rem; font-weight:800; background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin:0;"><?= htmlspecialchars($page_title) ?></h1>
+      <?php if ($mode === 'reel'): ?>
+        <p style="color:var(--text2); font-size:0.9rem; margin-top:4px;">Upload and publish short vertical Reels (under 60s) in the background.</p>
+      <?php else: ?>
+        <p style="color:var(--text2); font-size:0.9rem; margin-top:4px;">Upload and publish landscape videos in the background.</p>
+      <?php endif; ?>
     </div>
     
     <!-- Small Top Dropzone (always visible once uploads start) -->
@@ -38,7 +45,7 @@ require_once __DIR__ . '/../includes/header.php';
   <!-- ── WELCOME VIEW: Large Init Dropzone ── -->
   <div id="welcome-dropzone" class="fade-in">
     <!-- Tab selector -->
-    <div class="upload-tab-header" style="margin-bottom:24px; display:flex; gap:12px;">
+    <div class="upload-tab-header" style="margin-bottom:24px; <?= $mode === 'reel' ? 'display:none;' : 'display:flex;' ?> gap:12px;">
       <button type="button" class="upload-tab-btn active" id="tab-file-btn" onclick="switchSourceType('file')">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Upload Video Files
@@ -132,7 +139,7 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
 
                 <!-- Thumbnail Selection Grid -->
-                <div class="thumbnail-box" style="background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px;">
+                <div class="thumbnail-box" id="thumbnail-selector-panel" style="background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:24px;">
                   <div style="font-weight:700; font-size:0.92rem; margin-bottom:4px; color:#fff;">Thumbnail Selector</div>
                   <div style="font-size:0.8rem; color:var(--text2); margin-bottom:16px; line-height:1.4;">Select a frame from the video or upload a custom image.</div>
                   
@@ -596,15 +603,37 @@ require_once __DIR__ . '/../includes/header.php';
     document.getElementById('embed-url-container').style.display = type === 'embed' ? 'block' : 'none';
   };
 
+  // Helper to extract duration before queueing
+  function getVideoDuration(file) {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.src = URL.createObjectURL(file);
+      video.onloadedmetadata = () => {
+        const dur = video.duration || 0;
+        URL.revokeObjectURL(video.src);
+        resolve(dur);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(0);
+      };
+    });
+  }
+
   // Main file processing entrance
-  function handleSelectedFiles(files) {
+  async function handleSelectedFiles(files) {
     if (files.length === 0) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const isReelMode = urlParams.get('mode') === 'reel';
 
     // Show dashboard layouts, hide default dropzones
     document.getElementById('welcome-dropzone').style.display = 'none';
     document.getElementById('top-dropzone').style.display = 'block';
     document.getElementById('studio-dashboard').style.display = 'block';
 
+    let queuedCount = 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       // Basic check
@@ -612,9 +641,26 @@ require_once __DIR__ . '/../includes/header.php';
         showToast(`File "${file.name}" is not a supported video.`, 'danger');
         continue;
       }
+      
+      if (isReelMode) {
+        const duration = await getVideoDuration(file);
+        if (duration > 60) {
+          showToast(`File "${file.name}" exceeds 60s limit for Reels (${Math.round(duration)}s).`, 'danger');
+          continue;
+        }
+      }
+      
       createUploadSession(file);
+      queuedCount++;
     }
     fileInput.value = ''; // clear input
+
+    // If nothing was successfully queued, and no other uploads are active, revert view
+    if (Object.keys(uploads).length === 0) {
+      document.getElementById('welcome-dropzone').style.display = 'block';
+      document.getElementById('top-dropzone').style.display = 'none';
+      document.getElementById('studio-dashboard').style.display = 'none';
+    }
   }
 
   // Import Embed logic
@@ -669,6 +715,7 @@ require_once __DIR__ . '/../includes/header.php';
       thumbnails: [],
       selectedThumbDataUrl: null,
       localBlobUrl: null,
+      isReel: (new URLSearchParams(window.location.search).get('mode') === 'reel') ? 1 : 0,
       createdAt: Date.now(),
       activeLoopRunning: false
     };
@@ -713,6 +760,7 @@ require_once __DIR__ . '/../includes/header.php';
       thumbnails: [],
       selectedThumbDataUrl: null,
       localBlobUrl: URL.createObjectURL(file),
+      isReel: (new URLSearchParams(window.location.search).get('mode') === 'reel') ? 1 : 0,
       abortController: new AbortController(),
       createdAt: Date.now(),
       activeLoopRunning: false
@@ -984,37 +1032,20 @@ require_once __DIR__ . '/../includes/header.php';
 
     // Reels dynamic logic
     const updateReelsUI = (dur) => {
-      if (!reelsCheckboxGroup || !detailsIsReel) return;
-      if (session.isEmbed) {
-        reelsCheckboxGroup.style.display = 'none';
-        return;
-      }
-      if (dur > 60) {
-        reelsCheckboxGroup.style.display = 'none';
-        session.isReel = 0;
-        detailsIsReel.checked = false;
-      } else {
-        reelsCheckboxGroup.style.display = 'block';
-        const urlParams = new URLSearchParams(window.location.search);
-        if (session.isReel === undefined || session.isReel === null) {
-          session.isReel = (urlParams.get('mode') === 'reel') ? 1 : 0;
-        }
-        detailsIsReel.checked = (parseInt(session.isReel) === 1);
+      if (reelsCheckboxGroup) reelsCheckboxGroup.style.display = 'none';
+      const urlParams = new URLSearchParams(window.location.search);
+      const isReelMode = urlParams.get('mode') === 'reel';
+      session.isReel = isReelMode ? 1 : 0;
+      if (detailsIsReel) detailsIsReel.checked = isReelMode;
+      
+      const thumbPanel = document.getElementById('thumbnail-selector-panel');
+      if (thumbPanel) {
+        thumbPanel.style.display = isReelMode ? 'none' : 'block';
       }
     };
 
     const initialDur = session.duration || spaPlayer.duration || 0;
     updateReelsUI(initialDur);
-
-    detailsIsReel.onchange = function() {
-      if (this.checked && (session.duration || spaPlayer.duration || 0) > 60) {
-        alert('Reels must be 60 seconds or less.');
-        this.checked = false;
-        session.isReel = 0;
-        return;
-      }
-      session.isReel = this.checked ? 1 : 0;
-    };
 
     // Setup Category & Playlists checkboxes
     document.querySelectorAll('.category-checkbox').forEach(cb => {
@@ -1183,12 +1214,22 @@ require_once __DIR__ . '/../includes/header.php';
         session.token = initData.data.upload_token;
         await UploadDB.save(session);
 
-        // Extract client-side thumbnails in the background
-        extractThumbnailsInBackground(session);
+        if (session.isReel) {
+          probeReelDurationAndOrientation(session);
+        } else {
+          // Extract client-side thumbnails in the background
+          extractThumbnailsInBackground(session);
+        }
       } else {
         // Resume frame extraction if interrupted
-        if (!session.thumbnails || session.thumbnails.length === 0) {
-          extractThumbnailsInBackground(session);
+        if (session.isReel) {
+          if (!session.duration) {
+            probeReelDurationAndOrientation(session);
+          }
+        } else {
+          if (!session.thumbnails || session.thumbnails.length === 0) {
+            extractThumbnailsInBackground(session);
+          }
         }
       }
 
@@ -1465,9 +1506,7 @@ require_once __DIR__ . '/../includes/header.php';
       session.isReel = (isPortrait && duration <= 60) ? 1 : 0;
       
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('mode') === 'reel' && duration <= 60) {
-        session.isReel = 1;
-      }
+      session.isReel = (urlParams.get('mode') === 'reel') ? 1 : 0;
       
       await UploadDB.save(session);
 
@@ -1515,6 +1554,34 @@ require_once __DIR__ . '/../includes/header.php';
             renderThumbnailsGrid(session);
           }
         } catch (e) {}
+      }
+      URL.revokeObjectURL(helperVideo.src);
+    };
+  }
+
+  // Probe duration and orientation for Reels without extracting thumbnails
+  async function probeReelDurationAndOrientation(session) {
+    const helperVideo = document.createElement('video');
+    helperVideo.preload = 'auto';
+    helperVideo.src = session.localBlobUrl;
+    helperVideo.muted = true;
+    helperVideo.playsInline = true;
+
+    helperVideo.onloadedmetadata = async () => {
+      const duration = Math.max(1, Math.floor(helperVideo.duration || 0));
+      session.duration = duration;
+      session.isReel = 1;
+      
+      await UploadDB.save(session);
+
+      // Save video orientation and duration to backend session asynchronously
+      if (session.sessionId) {
+        saveVideoOrientationAndDuration(session);
+      }
+      
+      // Update UI duration
+      if (selectedUploadId === session.id) {
+        detailsPreviewDuration.textContent = formatTime(duration);
       }
       URL.revokeObjectURL(helperVideo.src);
     };
@@ -1686,6 +1753,11 @@ require_once __DIR__ . '/../includes/header.php';
 
     if (!session.sessionId && !session.videoId) {
       alert('Video is initializing. Please wait a moment.');
+      return;
+    }
+
+    if (session.isReel === 1 && session.duration > 60) {
+      alert('Reels must be 60 seconds or less. Please upload a shorter video.');
       return;
     }
 

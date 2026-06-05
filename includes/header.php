@@ -815,7 +815,9 @@ endif;
 </script>
 <?php endif; ?>
 
-<?php if ($is_dashboard_page): ?>
+<?php if (isset($is_reels) && $is_reels): ?>
+<div class="reels-page-wrapper">
+<?php elseif ($is_dashboard_page): ?>
 <div class="dashboard-layout">
   <!-- Left Sidebar -->
   <aside class="dashboard-sidebar-container" id="dashboard-sidebar">
@@ -942,7 +944,7 @@ endif;
         <a href="<?= BASE_URL ?>/creator/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">
           <span>📈 Analytics</span>
         </a>
-        <a href="<?= BASE_URL ?>/creator/upload.php" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') !== 'reel' ? 'active' : '' ?>">
+        <a href="<?= BASE_URL ?>/creator/upload.php?mode=video" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') !== 'reel' ? 'active' : '' ?>">
           <span>⬆️ Upload Video</span>
         </a>
         <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') === 'reel' ? 'active' : '' ?>">

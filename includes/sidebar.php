@@ -54,7 +54,7 @@ $is_categories = ($current_page === 'categories.php');
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           <span>Analytics</span>
         </a>
-        <a href="<?= BASE_URL ?>/creator/upload.php" class="nav-item <?= $current_page === 'upload.php' ? 'active' : '' ?>">
+        <a href="<?= BASE_URL ?>/creator/upload.php?mode=video" class="nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') !== 'reel' ? 'active' : '' ?>">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>Upload Video</span>
         </a>

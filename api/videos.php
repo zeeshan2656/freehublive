@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $total  = db_count('videos v', $where, $where_params);
     $all_params = array_merge($where_params, $order_params);
     $videos = db_fetchAll(
-        "SELECT v.id,v.user_id,v.title,v.thumbnail,v.duration,v.views,v.published_at,v.is_reel,
+        "SELECT v.id,v.user_id,v.title,v.thumbnail,v.duration,v.views,v.published_at,v.is_reel,v.video_url,
                 u.username,u.channel_name,u.avatar
          FROM videos v JOIN users u ON u.id=v.user_id
          WHERE $where ORDER BY $order LIMIT $per OFFSET $offset",
@@ -91,6 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
             'avatar'       => avatar_url($v['avatar']),
             'url'          => BASE_URL . '/watch.php?v=' . $v['id'] . $ref_param,
             'is_reel'      => (int)($v['is_reel'] ?? 0),
+            'video_src'    => video_url($v['video_url']),
         ];
         return $item;
     }, $videos);

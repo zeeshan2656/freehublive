@@ -443,7 +443,10 @@ function bindLoadMore() {
 
           el.innerHTML = `
             <div class="video-thumb \${v.is_reel ? 'is-portrait' : ''}" style="position:relative">
-              <img src="\${v.thumbnail}" alt="\${v.title}" loading="lazy" width="320" height="180" class="thumb-main">
+              \${v.is_reel 
+                ? `<video src="\${v.video_src}#t=0.1" muted playsinline preload="metadata" class="thumb-main" style="width:100%; height:100%; object-fit:cover; aspect-ratio:9/16;"></video>`
+                : `<img src="\${v.thumbnail}" alt="\${v.title}" loading="lazy" width="320" height="180" class="thumb-main">`
+              }
               \${durBadge}
               \${deleteBtnHtml}
             </div>

@@ -278,6 +278,7 @@ require_once __DIR__ . '/../includes/header.php';
 
         <!-- Right: Thumbnail + Actions -->
         <div>
+          <?php if (!(int)$video['is_reel']): ?>
           <div class="card" style="margin-bottom:16px">
             <h3 style="font-weight:700;margin-bottom:12px;font-size:.95rem">&#128444; Thumbnail</h3>
             <div class="thumb-preview-box" id="thumb-preview-box">
@@ -289,6 +290,7 @@ require_once __DIR__ . '/../includes/header.php';
             <input type="file" id="thumb-input" name="thumbnail" accept="image/jpeg,image/png,image/webp" style="display:none">
             <p class="text-xs text-muted" style="margin-top:8px;text-align:center">JPG, PNG, WebP — 1280×720 recommended</p>
           </div>
+          <?php endif; ?>
 
           <div class="card" style="margin-bottom:16px">
             <h3 style="font-weight:700;margin-bottom:12px;font-size:.95rem">&#128279; Video Info</h3>
@@ -318,11 +320,14 @@ require_once __DIR__ . '/../includes/header.php';
 
 <script data-page-script="true">
 // Thumbnail preview
-document.getElementById('thumb-input').addEventListener('change', function() {
-  if (!this.files[0]) return;
-  const reader = new FileReader();
-  reader.onload = e => { document.getElementById('thumb-preview-img').src = e.target.result; };
-  reader.readAsDataURL(this.files[0]);
-});
+const thumbInput = document.getElementById('thumb-input');
+if (thumbInput) {
+  thumbInput.addEventListener('change', function() {
+    if (!this.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => { document.getElementById('thumb-preview-img').src = e.target.result; };
+    reader.readAsDataURL(this.files[0]);
+  });
+}
 </script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

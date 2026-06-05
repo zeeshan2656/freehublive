@@ -89,7 +89,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $category_ids = $meta['category_ids'] ?? [];
         $first_cat   = !empty($category_ids) ? (int)$category_ids[0] : null;
-        $thumbnail   = !empty($session['temp_thumb']) ? $session['temp_thumb'] : 'default-thumb.jpg';
+        if ($is_reel === 1) {
+            $thumbnail = null;
+        } else {
+            $thumbnail   = !empty($session['temp_thumb']) ? $session['temp_thumb'] : 'default-thumb.jpg';
+        }
 
         // Generate unique slug
         $slug = slugify($title);

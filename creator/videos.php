@@ -228,7 +228,13 @@ require_once __DIR__ . '/../includes/header.php';
             <td style="text-align: center;">
               <input type="checkbox" name="video_ids[]" value="<?= $v['id'] ?>" class="video-select-checkbox" style="cursor: pointer;">
             </td>
-            <td><img src="<?= thumb_url($v['thumbnail']) ?>" style="width:72px;aspect-ratio:16/9;object-fit:cover;border-radius:4px" loading="lazy"></td>
+            <td>
+              <?php if ((int)$v['is_reel'] === 1): ?>
+                <video src="<?= video_url($v['video_url']) ?>#t=0.1" muted playsinline style="width:50px; aspect-ratio:9/16; object-fit:cover; border-radius:4px; background:#000;"></video>
+              <?php else: ?>
+                <img src="<?= thumb_url($v['thumbnail']) ?>" style="width:72px;aspect-ratio:16/9;object-fit:cover;border-radius:4px" loading="lazy">
+              <?php endif; ?>
+            </td>
             <td style="max-width:200px; font-weight:600;">
               <a href="<?= BASE_URL ?>/watch.php?v=<?= $v['id'] ?>" target="_blank" style="color:var(--accent); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<?= e($v['title']) ?>">
                 <?= e(truncate($v['title'], 50)) ?>
