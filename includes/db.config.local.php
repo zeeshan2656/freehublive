@@ -6,9 +6,9 @@
 return [
     'host'    => 'localhost',
     'port'    => 3306,
-    'user'    => 'root',
-    'pass'    => '',
-    'name'    => 'freehub',
+    'user'    => 'u434697879_freehub',
+    'pass'    => '03061881882Star2656@',
+    'name'    => 'u434697879_freehub',
     'charset' => 'utf8mb4',
 ];
 
