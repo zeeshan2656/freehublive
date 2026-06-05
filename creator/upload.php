@@ -61,7 +61,7 @@ require_once __DIR__ . '/../includes/header.php';
       <div class="upload-dropzone" id="drop-zone" onclick="document.getElementById('video-file-input').click()">
         <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" style="width:64px; height:64px; color:var(--text3); margin-bottom:20px;"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
         <h2 style="font-size:1.4rem; font-weight:700; margin-bottom:8px;">Drag and drop video files to upload</h2>
-        <p style="color:var(--text2); font-size:0.9rem; margin-bottom:20px;">Turbo upload with parallel pipeline. 20MB chunks. Resumable.</p>
+        <p style="color:var(--text2); font-size:0.9rem; margin-bottom:20px;">Turbo upload with parallel pipeline. Resumable. Auto-publish.</p>
         <button class="btn btn-primary" style="font-weight:700; padding:10px 24px;">Select Files</button>
       </div>
     </div>
@@ -472,7 +472,7 @@ require_once __DIR__ . '/../includes/header.php';
   let sourceType = 'file'; // file or embed
   const MAX_CONCURRENT_UPLOADS = 2;  // Allow 2 parallel uploads
   const PARALLEL_CHUNKS = 3;         // 3 chunks in-flight per upload
-  const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB chunks for speed
+  const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks (optimal for shared hosting)
   const DB_SAVE_INTERVAL = 5;        // Save to IndexedDB every N chunks
 
   // ── IndexedDB Helper Class for persistent queues ──
@@ -1252,12 +1252,12 @@ require_once __DIR__ . '/../includes/header.php';
           }
         } else {
           if (!session.thumbnails || session.thumbnails.length === 0) {
-            extractThumbnailsInBackground(session);
+            session._thumbExtractDeferred = true;
           }
         }
       }
 
-      // Check resumability status from the server
+      // 2. Check server-side resume position (source of truth)
       let uploadedBytes = 0;
       try {
         const checkRes = await fetch(`<?= BASE_URL ?>/api/upload.php?action=status&session_id=${session.sessionId}&token=${session.token}`, {
@@ -1270,147 +1270,123 @@ require_once __DIR__ . '/../includes/header.php';
       } catch (e) {}
 
       session.uploadedBytes = uploadedBytes;
-      let chunksSinceLastSave = 0;
 
-      // 2. Turbo chunked upload: parallel pipeline with 3 concurrent chunks
+      // 3. Build chunk descriptors for remaining work
       const totalSize = file.size;
+      let chunks = [];
+      for (let start = 0; start < totalSize; start += CHUNK_SIZE) {
+        const end = Math.min(start + CHUNK_SIZE, totalSize);
+        // Skip chunks that are already uploaded (based on server position)
+        if (end <= uploadedBytes) continue;
+        chunks.push({ start, end, index: chunks.length });
+      }
 
-      let lastTime = Date.now();
-      let lastBytes = uploadedBytes;
+      if (chunks.length === 0 && uploadedBytes >= totalSize) {
+        // All chunks already uploaded — go straight to finalize
+        session.uploadedBytes = totalSize;
+        session.progress = 100;
+      }
+
+      // 4. Upload chunks in parallel batches
+      let lastSpeedTime = Date.now();
+      let lastSpeedBytes = uploadedBytes;
+      let smoothSpeed = 0;
+      let dbSaveCounter = 0;
 
       updateCardProgress(session, 'Uploading...');
 
-      // --- Parallel chunk upload pipeline ---
-      let nextStart = uploadedBytes;
-      const inflight = new Set();
-
-      while (nextStart < totalSize || inflight.size > 0) {
-        if (session.status !== 'uploading' && session.status !== 'retrying') {
+      while (chunks.length > 0) {
+        if (session.status === 'paused' || session.status === 'cancelled') {
           session.activeLoopRunning = false;
-          return; // Paused or Cancelled
+          return;
         }
 
-        // Launch up to PARALLEL_CHUNKS concurrent chunk uploads
-        while (inflight.size < PARALLEL_CHUNKS && nextStart < totalSize) {
-          const chunkStart = nextStart;
-          const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalSize);
-          nextStart = chunkEnd;
+        // Take a batch of PARALLEL_CHUNKS
+        const batch = chunks.splice(0, PARALLEL_CHUNKS);
 
-          const chunkBlob = file.slice(chunkStart, chunkEnd);
-          const formData = new FormData();
-          formData.append('chunk', chunkBlob, file.name);
+        // Upload batch concurrently
+        const batchPromises = batch.map(chunk => uploadSingleChunk(session, file, chunk, totalSize));
+        const results = await Promise.allSettled(batchPromises);
 
-          const chunkPromise = (async () => {
-            try {
-              const uploadRes = await fetch(`<?= BASE_URL ?>/api/upload.php?session_id=${session.sessionId}&token=${session.token}`, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                  'Content-Range': `bytes ${chunkStart}-${chunkEnd - 1}/${totalSize}`
-                },
-                signal: session.abortController.signal
-              });
-              const uploadData = await uploadRes.json();
-              if (!uploadData.success) throw new Error('Chunk failed');
-
-              // Track uploaded bytes (use max to handle out-of-order completions)
-              session.uploadedBytes = Math.max(session.uploadedBytes, chunkEnd);
-              session.retries = 0;
-              chunksSinceLastSave++;
-
-              // Debounce IndexedDB saves — every N chunks or on last chunk
-              if (chunksSinceLastSave >= DB_SAVE_INTERVAL || session.uploadedBytes >= totalSize) {
-                chunksSinceLastSave = 0;
-                UploadDB.save(session); // fire-and-forget
-              }
-
-              return { ok: true, start: chunkStart, end: chunkEnd };
-            } catch (e) {
-              if (e.name === 'AbortError' || session.status === 'paused') {
-                return { ok: false, aborted: true };
-              }
-              return { ok: false, start: chunkStart, end: chunkEnd };
-            }
-          })();
-
-          chunkPromise._start = chunkStart;
-          chunkPromise._end = chunkEnd;
-          inflight.add(chunkPromise);
-        }
-
-        // Wait for the first chunk to finish
-        if (inflight.size > 0) {
-          const settled = await Promise.race(inflight);
-          // Remove the resolved promise
-          for (const p of inflight) {
-            // Check if promise resolved by trying to get its value
-            const result = await Promise.race([p, Promise.resolve('__pending__')]);
-            if (result !== '__pending__') {
-              inflight.delete(p);
-              if (!result.ok) {
-                if (result.aborted) {
-                  session.activeLoopRunning = false;
-                  return;
-                }
-                // Retry failed chunk
-                session.retries = (session.retries || 0) + 1;
-                if (session.retries > 10) {
-                  setUploadFailed(session, 'Too many chunk failures.');
-                  return;
-                }
-                // Re-queue this chunk range
-                const retryStart = result.start;
-                const retryEnd = result.end;
-                const retryBlob = file.slice(retryStart, retryEnd);
-                const retryFormData = new FormData();
-                retryFormData.append('chunk', retryBlob, file.name);
-                session.status = 'retrying';
-                updateCardProgress(session, `Retrying...`);
-
-                const delay = Math.min(10000, 500 * Math.pow(2, session.retries)) + Math.random() * 500;
-                await new Promise(r => setTimeout(r, delay));
-                session.status = 'uploading';
-                // Push retry start back
-                nextStart = Math.min(nextStart, retryStart);
-              }
-              break;
-            }
+        // Process results
+        let failedChunks = [];
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          if (result.status === 'fulfilled' && result.value.ok) {
+            // Success — update progress
+            session.uploadedBytes = Math.max(session.uploadedBytes, result.value.end);
+          } else if (result.status === 'fulfilled' && result.value.aborted) {
+            // User paused or cancelled
+            session.activeLoopRunning = false;
+            return;
+          } else {
+            // Failed — add to retry queue
+            failedChunks.push(batch[i]);
           }
         }
 
-        // Speed and ETA calculations
+        // Re-queue failed chunks at front
+        if (failedChunks.length > 0) {
+          session.retries = (session.retries || 0) + 1;
+          if (session.retries > 15) {
+            setUploadFailed(session, 'Too many failures. Check your connection.');
+            return;
+          }
+
+          // Exponential backoff
+          const delay = Math.min(15000, 500 * Math.pow(2, Math.min(session.retries, 8))) + Math.random() * 500;
+          session.status = 'retrying';
+          updateCardProgress(session, `Retrying (${session.retries}/15)...`, 'processing');
+          await new Promise(r => setTimeout(r, delay));
+          session.status = 'uploading';
+
+          // Put failed chunks back at front of queue
+          chunks.unshift(...failedChunks);
+        } else {
+          session.retries = 0; // Reset on successful batch
+        }
+
+        // Speed and ETA calculations (smoothed)
         const now = Date.now();
-        const delta = (now - lastTime) / 1000;
-        const deltaBytes = session.uploadedBytes - lastBytes;
-        const speed = delta > 0 ? Math.round(deltaBytes / delta) : 0;
-        lastTime = now;
-        lastBytes = session.uploadedBytes;
+        const elapsed = (now - lastSpeedTime) / 1000;
+        if (elapsed > 0.5) {
+          const instantSpeed = (session.uploadedBytes - lastSpeedBytes) / elapsed;
+          smoothSpeed = smoothSpeed > 0 ? (smoothSpeed * 0.7 + instantSpeed * 0.3) : instantSpeed;
+          lastSpeedTime = now;
+          lastSpeedBytes = session.uploadedBytes;
+        }
 
         const pct = Math.floor((session.uploadedBytes / totalSize) * 100);
         session.progress = pct;
-        session.speed = speed;
+        session.speed = Math.round(smoothSpeed);
+        session.eta = smoothSpeed > 0 ? Math.max(0, Math.round((totalSize - session.uploadedBytes) / smoothSpeed)) : null;
 
-        const remainSec = speed > 0 ? Math.max(0, Math.round((totalSize - session.uploadedBytes) / speed)) : null;
-        session.eta = remainSec;
-
-        session.status = 'uploading';
         updateCardProgress(session, 'Uploading...');
 
-        // Trigger deferred thumbnail extraction at 80% progress
+        // Trigger deferred thumbnail extraction at 80%
         if (session._thumbExtractDeferred && pct >= 80) {
           session._thumbExtractDeferred = false;
           extractThumbnailsInBackground(session);
         }
+
+        // Debounced IndexedDB save (every N batches)
+        dbSaveCounter++;
+        if (dbSaveCounter >= DB_SAVE_INTERVAL || chunks.length === 0) {
+          dbSaveCounter = 0;
+          UploadDB.save(session); // fire-and-forget
+        }
       }
 
-      // 3. Finalize upload
+      // 5. Finalize upload
       if (session.uploadedBytes >= totalSize) {
-        updateCardProgress(session, 'Finalizing file...', 'processing');
+        updateCardProgress(session, 'Publishing...', 'processing');
         session.status = 'processing';
+        session.progress = 100;
         updateSelectedEditorState(session);
         await UploadDB.save(session);
 
-        const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?session_id=${session.sessionId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(file.name)}`, {
+        const finalizeUrl = `<?= BASE_URL ?>/api/upload.php?session_id=${session.sessionId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(file.name)}&expected_size=${totalSize}`;
+        const finalizeRes = await fetch(finalizeUrl, {
           method: 'POST',
           signal: session.abortController.signal,
           keepalive: true
@@ -1423,33 +1399,52 @@ require_once __DIR__ . '/../includes/header.php';
           session.videoUrl = finalizeData.data.video_url;
           session.activeLoopRunning = false;
 
-          // Duration is already saved in session meta_json and committed in the transaction
-          // But re-save if we have a more accurate client-side reading
           await saveVideoDuration(session);
 
-          // Thumbnail was already saved to upload_sessions.temp_thumb and committed
-          // No need to re-upload
-
-          updateCardProgress(session, 'Published', 'published');
+          updateCardProgress(session, 'Published ✓', 'published');
           updateSelectedEditorState(session);
 
-          // Clear completed upload from IndexedDB
           await UploadDB.delete(session.id);
           
           showToast(`🟢 <strong>"${escapeHtml(session.title)}"</strong> published successfully!`);
           
-          // Auto-hide from queue after brief delay
           removePublishedCard(session.id);
-          
           processQueue();
         } else {
-          setUploadFailed(session, 'Finalization failed.');
+          setUploadFailed(session, finalizeData.message || 'Publishing failed.');
         }
       }
 
     } catch (err) {
       if (err.name === 'AbortError') return;
-      setUploadFailed(session, 'Connection error.');
+      setUploadFailed(session, 'Connection error: ' + (err.message || 'Unknown'));
+    }
+  }
+
+  // Upload a single chunk — returns {ok, start, end} or {ok:false, aborted}
+  async function uploadSingleChunk(session, file, chunk, totalSize) {
+    try {
+      const chunkBlob = file.slice(chunk.start, chunk.end);
+      const formData = new FormData();
+      formData.append('chunk', chunkBlob, file.name);
+
+      const res = await fetch(`<?= BASE_URL ?>/api/upload.php?session_id=${session.sessionId}&token=${session.token}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Range': `bytes ${chunk.start}-${chunk.end - 1}/${totalSize}`
+        },
+        signal: session.abortController.signal
+      });
+
+      const data = await res.json();
+      if (!data.success) return { ok: false, start: chunk.start, end: chunk.end };
+      return { ok: true, start: chunk.start, end: chunk.end };
+    } catch (e) {
+      if (e.name === 'AbortError' || session.status === 'paused') {
+        return { ok: false, aborted: true };
+      }
+      return { ok: false, start: chunk.start, end: chunk.end };
     }
   }
 

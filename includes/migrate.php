@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.06.05.2';
+    $migration_version = '2026.06.05.3';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -608,6 +608,12 @@ function fh_run_migrations(): void {
         if (!fh_column_exists('upload_sessions', 'uploaded_bytes')) {
             try { db_query("ALTER TABLE upload_sessions ADD COLUMN uploaded_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER status"); } catch (Throwable $e) {}
         }
+        if (!fh_column_exists('upload_sessions', 'total_size')) {
+            try { db_query("ALTER TABLE upload_sessions ADD COLUMN total_size BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER uploaded_bytes"); } catch (Throwable $e) {}
+        }
+        if (!fh_column_exists('upload_sessions', 'created_at')) {
+            try { db_query("ALTER TABLE upload_sessions ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"); } catch (Throwable $e) {}
+        }
         // Make video_id nullable (session is created before video record exists)
         try { db_query("ALTER TABLE upload_sessions MODIFY COLUMN video_id INT UNSIGNED DEFAULT NULL"); } catch (Throwable $e) {}
     } else {
@@ -622,6 +628,7 @@ function fh_run_migrations(): void {
                 temp_thumb VARCHAR(255) DEFAULT NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'active',
                 uploaded_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                total_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_token (token),
                 INDEX idx_user (user_id),

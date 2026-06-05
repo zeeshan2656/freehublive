@@ -5,6 +5,8 @@
   <script src="<?= fh_asset_url('assets/js/app.js') ?>" defer></script>
   <script src="<?= fh_asset_url('assets/js/ads.js') ?>" defer></script>
 
+  <?php require_once __DIR__ . '/partials/global-upload-widget.php'; ?>
+
   <?php
   $is_admin_page = str_contains($_SERVER['PHP_SELF'] ?? '', '/admin/');
   if (!$is_admin_page && setting('ad_code_body_enabled', '0') === '1' && setting('ad_code_body_placement', 'bottom') === 'bottom' && !empty($ad_code_b = setting('ad_code_body'))):
@@ -51,6 +53,7 @@ if (!$is_admin_page && setting('ad_code_body_enabled', '0') === '1' && setting('
     echo $ad_code_b . "\n";
 endif;
 ?>
+<?php require_once __DIR__ . '/partials/global-upload-widget.php'; ?>
 
 </body>
 </html>
