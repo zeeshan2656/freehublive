@@ -27,7 +27,7 @@ require_once __DIR__ . '/../includes/header.php';
     <div>
       <h1 style="font-size:1.8rem; font-weight:800; background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin:0;"><?= htmlspecialchars($page_title) ?></h1>
       <?php if ($mode === 'reel'): ?>
-        <p style="color:var(--text2); font-size:0.9rem; margin-top:4px;">Upload and publish short vertical Reels (under 60s) in the background.</p>
+        <p style="color:var(--text2); font-size:0.9rem; margin-top:4px;">Upload and publish short vertical Reels (under 5 mins) in the background.</p>
       <?php else: ?>
         <p style="color:var(--text2); font-size:0.9rem; margin-top:4px;">Upload and publish landscape videos in the background.</p>
       <?php endif; ?>
@@ -200,7 +200,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <input type="checkbox" id="details-is-reel" name="is_reel" value="1">
                     <span style="font-weight:600; font-size:0.9rem;">📱 Publish as Reel (Short Vertical Video)</span>
                   </label>
-                  <small class="text-muted text-xs" style="display:block; margin-top:4px;">Only videos 60 seconds or less can be published as Reels.</small>
+                  <small class="text-muted text-xs" style="display:block; margin-top:4px;">Only videos 5 minutes or less can be published as Reels.</small>
                 </div>
 
                 <div style="display:flex; gap:12px; margin-top:28px;">
@@ -699,8 +699,8 @@ require_once __DIR__ . '/../includes/header.php';
       
       if (isReelMode) {
         const duration = await getVideoDuration(file);
-        if (duration > 60) {
-          showToast(`File "${file.name}" exceeds 60s limit for Reels (${Math.round(duration)}s).`, 'danger');
+        if (duration > 300) {
+          showToast(`File "${file.name}" exceeds 5-minute limit for Reels (${Math.round(duration)}s).`, 'danger');
           continue;
         }
       }
@@ -1236,22 +1236,28 @@ require_once __DIR__ . '/../includes/header.php';
 
   // Upload thumbnail base64 data to server (supports pre-publish via session_id)
   async function saveCustomThumbnail(session, dataUrl) {
-    if (!session || !dataUrl) return;
+    if (!session || !dataUrl) return false;
     const payload = { data_url: dataUrl };
     if (session.videoId) {
       payload.video_id = session.videoId;
     } else if (session.sessionId) {
       payload.session_id = session.sessionId;
     } else {
-      return; // Neither ID available yet
+      return false; // Neither ID available yet
     }
     try {
-      await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
+      const res = await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
       });
+      const data = await res.json();
+      if (data && data.success) {
+        session._thumbnailSaved = true;
+        return true;
+      }
     } catch (e) {}
+    return false;
   }
 
   // Start background upload loop for standard video files
@@ -1431,6 +1437,16 @@ require_once __DIR__ . '/../includes/header.php';
 
       // 5. Finalize upload
       if (session.uploadedBytes >= totalSize) {
+        // Wait for default client-side thumbnail extraction to finish saving (up to 10s safety timeout)
+        if (!session.isReel && !session._thumbnailSaved) {
+          updateCardProgress(session, 'Generating thumbnail...', 'processing');
+          let waitTime = 0;
+          while (!session._thumbnailSaved && waitTime < 10000) {
+            await new Promise(r => setTimeout(r, 200));
+            waitTime += 200;
+          }
+        }
+
         updateCardProgress(session, 'Publishing...', 'processing');
         session.status = 'processing';
         session.progress = 100;
@@ -1618,7 +1634,17 @@ require_once __DIR__ . '/../includes/header.php';
     helperVideo.muted = true;
     helperVideo.playsInline = true;
 
+    // Safety fallback in case metadata loading or seeking hangs
+    let loaded = false;
+    setTimeout(() => {
+      if (!loaded) {
+        console.warn('Thumbnail extraction metadata load timed out.');
+        URL.revokeObjectURL(helperVideo.src);
+      }
+    }, 15000);
+
     helperVideo.onloadedmetadata = async () => {
+      loaded = true;
       const duration = Math.max(1, Math.floor(helperVideo.duration || 0));
       const count = 7;
       const step = duration / (count + 1);
@@ -1669,7 +1695,7 @@ require_once __DIR__ . '/../includes/header.php';
             if (miniThumb) {
               miniThumb.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;background:#000">`;
             }
-            saveCustomThumbnail(session, dataUrl);
+            await saveCustomThumbnail(session, dataUrl);
           }
 
           await UploadDB.save(session);
@@ -1884,8 +1910,8 @@ require_once __DIR__ . '/../includes/header.php';
       return;
     }
 
-    if (session.isReel === 1 && session.duration > 60) {
-      alert('Reels must be 60 seconds or less. Please upload a shorter video.');
+    if (session.isReel === 1 && session.duration > 300) {
+      alert('Reels must be 5 minutes (300 seconds) or less. Please upload a shorter video.');
       return;
     }
 
@@ -2071,6 +2097,11 @@ require_once __DIR__ . '/../includes/header.php';
         document.getElementById('studio-dashboard').style.display = 'block';
 
         for (const item of stored) {
+          if (item.status === 'published' || item.status === 'completed') {
+            // Delete completed sessions so they never clutter the queue
+            UploadDB.delete(item.id).catch(e => {});
+            continue;
+          }
           const session = {
             id: item.id,
             isEmbed: item.isEmbed,

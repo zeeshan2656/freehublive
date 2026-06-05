@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
                 "SELECT $select_fields
                  FROM reels v JOIN users u ON u.id=v.user_id
                  WHERE $where AND v.id!=?
-                 ORDER BY v.created_at DESC LIMIT $rest_limit OFFSET 0", array_merge($where_params, [$start_id])
+                 ORDER BY v.created_at DESC, v.id DESC LIMIT $rest_limit OFFSET 0", array_merge($where_params, [$start_id])
             );
             $videos = array_merge($videos_start, $videos_rest);
             $total  = db_count('reels v', $where, $where_params);
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
             $videos = db_fetchAll(
                 "SELECT $select_fields
                  FROM reels v JOIN users u ON u.id=v.user_id
-                 WHERE $where ORDER BY v.created_at DESC LIMIT $per OFFSET $offset",
+                 WHERE $where ORDER BY v.created_at DESC, v.id DESC LIMIT $per OFFSET $offset",
                 $where_params
             );
         }
@@ -84,6 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
                 'description' => $v['title'] ?? '',
                 'title'       => $v['title'] ?? '',
                 'views'       => format_number((int)$v['views']),
+                'views_raw'   => (int)$v['views'],
                 'likes'       => format_number((int)$v['likes']),
                 'comments'    => format_number((int)$v['comments_count']),
                 'ago'         => time_ago($v['created_at'] ?? ''),

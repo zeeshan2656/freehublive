@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
 // ── Statistics Section ──
 $stats = [
     'total' => (int)db_fetch("SELECT COUNT(*) AS c FROM videos")['c'],
-    'watch_time' => (int)db_fetch("SELECT COALESCE(SUM(watch_time),0) AS c FROM videos")['c'],
+    'total_views' => (int)db_fetch("SELECT COALESCE(SUM(views),0) AS c FROM videos")['c'],
     'published' => (int)db_fetch("SELECT COUNT(*) AS c FROM videos WHERE status='published'")['c'],
     'pending' => (int)db_fetch("SELECT COUNT(*) AS c FROM videos WHERE status='pending'")['c'],
     'rejected' => (int)db_fetch("SELECT COUNT(*) AS c FROM videos WHERE status='rejected'")['c'],
@@ -81,8 +81,6 @@ $filter = $_GET['filter'] ?? 'all';
 $creator = trim($_GET['creator'] ?? '');
 $from = trim($_GET['from'] ?? '');
 $to = trim($_GET['to'] ?? '');
-$min_watch = trim($_GET['min_watch'] ?? '');
-$max_watch = trim($_GET['max_watch'] ?? '');
 $type = $_GET['type'] ?? 'all';
 $page = max(1, (int)($_GET['page'] ?? 1));
 
@@ -111,14 +109,7 @@ if ($from !== '' && $to !== '') {
     $where .= " AND DATE(v.created_at) <= ?";
     $params[] = $to;
 }
-if ($min_watch !== '') {
-    $where .= " AND v.watch_time >= ?";
-    $params[] = (int)$min_watch;
-}
-if ($max_watch !== '') {
-    $where .= " AND v.watch_time <= ?";
-    $params[] = (int)$max_watch;
-}
+// End date check
 
 $total = db_count('videos v JOIN users u ON u.id=v.user_id', $where, $params);
 $pg    = paginate($total, 20, $page);
@@ -161,8 +152,8 @@ require_once __DIR__ . '/partials/admin_head.php';
       <div class="stat-label">Total Videos</div>
     </div>
     <div class="stat-card" style="padding:14px 18px;">
-      <div class="stat-value" style="font-size:1.3rem;"><?= format_duration($stats['watch_time']) ?></div>
-      <div class="stat-label">Total Watch Time</div>
+      <div class="stat-value" style="font-size:1.3rem;"><?= number_format($stats['total_views']) ?></div>
+      <div class="stat-label">Total Video Views</div>
     </div>
     <div class="stat-card" style="padding:14px 18px; border-left: 3px solid var(--green);">
       <div class="stat-value" style="font-size:1.3rem; color:var(--green);"><?= number_format($stats['published']) ?></div>
@@ -221,15 +212,7 @@ require_once __DIR__ . '/partials/admin_head.php';
         </div>
       </div>
 
-      <!-- Watch Time Range -->
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Watch Time (sec)</label>
-        <div class="flex gap-2">
-          <input type="number" name="min_watch" value="<?= e($min_watch) ?>" placeholder="Min" class="form-input" style="flex:1">
-          <span class="text-muted" style="align-self:center">-</span>
-          <input type="number" name="max_watch" value="<?= e($max_watch) ?>" placeholder="Max" class="form-input" style="flex:1">
-        </div>
-      </div>
+      <!-- Filter Button Actions -->
 
       <!-- Actions -->
       <div class="flex gap-2" style="margin-bottom:0">

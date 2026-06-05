@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.06.05.3';
+    $migration_version = '2026.06.06.1';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -764,9 +764,226 @@ function fh_run_migrations(): void {
         db_query("DELETE FROM videos WHERE is_reel = 1");
     }
 
+    // ── Analytics System migration (2026.06.06.1) ──
+    if (!fh_table_exists('analytics_pageviews')) {
+        db_query("CREATE TABLE analytics_pageviews (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            session_id VARCHAR(64) NOT NULL,
+            user_id INT UNSIGNED DEFAULT NULL,
+            ip_hash VARCHAR(64) NOT NULL,
+            url VARCHAR(255) NOT NULL,
+            referer VARCHAR(255) DEFAULT NULL,
+            traffic_source VARCHAR(50) NOT NULL DEFAULT 'direct',
+            device_type ENUM('desktop', 'mobile', 'tablet') NOT NULL DEFAULT 'desktop',
+            os VARCHAR(50) DEFAULT NULL,
+            browser VARCHAR(50) DEFAULT NULL,
+            country VARCHAR(3) NOT NULL DEFAULT 'US',
+            city VARCHAR(100) NOT NULL DEFAULT 'Unknown',
+            duration INT UNSIGNED NOT NULL DEFAULT 0,
+            is_reel TINYINT(1) NOT NULL DEFAULT 0,
+            is_video TINYINT(1) NOT NULL DEFAULT 0,
+            content_id INT UNSIGNED DEFAULT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_created_at (created_at DESC),
+            INDEX idx_session (session_id),
+            INDEX idx_user (user_id),
+            INDEX idx_traffic (traffic_source),
+            INDEX idx_device (device_type),
+            INDEX idx_country (country)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    if (!fh_table_exists('analytics_daily_stats')) {
+        db_query("CREATE TABLE analytics_daily_stats (
+            `date` DATE PRIMARY KEY,
+            visits INT UNSIGNED NOT NULL DEFAULT 0,
+            visitors INT UNSIGNED NOT NULL DEFAULT 0,
+            pageviews INT UNSIGNED NOT NULL DEFAULT 0,
+            video_views INT UNSIGNED NOT NULL DEFAULT 0,
+            reel_views INT UNSIGNED NOT NULL DEFAULT 0,
+            avg_duration DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            bounce_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    if (!fh_table_exists('analytics_device_stats')) {
+        db_query("CREATE TABLE analytics_device_stats (
+            `date` DATE NOT NULL,
+            device_type VARCHAR(20) NOT NULL,
+            os VARCHAR(50) NOT NULL,
+            browser VARCHAR(50) NOT NULL,
+            `count` INT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (`date`, device_type, os, browser),
+            INDEX idx_date (`date`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    if (!fh_table_exists('analytics_geo_stats')) {
+        db_query("CREATE TABLE analytics_geo_stats (
+            `date` DATE NOT NULL,
+            country VARCHAR(3) NOT NULL,
+            city VARCHAR(100) NOT NULL,
+            `count` INT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (`date`, country, city),
+            INDEX idx_date (`date`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    if (!fh_table_exists('analytics_source_stats')) {
+        db_query("CREATE TABLE analytics_source_stats (
+            `date` DATE NOT NULL,
+            source VARCHAR(50) NOT NULL,
+            `count` INT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (`date`, source),
+            INDEX idx_date (`date`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    // Run daily aggregation helper exactly once per day (or if cache is stale)
+    $agg_flag = $cache_dir . '.analytics_aggregated';
+    $today = date('Y-m-d');
+    if (!is_file($agg_flag) || trim(@file_get_contents($agg_flag)) !== $today) {
+        fh_run_analytics_aggregation();
+        @file_put_contents($agg_flag, $today);
+    }
+
     // ── All migrations passed — write flag to skip on next request ──
     if (!is_dir($cache_dir)) {
         @mkdir($cache_dir, 0755, true);
     }
     @file_put_contents($flag_file, $migration_version);
+}
+
+function fh_aggregate_date(string $date_str): void {
+    // 1. Basic metrics (visits, visitors, pageviews, video_views, reel_views, avg_duration)
+    $basic = db_fetch("
+        SELECT 
+            COUNT(*) AS total_pageviews,
+            COUNT(DISTINCT session_id) AS total_visits,
+            COUNT(DISTINCT ip_hash) AS total_visitors,
+            SUM(CASE WHEN is_video = 1 THEN 1 ELSE 0 END) AS total_video_views,
+            SUM(CASE WHEN is_reel = 1 THEN 1 ELSE 0 END) AS total_reel_views,
+            COALESCE(AVG(duration), 0) AS avg_duration
+        FROM analytics_pageviews
+        WHERE DATE(created_at) = ?
+    ", [$date_str]);
+
+    // 2. Bounce Rate metric
+    $bounce = db_fetch("
+        SELECT 
+            COUNT(DISTINCT session_id) as total_sessions,
+            SUM(CASE WHEN pv_count = 1 AND max_dur <= 10 THEN 1 ELSE 0 END) as bounce_sessions
+        FROM (
+            SELECT session_id, COUNT(*) as pv_count, MAX(duration) as max_dur
+            FROM analytics_pageviews
+            WHERE DATE(created_at) = ?
+            GROUP BY session_id
+        ) as session_summaries
+    ", [$date_str]);
+
+    $visits = (int)($basic['total_visits'] ?? 0);
+    $visitors = (int)($basic['total_visitors'] ?? 0);
+    $pageviews = (int)($basic['total_pageviews'] ?? 0);
+    $video_views = (int)($basic['total_video_views'] ?? 0);
+    $reel_views = (int)($basic['total_reel_views'] ?? 0);
+    $avg_duration = (float)($basic['avg_duration'] ?? 0.00);
+    
+    $total_sessions = (int)($bounce['total_sessions'] ?? 0);
+    $bounce_sessions = (int)($bounce['bounce_sessions'] ?? 0);
+    $bounce_rate = $total_sessions > 0 ? ($bounce_sessions / $total_sessions) * 100 : 0.00;
+
+    db_query("
+        INSERT INTO analytics_daily_stats (date, visits, visitors, pageviews, video_views, reel_views, avg_duration, bounce_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            visits = VALUES(visits),
+            visitors = VALUES(visitors),
+            pageviews = VALUES(pageviews),
+            video_views = VALUES(video_views),
+            reel_views = VALUES(reel_views),
+            avg_duration = VALUES(avg_duration),
+            bounce_rate = VALUES(bounce_rate)
+    ", [$date_str, $visits, $visitors, $pageviews, $video_views, $reel_views, $avg_duration, $bounce_rate]);
+
+    // 3. Device breakdown
+    db_query("DELETE FROM analytics_device_stats WHERE date = ?", [$date_str]);
+    $devices = db_fetchAll("
+        SELECT device_type, os, browser, COUNT(*) as count
+        FROM analytics_pageviews
+        WHERE DATE(created_at) = ?
+        GROUP BY device_type, os, browser
+    ", [$date_str]);
+    foreach ($devices as $row) {
+        db_query("
+            INSERT INTO analytics_device_stats (date, device_type, os, browser, count)
+            VALUES (?, ?, ?, ?, ?)
+        ", [$date_str, $row['device_type'], $row['os'] ?: 'Other', $row['browser'] ?: 'Other', $row['count']]);
+    }
+
+    // 4. Geo breakdown
+    db_query("DELETE FROM analytics_geo_stats WHERE date = ?", [$date_str]);
+    $geo = db_fetchAll("
+        SELECT country, city, COUNT(*) as count
+        FROM analytics_pageviews
+        WHERE DATE(created_at) = ?
+        GROUP BY country, city
+    ", [$date_str]);
+    foreach ($geo as $row) {
+        db_query("
+            INSERT INTO analytics_geo_stats (date, country, city, count)
+            VALUES (?, ?, ?, ?)
+        ", [$date_str, $row['country'], $row['city'], $row['count']]);
+    }
+
+    // 5. Source breakdown
+    db_query("DELETE FROM analytics_source_stats WHERE date = ?", [$date_str]);
+    $sources = db_fetchAll("
+        SELECT traffic_source, COUNT(*) as count
+        FROM analytics_pageviews
+        WHERE DATE(created_at) = ?
+        GROUP BY traffic_source
+    ", [$date_str]);
+    foreach ($sources as $row) {
+        db_query("
+            INSERT INTO analytics_source_stats (date, source, count)
+            VALUES (?, ?, ?)
+        ", [$date_str, $row['traffic_source'], $row['count']]);
+    }
+}
+
+function fh_run_analytics_aggregation(): void {
+    $min_date_row = db_fetch("SELECT MIN(DATE(created_at)) as min_date FROM analytics_pageviews");
+    if (!$min_date_row || empty($min_date_row['min_date'])) {
+        return;
+    }
+    
+    $start_date = $min_date_row['min_date'];
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    
+    if (strtotime($start_date) > strtotime($yesterday)) {
+        return;
+    }
+    
+    $current = new DateTime($start_date);
+    $end = new DateTime($yesterday);
+    $run_count = 0;
+    
+    while ($current <= $end && $run_count < 30) {
+        $date_str = $current->format('Y-m-d');
+        
+        $is_yesterday = ($date_str === $yesterday);
+        $exists = db_fetch("SELECT 1 FROM analytics_daily_stats WHERE date = ?", [$date_str]);
+        
+        if (!$exists || $is_yesterday) {
+            fh_aggregate_date($date_str);
+            $run_count++;
+        }
+        $current->modify('+1 day');
+    }
+
+    // Prune raw logs older than 60 days to keep the database lightweight
+    $prune_date = date('Y-m-d H:i:s', strtotime('-60 days'));
+    db_query("DELETE FROM analytics_pageviews WHERE created_at < ?", [$prune_date]);
 }

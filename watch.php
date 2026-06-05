@@ -76,7 +76,9 @@ if ($aff) {
     $affId = $affUser['id'] ?? null;
 }
 $viewRow = db_fetch(
-    "SELECT id FROM video_views WHERE video_id=? AND ip_hash=? ORDER BY id DESC LIMIT 1",
+    "SELECT id FROM video_views 
+     WHERE video_id=? AND ip_hash=? AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) 
+     ORDER BY id DESC LIMIT 1",
     [$vid, $ip]
 );
 if (!$viewRow) {

@@ -13,6 +13,7 @@
       echo $ad_code_b . "\n";
   endif;
   ?>
+  <?php require_once __DIR__ . '/partials/tracker_js.php'; ?>
   </body>
   </html>
 <?php else: ?>
@@ -54,6 +55,7 @@ if (!$is_admin_page && setting('ad_code_body_enabled', '0') === '1' && setting('
 endif;
 ?>
 <?php require_once __DIR__ . '/partials/global-upload-widget.php'; ?>
+<?php require_once __DIR__ . '/partials/tracker_js.php'; ?>
 
 </body>
 </html>

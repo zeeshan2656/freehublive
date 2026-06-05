@@ -207,7 +207,7 @@ $is_home = ($current_page === 'index.php' && !isset($_GET['cat']));
 $is_trending = ($current_page === 'search.php' && ($current_q === 'trending' || $current_sort === 'views')) || ($current_page === 'index.php' && isset($_GET['sort']) && $_GET['sort'] === 'views');
 $is_latest = ($current_page === 'search.php' && $current_sort === 'latest') || ($current_page === 'index.php' && isset($_GET['sort']) && $_GET['sort'] === 'latest');
 $is_categories = ($current_page === 'categories.php');
-$is_reels = ($current_page === 'reels.php');
+$is_reels = ($current_page === 'reels.php' && !str_contains($_SERVER['PHP_SELF'] ?? '', '/admin/') && !str_contains($_SERVER['PHP_SELF'] ?? '', '/creator/'));
 $nav_cats = db_fetchAll(
     "SELECT id, name, slug, image, color FROM categories WHERE is_active=1 ORDER BY sort_order LIMIT ?",
     [$nav_cat_limit]
@@ -846,6 +846,9 @@ endif;
         </a>
         <a href="<?= BASE_URL ?>/admin/videos.php" class="studio-nav-item <?= $current_page === 'videos.php' && ($_GET['filter'] ?? '') !== 'pending' ? 'active' : '' ?>">
           <span>📹 Videos</span>
+        </a>
+        <a href="<?= BASE_URL ?>/admin/reels.php" class="studio-nav-item <?= $current_page === 'reels.php' ? 'active' : '' ?>">
+          <span>📱 Reels</span>
         </a>
         <a href="<?= BASE_URL ?>/admin/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">
           <span>📈 Analytics</span>

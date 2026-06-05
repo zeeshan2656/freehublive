@@ -34,7 +34,7 @@ try {
                 "SELECT $ssr_fields
                  FROM reels v JOIN users u ON u.id=v.user_id
                  WHERE v.status='published' AND v.id != ?
-                 ORDER BY v.created_at DESC LIMIT 2",
+                 ORDER BY v.created_at DESC, v.id DESC LIMIT 2",
                 [$_ssr_start_id]
             );
             $_ssr_reels = array_merge($_ssr_reels, $more);
@@ -45,7 +45,7 @@ try {
             "SELECT $ssr_fields
              FROM reels v JOIN users u ON u.id=v.user_id
              WHERE v.status='published'
-             ORDER BY v.created_at DESC LIMIT 3"
+             ORDER BY v.created_at DESC, v.id DESC LIMIT 3"
         );
     }
 } catch (\Throwable $e) {
@@ -64,6 +64,7 @@ $_ssr_feed = array_map(function($v) {
         'description' => $v['title'] ?? '',
         'title'       => $v['title'] ?? '',
         'views'       => format_number((int)($v['views'] ?? 0)),
+        'views_raw'   => (int)($v['views'] ?? 0),
         'likes'       => format_number((int)($v['likes'] ?? 0)),
         'comments'    => format_number((int)($v['comments_count'] ?? 0)),
         'ago'         => time_ago($v['created_at'] ?? date('Y-m-d H:i:s')),
@@ -76,6 +77,10 @@ require_once __DIR__ . '/includes/header.php';
 ?>
 
 <div class="reels-feed-container">
+  <!-- Reels Ads Placements (Desktop Sides) -->
+  <div class="ad-sponsored-container ad-desktop-only reels-desktop-left-ad" data-placement="reels_left" data-device-target="desktop"></div>
+  <div class="ad-sponsored-container ad-desktop-only reels-desktop-right-ad" data-placement="reels_right" data-device-target="desktop"></div>
+
   <!-- Sleek Floating Back Button -->
   <a href="<?= BASE_URL ?>/" class="reels-back-button" title="Back to Home">
     <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
@@ -98,7 +103,7 @@ require_once __DIR__ . '/includes/header.php';
       <line x1="12" y1="18" x2="12.01" y2="18"/>
     </svg>
     <h2 style="font-size:1.3rem; margin-bottom:8px; color:#fff;">No Reels Yet</h2>
-    <p style="font-size:0.9rem; margin-bottom:20px; max-width: 320px;">Be the first to upload a short vertical video (under 60s) to kickstart the Reels feed!</p>
+    <p style="font-size:0.9rem; margin-bottom:20px; max-width: 320px;">Be the first to upload a short vertical video (under 5 mins) to kickstart the Reels feed!</p>
     <a href="<?= BASE_URL ?>/creator/upload.php?mode=reel" class="btn btn-primary" style="font-weight:700;">Create a Reel</a>
   </div>
 
@@ -127,6 +132,53 @@ require_once __DIR__ . '/includes/header.php';
 </div> <!-- /reels-feed-container -->
 
 <style>
+/* Reels Ads Placement Overlay Styles */
+.reels-mobile-overlay-ad {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  width: 100%;
+  max-width: 340px;
+  display: flex !important;
+  justify-content: center;
+  pointer-events: auto;
+}
+.reels-desktop-left-ad {
+  position: absolute;
+  top: 50%;
+  left: calc(50% - 230px - 180px);
+  transform: translateY(-50%);
+  z-index: 90;
+  width: 160px;
+  height: 600px;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.reels-desktop-right-ad {
+  position: absolute;
+  top: 50%;
+  right: calc(50% - 230px - 180px);
+  transform: translateY(-50%);
+  z-index: 90;
+  width: 160px;
+  height: 600px;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -480,11 +532,14 @@ function renderReelSlide(v) {
 
     <div class="double-tap-zone" onclick="handleTapOrDoubleTap(this, ${v.id})"></div>
 
+    <!-- Dynamic Mobile Overlay Ad inside Slide -->
+    <div class="ad-sponsored-container ad-mobile-only reels-mobile-overlay-ad" data-placement="reels_mobile_top" data-device-target="mobile" data-lazy="true" style="position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 120; margin: 0; padding: 0; background: transparent; width: 100%; max-width: 340px; display: flex; justify-content: center; pointer-events: auto;"></div>
+
     <div class="reel-info-overlay">
       <div class="reel-creator-row">
-        <a href="${channelUrl}" style="display:flex; align-items:center; gap:10px; color:#fff; font-weight:700; text-decoration:none;">
+        <a href="${channelUrl}" style="display:flex; align-items:center; gap:10px; color:#fff; font-weight:700; text-decoration:none; pointer-events:auto;">
           <img class="reel-creator-avatar" src="${avatarUrl}" alt="${escapeHtml(v.channel)}">
-          <span>${escapeHtml(v.channel)}</span>
+          <span>@${escapeHtml(v.channel)}</span>
         </a>
       </div>
       <h2 class="reel-title">${escapeHtml(v.description || v.title || '')}</h2>
@@ -514,6 +569,16 @@ function renderReelSlide(v) {
           <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         </div>
         <span>Share</span>
+      </button>
+
+      <button type="button" class="reel-side-btn views-display-btn" title="Views" style="cursor: default;">
+        <div class="action-icon-wrap">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </div>
+        <span>${v.views_raw !== undefined ? Number(v.views_raw).toLocaleString() : (v.views || 0)}</span>
       </button>
 
       <button type="button" class="reel-side-btn mute-btn" onclick="toggleMuteState()" title="Mute/Unmute">
@@ -681,6 +746,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         updateMediaSources(currentActiveIndex);
 
+        // Track active Reel view
+        const reelId = entry.target.getAttribute('data-id');
+        if (reelId && typeof FHTracker !== 'undefined') {
+          FHTracker.trackReel(reelId);
+        }
+
+        // Refresh mobile overlay ad inside active slide
+        const mobileAd = entry.target.querySelector('.reels-mobile-overlay-ad');
+        if (mobileAd && typeof window.reloadAd === 'function') {
+          window.reloadAd(mobileAd);
+        }
+        
+        // Refresh desktop side ads
+        const desktopLeftAd = document.querySelector('.reels-desktop-left-ad');
+        const desktopRightAd = document.querySelector('.reels-desktop-right-ad');
+        if (desktopLeftAd && typeof window.reloadAd === 'function') {
+          window.reloadAd(desktopLeftAd);
+        }
+        if (desktopRightAd && typeof window.reloadAd === 'function') {
+          window.reloadAd(desktopRightAd);
+        }
+
         // Pause all other videos in the document
         document.querySelectorAll('.reel-video').forEach(v => {
           if (v !== video) {
@@ -799,21 +886,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       const isFresh = await cache.isFeedFresh();
       const cachedFeed = await cache.getFeed();
       if (cachedFeed && cachedFeed.length) {
-        // Replace SSR data with fuller cached feed
-        container.innerHTML = '';
-        reelsList = [];
-        cachedFeed.forEach(v => {
-          appendReelSlide(v);
-          reelsList.push(v);
-        });
-        reelsPage = 2;
-        hasNextPage = true;
-        hasCache = true;
-        updateMediaSources(0);
+        // Ensure cache actually contains the latest SSR-rendered reel (prevents hiding fresh uploads)
+        const hasLatest = !ssrReels.length || cachedFeed.some(v => v.id === ssrReels[0].id);
+        if (hasLatest) {
+          // Replace SSR data with fuller cached feed
+          container.innerHTML = '';
+          reelsList = [];
+          cachedFeed.forEach(v => {
+            appendReelSlide(v);
+            reelsList.push(v);
+          });
+          reelsPage = 2;
+          hasNextPage = true;
+          hasCache = true;
+          updateMediaSources(0);
 
-        if (!isFresh) {
-          // Cache is stale — refresh silently in background
-          refreshFeedFromAPI();
+          if (!isFresh) {
+            // Cache is stale — refresh silently in background
+            refreshFeedFromAPI();
+          }
         }
       }
     } catch (e) {
@@ -853,6 +944,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       container.scrollBy({ top: container.clientHeight, behavior: 'smooth' });
     }
   });
+
+  // Unmute active video on first user interaction if the browser forced a muted autoplay fallback
+  const unmuteOnInteraction = () => {
+    const slides = document.querySelectorAll('.reel-slide');
+    if (slides[currentActiveIndex]) {
+      const activeVideo = slides[currentActiveIndex].querySelector('.reel-video');
+      if (activeVideo && !isMutedGlobal) {
+        activeVideo.muted = false;
+        updateMuteIcons();
+      }
+    }
+    document.removeEventListener('click', unmuteOnInteraction);
+    document.removeEventListener('touchstart', unmuteOnInteraction);
+  };
+  document.addEventListener('click', unmuteOnInteraction);
+  document.addEventListener('touchstart', unmuteOnInteraction);
 });
 
 async function loadMoreReels() {

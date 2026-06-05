@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $visibility  = $meta['visibility'] ?? 'public';
         $is_reel     = (int)($meta['is_reel'] ?? 0);
         $duration    = (int)($meta['duration'] ?? 0);
-        if ($is_reel === 1 && $duration > 60) {
+        if ($is_reel === 1 && $duration > 300) {
             $is_reel = 0;
         }
         $category_ids = $meta['category_ids'] ?? [];
