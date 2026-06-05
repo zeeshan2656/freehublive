@@ -1806,6 +1806,9 @@ require_once __DIR__ . '/../includes/header.php';
 
   // Auto-remove published card from queue after a brief visual delay
   function removePublishedCard(id) {
+    // Permanently remove from IndexedDB queue so it does not reappear on page refresh
+    UploadDB.delete(id).catch(err => console.error('Failed to delete published session:', err));
+
     setTimeout(() => {
       const card = document.getElementById(`card_${id}`);
       if (card) {
