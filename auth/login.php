@@ -71,10 +71,7 @@ require_once __DIR__ . '/../includes/db.php';
       </div>
       <button type="submit" class="btn btn-primary w-full" style="justify-content:center;padding:12px">Sign In</button>
     </form>
-    <div class="divider">or</div>
-    <p style="text-align:center;font-size:.875rem;color:var(--text2)">
-      Don't have an account? <a href="<?= BASE_URL ?>/auth/register.php" style="color:var(--accent);font-weight:600">Join Free</a>
-    </p>
+
     <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
       <a href="<?= BASE_URL ?>/" style="color:var(--text2);font-size:.875rem;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text2)'">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>

@@ -99,10 +99,19 @@ Options -Indexes
     Deny from all
 </FilesMatch>
 
-# ── Protect cache directory ───────────────────────────────────
+# ── Protect cache directory & Custom Routing ──────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule ^cache/ - [F,L]
+
+    # Video click -> /video/watch/:id
+    RewriteRule ^video/watch/([0-9]+)/?$ watch.php?v=$1 [QSA,L]
+
+    # Reel click -> /reels/:id
+    RewriteRule ^reels/([0-9]+)/?$ reels.php?id=$1 [QSA,L]
+
+    # Reels feed -> /reels
+    RewriteRule ^reels/?$ reels.php [QSA,L]
 </IfModule>
 
 # ── Allow iframe embedding for the proxy script ──────────────────

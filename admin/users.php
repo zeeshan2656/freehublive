@@ -98,10 +98,6 @@ if ($view_uid) {
         <div>
           <a href="<?= BASE_URL ?>/admin/users.php" style="color:var(--text2);font-size:.8rem;text-decoration:none">&larr; All Users</a>
         </div>
-        <div class="flex gap-2" style="flex-wrap:wrap">
-          <a href="<?= BASE_URL ?>/channel.php?id=<?= $view_uid ?>" target="_blank" class="btn btn-outline btn-sm">View Channel</a>
-          <a href="<?= BASE_URL ?>/dashboard.php?uid=<?= $view_uid ?>" target="_blank" class="btn btn-outline btn-sm">Preview Dashboard</a>
-        </div>
       </div>
 
       <?php foreach (get_flash() as $f): ?><div class="alert alert-<?= $f['type'] ?>"><?= e($f['msg']) ?></div><?php endforeach; ?>

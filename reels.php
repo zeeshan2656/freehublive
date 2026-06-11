@@ -69,7 +69,7 @@ $_ssr_feed = array_map(function($v) {
         'comments'    => format_number((int)($v['comments_count'] ?? 0)),
         'ago'         => time_ago($v['created_at'] ?? date('Y-m-d H:i:s')),
         'is_reel'     => 1,
-        'url'         => BASE_URL . '/reels.php?id=' . $v['id'],
+        'url'         => BASE_URL . '/reels/' . $v['id'],
     ];
 }, $_ssr_reels);
 
@@ -504,6 +504,14 @@ function format_number(num) {
   return num;
 }
 
+function getYoutubeId(url) {
+  if (!url) return null;
+  if (url.match(/^[a-zA-Z0-9_-]{11}$/)) return url;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+}
+
 function appendReelSlide(v) {
   const container = document.getElementById('reels-slider');
   const slide = renderReelSlide(v);
@@ -519,10 +527,17 @@ function renderReelSlide(v) {
   slide.setAttribute('data-views', v.views || 0);
 
   const avatarUrl = v.avatar || '<?= BASE_URL ?>/assets/img/default-avatar.jpg';
-  const channelUrl = v.user_id ? `<?= BASE_URL ?>/channel.php?id=${v.user_id}&tab=videos` : `<?= BASE_URL ?>/search.php?q=${encodeURIComponent(v.channel)}`;
+  const ytId = getYoutubeId(v.video_src);
+
+  let mediaHtml = '';
+  if (ytId) {
+    mediaHtml = `<div class="reel-video" data-src="${v.video_src}" data-yt-id="${ytId}" style="width:100%; height:100%; background:#000;"></div>`;
+  } else {
+    mediaHtml = `<video class="reel-video" data-src="${v.video_src}" loop playsinline style="width:100%; height:100%; object-fit:contain; background:#000;" onerror="handleVideoError(this)"></video>`;
+  }
 
   slide.innerHTML = `
-    <video class="reel-video" data-src="${v.video_src}" loop playsinline style="width:100%; height:100%; object-fit:cover; background:#000;" onerror="handleVideoError(this)"></video>
+    ${mediaHtml}
     
     <div class="reel-play-overlay" onclick="togglePlay(this)">
       <div class="play-icon-shape">
@@ -536,19 +551,17 @@ function renderReelSlide(v) {
     <div class="ad-sponsored-container ad-mobile-only reels-mobile-overlay-ad" data-placement="reels_mobile_top" data-device-target="mobile" data-lazy="true" style="position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 120; margin: 0; padding: 0; background: transparent; width: 100%; max-width: 340px; display: flex; justify-content: center; pointer-events: auto;"></div>
 
     <div class="reel-info-overlay">
-      <div class="reel-creator-row">
-        <a href="${channelUrl}" style="display:flex; align-items:center; gap:10px; color:#fff; font-weight:700; text-decoration:none; pointer-events:auto;">
-          <img class="reel-creator-avatar" src="${avatarUrl}" alt="${escapeHtml(v.channel)}">
-          <span>@${escapeHtml(v.channel)}</span>
-        </a>
+      <div class="reel-creator-row" style="display:flex; align-items:center; gap:10px; color:#fff; font-weight:700;">
+        <img class="reel-creator-avatar" src="${avatarUrl}" alt="${escapeHtml(v.channel)}">
+        <span>@${escapeHtml(v.channel)}</span>
       </div>
       <h2 class="reel-title">${escapeHtml(v.description || v.title || '')}</h2>
     </div>
 
     <div class="reel-sidebar-actions">
-      <a href="${channelUrl}" class="reel-side-btn creator-profile-btn" title="Visit Channel">
+      <div class="reel-side-btn creator-profile-btn" style="cursor: default;">
         <img src="${avatarUrl}" alt="Creator">
-      </a>
+      </div>
 
       <button type="button" class="reel-side-btn like-btn" onclick="toggleLike(this, ${v.id})" title="Like">
         <div class="action-icon-wrap">
@@ -640,40 +653,63 @@ async function updateMediaSources(activeIndex) {
 
     // Active DOM range: [activeIndex - 2, activeIndex + 5]
     if (idx >= activeIndex - 2 && idx <= activeIndex + 5) {
-      let srcJustSet = false;
-      if (!video.src || video.src === '') {
-        const localBlob = await cache.getVideoBlob(reelId);
-        if (localBlob) {
-          const blobUrl = URL.createObjectURL(localBlob);
-          activeBlobUrls[reelId] = blobUrl;
-          video.src = blobUrl;
+      if (video.tagName === 'DIV' && video.hasAttribute('data-yt-id')) {
+        const ytId = video.getAttribute('data-yt-id');
+        if (idx === activeIndex) {
+          let iframe = video.querySelector('iframe');
+          if (!iframe) {
+            video.innerHTML = `<iframe class="youtube-player-iframe" src="https://www.youtube.com/embed/${ytId}?enablejsapi=1&autoplay=1&controls=0&loop=1&playlist=${ytId}&mute=${isMutedGlobal ? 1 : 0}&playsinline=1&rel=0" style="width:100%; height:100%; border:none; display:block;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+          } else {
+            if (iframe.contentWindow) {
+              iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+            }
+          }
+          const playOverlay = slide.querySelector('.reel-play-overlay');
+          if (playOverlay) playOverlay.classList.remove('paused');
         } else {
-          video.src = realSrc;
-        }
-        srcJustSet = true;
-      }
-
-      if (idx === activeIndex) {
-        video.setAttribute('preload', 'auto');
-        if (srcJustSet || video.paused) {
-          playActiveVideo(video, slide);
-        }
-      } else if (idx > activeIndex) {
-        video.setAttribute('preload', 'auto');
-        if (video.paused && video.readyState < 2) {
-          video.load();
+          video.innerHTML = '';
         }
       } else {
-        video.setAttribute('preload', 'metadata');
+        // Standard video file
+        let srcJustSet = false;
+        if (!video.src || video.src === '') {
+          const localBlob = await cache.getVideoBlob(reelId);
+          if (localBlob) {
+            const blobUrl = URL.createObjectURL(localBlob);
+            activeBlobUrls[reelId] = blobUrl;
+            video.src = blobUrl;
+          } else {
+            video.src = realSrc;
+          }
+          srcJustSet = true;
+        }
+
+        if (idx === activeIndex) {
+          video.setAttribute('preload', 'auto');
+          if (srcJustSet || video.paused) {
+            playActiveVideo(video, slide);
+          }
+        } else if (idx > activeIndex) {
+          video.setAttribute('preload', 'auto');
+          if (video.paused && video.readyState < 2) {
+            video.load();
+          }
+        } else {
+          video.setAttribute('preload', 'metadata');
+        }
       }
     } else {
-      video.removeAttribute('preload');
-      video.removeAttribute('src');
-      video.load();
+      if (video.tagName === 'DIV') {
+        video.innerHTML = '';
+      } else {
+        video.removeAttribute('preload');
+        video.removeAttribute('src');
+        video.load();
 
-      if (activeBlobUrls[reelId]) {
-        URL.revokeObjectURL(activeBlobUrls[reelId]);
-        delete activeBlobUrls[reelId];
+        if (activeBlobUrls[reelId]) {
+          URL.revokeObjectURL(activeBlobUrls[reelId]);
+          delete activeBlobUrls[reelId];
+        }
       }
     }
   }
@@ -692,7 +728,7 @@ async function precacheRange(startIdx, endIdx) {
     const slide = slides[idx];
     const reelId = parseInt(slide.getAttribute('data-id'), 10);
     const video = slide.querySelector('.reel-video');
-    if (!video) continue;
+    if (!video || video.tagName === 'DIV') continue;
 
     const realSrc = video.getAttribute('data-src');
 
@@ -951,7 +987,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (slides[currentActiveIndex]) {
       const activeVideo = slides[currentActiveIndex].querySelector('.reel-video');
       if (activeVideo && !isMutedGlobal) {
-        activeVideo.muted = false;
+        if (activeVideo.tagName === 'VIDEO') {
+          activeVideo.muted = false;
+        } else {
+          const iframe = activeVideo.querySelector('iframe');
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage(JSON.stringify({
+              event: 'command',
+              func: 'unmute',
+              args: ''
+            }), '*');
+          }
+        }
         updateMuteIcons();
       }
     }
@@ -1003,12 +1050,25 @@ function togglePlay(overlay) {
   const video = slide.querySelector('.reel-video');
   if (!video) return;
 
-  if (video.paused) {
-    video.play();
-    overlay.classList.remove('paused');
+  if (video.tagName === 'VIDEO') {
+    if (video.paused) {
+      video.play();
+      overlay.classList.remove('paused');
+    } else {
+      video.pause();
+      overlay.classList.add('paused');
+    }
   } else {
-    video.pause();
-    overlay.classList.add('paused');
+    const iframe = video.querySelector('iframe');
+    if (iframe && iframe.contentWindow) {
+      if (overlay.classList.contains('paused')) {
+        iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+        overlay.classList.remove('paused');
+      } else {
+        iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+        overlay.classList.add('paused');
+      }
+    }
   }
 }
 
@@ -1018,7 +1078,18 @@ function toggleMuteState() {
   
   const videos = document.querySelectorAll('.reel-video');
   videos.forEach(v => {
-    v.muted = isMutedGlobal;
+    if (v.tagName === 'VIDEO') {
+      v.muted = isMutedGlobal;
+    } else {
+      const iframe = v.querySelector('iframe');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({
+          event: 'command',
+          func: isMutedGlobal ? 'mute' : 'unmute',
+          args: ''
+        }), '*');
+      }
+    }
   });
 
   updateMuteIcons();
@@ -1119,7 +1190,9 @@ function handleDoubleTap(zone, id) {
 }
 
 function shareReel(id, btn) {
-  const url = `${window.location.origin}${window.location.pathname}?id=${id}`;
+  const baseUrlMeta = document.querySelector('meta[name="base-url"]');
+  const baseUrl = baseUrlMeta ? baseUrlMeta.content : (window.location.origin + '/vid/freehub');
+  const url = `${baseUrl}/reels/${id}`;
   navigator.clipboard.writeText(url).then(() => {
     const textSpan = btn.querySelector('span');
     const originalText = textSpan.textContent;

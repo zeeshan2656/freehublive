@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.06.06.1';
+    $migration_version = '2026.06.12.1';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -86,28 +86,7 @@ function fh_run_migrations(): void {
         // Ignore if already run or database/driver mismatch
     }
 
-    // ── Withdrawal requests table ───────────────────────────
-    if (!fh_table_exists('withdrawal_requests')) {
-        db_query("CREATE TABLE withdrawal_requests (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            user_id INT UNSIGNED NOT NULL,
-            amount DECIMAL(12,4) NOT NULL,
-            currency VARCHAR(3) NOT NULL DEFAULT 'USD',
-            payment_method VARCHAR(80) NOT NULL,
-            payment_details TEXT NOT NULL,
-            country VARCHAR(80) DEFAULT NULL,
-            status ENUM('pending','processing','paid','rejected') NOT NULL DEFAULT 'pending',
-            admin_note TEXT DEFAULT NULL,
-            due_by DATE DEFAULT NULL,
-            processed_at DATETIME DEFAULT NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_user (user_id)
-        ) ENGINE=InnoDB");
-    }
 
-    if (fh_table_exists('withdrawal_requests') && !fh_column_exists('withdrawal_requests', 'payment_proof')) {
-        db_query("ALTER TABLE withdrawal_requests ADD COLUMN payment_proof VARCHAR(255) DEFAULT NULL AFTER admin_note");
-    }
 
     // ── Password resets table ───────────────────────────────
     if (!fh_table_exists('password_resets')) {
@@ -123,18 +102,7 @@ function fh_run_migrations(): void {
         ) ENGINE=InnoDB");
     }
 
-    // ── Watch later / saved videos table ────────────────────
-    if (!fh_table_exists('watch_later')) {
-        db_query("CREATE TABLE watch_later (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            user_id INT UNSIGNED NOT NULL,
-            video_id INT UNSIGNED NOT NULL,
-            added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_wl (user_id, video_id),
-            FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB");
-    }
+
 
     // ── Referral conversions table ──────────────────────────
     if (!fh_table_exists('referral_conversions')) {
@@ -421,36 +389,7 @@ function fh_run_migrations(): void {
 
 
 
-    // ── Playlists table ────────────────────────────────────
-    if (!fh_table_exists('playlists')) {
-        db_query("CREATE TABLE playlists (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            user_id INT UNSIGNED NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            description TEXT DEFAULT NULL,
-            thumbnail VARCHAR(255) DEFAULT NULL,
-            visibility ENUM('public', 'private') NOT NULL DEFAULT 'private',
-            video_count INT UNSIGNED NOT NULL DEFAULT 0,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_user (user_id),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB");
-    }
 
-    // ── Playlist items table ───────────────────────────────
-    if (!fh_table_exists('playlist_items')) {
-        db_query("CREATE TABLE playlist_items (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            playlist_id INT UNSIGNED NOT NULL,
-            video_id INT UNSIGNED NOT NULL,
-            position INT UNSIGNED NOT NULL DEFAULT 0,
-            added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_playlist_video (playlist_id, video_id),
-            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
-            FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB");
-    }
 
     // ── CPM and Placement Assignment Refactor (2026.05.30.1) ────
     if (fh_table_exists('ad_logs')) {
@@ -571,14 +510,7 @@ function fh_run_migrations(): void {
             db_query("DELETE FROM comments WHERE video_id NOT IN (SELECT id FROM videos)");
             db_query("DELETE FROM comments WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM users)");
         }
-        if (fh_table_exists('playlist_items')) {
-            db_query("DELETE FROM playlist_items WHERE playlist_id NOT IN (SELECT id FROM playlists)");
-            db_query("DELETE FROM playlist_items WHERE video_id NOT IN (SELECT id FROM videos)");
-        }
-        if (fh_table_exists('watch_later')) {
-            db_query("DELETE FROM watch_later WHERE user_id NOT IN (SELECT id FROM users)");
-            db_query("DELETE FROM watch_later WHERE video_id NOT IN (SELECT id FROM videos)");
-        }
+
         if (fh_table_exists('ad_logs')) {
             db_query("DELETE FROM ad_logs WHERE video_id IS NOT NULL AND video_id NOT IN (SELECT id FROM videos)");
             db_query("DELETE FROM ad_logs WHERE viewer_id IS NOT NULL AND viewer_id NOT IN (SELECT id FROM users)");

@@ -13,7 +13,6 @@
       echo $ad_code_b . "\n";
   endif;
   ?>
-  <?php require_once __DIR__ . '/partials/tracker_js.php'; ?>
   </body>
   </html>
 <?php else: ?>
@@ -47,7 +46,6 @@
   </div> <!-- /dashboard-main-viewport -->
 </div> <!-- /dashboard-layout -->
 
-<script src="<?= fh_asset_url('assets/js/dashboard-router.js') ?>" defer></script>
 <?php endif; ?>
 <?php
 if (!$is_admin_page && setting('ad_code_body_enabled', '0') === '1' && setting('ad_code_body_placement', 'bottom') === 'bottom' && !empty($ad_code_b = setting('ad_code_body'))):
@@ -55,7 +53,6 @@ if (!$is_admin_page && setting('ad_code_body_enabled', '0') === '1' && setting('
 endif;
 ?>
 <?php require_once __DIR__ . '/partials/global-upload-widget.php'; ?>
-<?php require_once __DIR__ . '/partials/tracker_js.php'; ?>
 
 </body>
 </html>

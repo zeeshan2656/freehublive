@@ -158,7 +158,7 @@ require_once __DIR__ . '/../includes/header.php';
               <video src="<?= reel_url($r['video_url']) ?>#t=0.1" muted playsinline style="width:50px; aspect-ratio:9/16; object-fit:cover; border-radius:4px; background:#000"></video>
             </td>
             <td style="max-width:300px; font-weight:600; padding:12px">
-              <a href="<?= BASE_URL ?>/reels.php?id=<?= $r['id'] ?>" target="_blank" style="color:var(--accent); text-decoration:none">
+              <a href="<?= BASE_URL ?>/reels/<?= $r['id'] ?>" target="_blank" style="color:var(--accent); text-decoration:none">
                 <?= $r['title'] ? e(truncate($r['title'], 50)) : '<em class="text-muted" style="font-size:0.8rem">Untitled Reel</em>' ?>
               </a>
               <div class="text-xs text-muted" style="margin-top:2px"><?= e($r['status']) ?></div>

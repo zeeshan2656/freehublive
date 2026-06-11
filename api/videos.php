@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
                 'comments'    => format_number((int)$v['comments_count']),
                 'ago'         => time_ago($v['created_at'] ?? ''),
                 'is_reel'     => 1,
-                'url'         => BASE_URL . '/reels.php?id=' . $v['id'],
+                'url'         => BASE_URL . '/reels/' . $v['id'],
             ];
         }, $videos);
 
@@ -168,13 +168,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
             'id'           => $v['id'],
             'user_id'      => (int)$v['user_id'],
             'title'        => $v['title'],
-            'thumbnail'    => thumb_url($v['thumbnail']),
+            'thumbnail'    => thumb_url($v['thumbnail'], $v['video_url']),
             'duration_fmt' => $durSec > 0 ? format_duration($durSec) : '',
             'views'        => format_number((int)$v['views']),
             'ago'          => time_ago($v['published_at'] ?? ''),
             'channel'      => $v['channel_name'] ?? $v['username'],
             'avatar'       => avatar_url($v['avatar']),
-            'url'          => BASE_URL . '/watch.php?v=' . $v['id'] . $ref_param,
+            'url'          => BASE_URL . '/video/watch/' . $v['id'] . ($ref_param ? '?' . ltrim($ref_param, '&') : ''),
             'is_reel'      => 0,
             'video_src'    => video_url($v['video_url']),
         ];
@@ -374,61 +374,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         json_success($out);
     }
 
-    // Watch Later
-    if ($action === 'watch_later') {
-        $vid = (int)($body['video_id'] ?? 0);
-        if (!$vid) json_error('Invalid video');
-        $exists = db_fetch("SELECT id FROM watch_later WHERE user_id=? AND video_id=?", [$uid,$vid]);
-        if ($exists) {
-            db_query("DELETE FROM watch_later WHERE user_id=? AND video_id=?", [$uid,$vid]);
-            json_success(['saved'=>false]);
-        } else {
-            db_insert('watch_later', ['user_id'=>$uid,'video_id'=>$vid]);
-            json_success(['saved'=>true]);
-        }
-    }
 
-    // Subscribe
-    if ($action === 'subscribe') {
-        $channel_id = (int)($body['channel_id'] ?? 0);
-        if (!$channel_id || $channel_id === $uid) json_error('Invalid');
-        $exists = db_fetch("SELECT id FROM subscriptions WHERE subscriber_id=? AND channel_id=?", [$uid,$channel_id]);
-        if ($exists) {
-            db_query("DELETE FROM subscriptions WHERE subscriber_id=? AND channel_id=?", [$uid,$channel_id]);
-            db_query("UPDATE users SET subscribers=GREATEST(0,subscribers-1) WHERE id=?", [$channel_id]);
-            json_success(['subscribed'=>false]);
-        } else {
-            db_insert('subscriptions', ['subscriber_id'=>$uid,'channel_id'=>$channel_id]);
-            db_query("UPDATE users SET subscribers=subscribers+1 WHERE id=?", [$channel_id]);
-            json_success(['subscribed'=>true]);
-        }
-    }
-
-    // Create playlist
-    if ($action === 'create_playlist') {
-        if (!is_creator()) json_error('Unauthorized', 403);
-        $name = trim($body['name'] ?? '');
-        $desc = trim($body['description'] ?? '');
-        if (empty($name)) json_error('Playlist name required');
-        db_insert('playlists', [
-            'user_id' => $uid,
-            'title' => $name,
-            'description' => $desc,
-            'visibility' => 'private'
-        ]);
-        json_success(['message' => 'Playlist created']);
-    }
-
-    // Delete playlist
-    if ($action === 'delete_playlist') {
-        $playlist_id = (int)($body['playlist_id'] ?? 0);
-        if (!$playlist_id) json_error('Invalid playlist');
-        $playlist = db_fetch("SELECT user_id FROM playlists WHERE id=?", [$playlist_id]);
-        if (!$playlist) json_error('Playlist not found', 404);
-        if ($playlist['user_id'] != $uid) json_error('Unauthorized', 403);
-        db_query("DELETE FROM playlists WHERE id=?", [$playlist_id]);
-        json_success(['message' => 'Playlist deleted']);
-    }
 
     // Reel React (like/dislike)
     if ($action === 'reel_react') {
