@@ -101,7 +101,7 @@ require_once __DIR__ . '/../includes/header.php';
               <td style="padding: 10px 8px;">
                 <div class="flex gap-3" style="align-items: center;">
                   <div style="position: relative; flex-shrink: 0; width: 72px; aspect-ratio: 16/9; border-radius: 4px; overflow: hidden; background: #0c0c0d;">
-                    <img src="<?= thumb_url($v['thumbnail']) ?>" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy">
+                    <img src="<?= thumb_url($v['thumbnail'], $v['video_url']) ?>" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy">
                     <span style="position: absolute; bottom: 3px; right: 3px; background: rgba(0,0,0,0.85); color: #fff; font-size: 0.6rem; font-weight: 700; padding: 1px 3px; border-radius: 2px; letter-spacing: 0.2px;">
                       <?= format_duration((int)$v['duration']) ?>
                     </span>
