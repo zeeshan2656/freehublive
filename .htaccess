@@ -8,13 +8,8 @@ Options -Indexes
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>
 
-# ── Block uploads/includes direct access ──────────────────────
-<FilesMatch "\.(php)$">
-    <If "%{REQUEST_URI} =~ m#(^/FreeHub\.Live)?/(cache|uploads)/.*#">
-        Order Deny,Allow
-        Deny from all
-    </If>
-</FilesMatch>
+# Block direct access to cache and uploads is now handled by subfolder .htaccess files
+
 
 # ── Gzip compression (expanded & forced) ─────────────────────
 <IfModule mod_deflate.c>
