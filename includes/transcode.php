@@ -75,6 +75,17 @@ if ($probe_out) {
     }
 }
 
+// Probe if video has audio stream
+$probe_audio_cmd = "ffprobe -v error -select_streams a -show_entries stream=index -of json $escaped_input 2>&1";
+$probe_audio_out = @shell_exec($probe_audio_cmd);
+$has_audio = false;
+if ($probe_audio_out) {
+    $probe_audio_data = json_decode($probe_audio_out, true);
+    if (!empty($probe_audio_data['streams'])) {
+        $has_audio = true;
+    }
+}
+
 // Ensure duration is non-zero
 if ($duration <= 0) {
     $duration = ($type === 'reel') ? 15 : 60; // fallback default
@@ -158,8 +169,12 @@ $idx = 0;
 $var_stream_map = [];
 foreach ($resolutions as $key => $res) {
     $args[] = "-map \"[v{$idx}out]\" -c:v:$idx libx264 -b:v:$idx {$res['bv']} -maxrate:v:$idx {$res['maxv']} -bufsize:v:$idx {$res['buf']}";
-    $args[] = "-map a:0 -c:a:$idx aac -b:a:$idx {$res['ba']}";
-    $var_stream_map[] = "v:$idx,a:$idx";
+    if ($has_audio) {
+        $args[] = "-map a:0 -c:a:$idx aac -b:a:$idx {$res['ba']}";
+        $var_stream_map[] = "v:$idx,a:$idx";
+    } else {
+        $var_stream_map[] = "v:$idx";
+    }
     $idx++;
 }
 

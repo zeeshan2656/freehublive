@@ -1262,9 +1262,17 @@ require_once __DIR__ . '/../includes/header.php';
           body: JSON.stringify({meta}),
           signal: session.abortController.signal
         });
-        const initData = await initRes.json();
+        let initData;
+        const initText = await initRes.text();
+        try {
+          initData = JSON.parse(initText);
+        } catch (jsonErr) {
+          console.error("Init JSON parse error. Raw response text:", initText);
+          setUploadFailed(session, 'Init error: ' + (initText.substring(0, 150) || 'Empty server response'));
+          return;
+        }
         if (!initData.success) {
-          setUploadFailed(session, 'Initialization failed.');
+          setUploadFailed(session, initData.message || 'Initialization failed.');
           return;
         }
 
@@ -1524,9 +1532,17 @@ require_once __DIR__ . '/../includes/header.php';
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({meta})
         });
-        const initData = await initRes.json();
+        let initData;
+        const initText = await initRes.text();
+        try {
+          initData = JSON.parse(initText);
+        } catch (jsonErr) {
+          console.error("Import Init JSON parse error. Raw response text:", initText);
+          setUploadFailed(session, 'Import Init error: ' + (initText.substring(0, 150) || 'Empty server response'));
+          return;
+        }
         if (!initData.success) {
-          setUploadFailed(session, 'Import initialization failed.');
+          setUploadFailed(session, initData.message || 'Import initialization failed.');
           return;
         }
 

@@ -197,11 +197,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ], 'id=?', [$sid]);
 
             $pdo->commit();
-            
-            // Trigger HLS transcoding and thumbnail extraction asynchronously
-            fh_run_background_transcode($video_id, $is_reel === 1 ? 'reel' : 'video');
         } catch (Throwable $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             // Clean up the finalized video file on transaction failure
             if (!$is_embed && isset($finalPath) && is_file($finalPath)) {
                 @unlink($finalPath);
@@ -211,6 +210,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             db_update('upload_sessions', ['status' => 'failed'], 'id=?', [$sid]);
             json_error('Publish failed: ' . $e->getMessage(), 500);
+        }
+
+        // Trigger HLS transcoding and thumbnail extraction asynchronously
+        try {
+            fh_run_background_transcode($video_id, $is_reel === 1 ? 'reel' : 'video');
+        } catch (Throwable $transcodeErr) {
+            @error_log('Background transcoding trigger failed: ' . $transcodeErr->getMessage());
         }
 
         @ignore_user_abort(true);
