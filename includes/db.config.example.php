@@ -12,3 +12,4 @@ return [
     'name'    => 'freehub',
     'charset' => 'utf8mb4',
 ];
+
