@@ -199,12 +199,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
 
 // ── POST actions ─────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!is_logged_in()) json_error('Login required', 401);
-    if ((auth_user()['status'] ?? 'pending') !== 'active') {
-        json_error('Account not active', 403);
-    }
     $body = json_decode(file_get_contents('php://input'), true) ?? [];
-    $uid  = auth_user()['id'];
+    $guest_allowed_actions = ['react', 'comment', 'reel_react', 'reel_comment'];
+    $is_guest_action = in_array($action, $guest_allowed_actions, true);
+
+    if (!$is_guest_action) {
+        if (!is_logged_in()) json_error('Login required', 401);
+        if ((auth_user()['status'] ?? 'pending') !== 'active') {
+            json_error('Account not active', 403);
+        }
+    }
+
+    $uid = is_logged_in() ? auth_user()['id'] : null;
 
     // React (like/dislike)
     if ($action === 'react') {
@@ -213,20 +219,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$vid) json_error('Invalid video');
 
         $new_reaction = $type;
-        $existing = db_fetch("SELECT id,type FROM video_reactions WHERE video_id=? AND user_id=?", [$vid,$uid]);
-        if ($existing) {
-            if ($existing['type'] === $type) {
-                db_query("DELETE FROM video_reactions WHERE id=?", [$existing['id']]);
-                $new_reaction = 'none';
+        if ($uid) {
+            $existing = db_fetch("SELECT id,type FROM video_reactions WHERE video_id=? AND user_id=?", [$vid,$uid]);
+            if ($existing) {
+                if ($existing['type'] === $type) {
+                    db_query("DELETE FROM video_reactions WHERE id=?", [$existing['id']]);
+                    $new_reaction = 'none';
+                } else {
+                    db_update('video_reactions', ['type'=>$type], 'id=?', [$existing['id']]);
+                }
             } else {
-                db_update('video_reactions', ['type'=>$type], 'id=?', [$existing['id']]);
+                db_insert('video_reactions', ['video_id'=>$vid,'user_id'=>$uid,'type'=>$type]);
             }
+            $likes = db_count('video_reactions', "video_id=? AND type='like'", [$vid]);
+            db_update('videos', ['likes'=>$likes], 'id=?', [$vid]);
         } else {
-            db_insert('video_reactions', ['video_id'=>$vid,'user_id'=>$uid,'type'=>$type]);
+            // Guest reaction tracking using PHP session
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            if (!isset($_SESSION['video_reactions'])) {
+                $_SESSION['video_reactions'] = [];
+            }
+            $old_reaction = $_SESSION['video_reactions'][$vid] ?? 'none';
+            if ($old_reaction === $type) {
+                unset($_SESSION['video_reactions'][$vid]);
+                $new_reaction = 'none';
+                if ($type === 'like') {
+                    db_query("UPDATE videos SET likes = GREATEST(0, CAST(likes AS SIGNED) - 1) WHERE id = ?", [$vid]);
+                } else {
+                    db_query("UPDATE videos SET dislikes = GREATEST(0, CAST(dislikes AS SIGNED) - 1) WHERE id = ?", [$vid]);
+                }
+            } else {
+                $_SESSION['video_reactions'][$vid] = $type;
+                if ($old_reaction === 'none') {
+                    if ($type === 'like') {
+                        db_query("UPDATE videos SET likes = likes + 1 WHERE id = ?", [$vid]);
+                    } else {
+                        db_query("UPDATE videos SET dislikes = dislikes + 1 WHERE id = ?", [$vid]);
+                    }
+                } else {
+                    if ($type === 'like') {
+                        db_query("UPDATE videos SET likes = likes + 1, dislikes = GREATEST(0, CAST(dislikes AS SIGNED) - 1) WHERE id = ?", [$vid]);
+                    } else {
+                        db_query("UPDATE videos SET dislikes = dislikes + 1, likes = GREATEST(0, CAST(likes AS SIGNED) - 1) WHERE id = ?", [$vid]);
+                    }
+                }
+            }
+            $video = db_fetch("SELECT likes FROM videos WHERE id=?", [$vid]);
+            $likes = (int)($video['likes'] ?? 0);
         }
-        $video = db_fetch("SELECT likes,dislikes FROM videos WHERE id=?", [$vid]);
-        $likes = db_count('video_reactions', "video_id=? AND type='like'", [$vid]);
-        db_update('videos', ['likes'=>$likes], 'id=?', [$vid]);
         json_success(['likes' => format_number($likes), 'reaction' => $new_reaction]);
     }
 
@@ -348,9 +390,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $vid     = (int)($body['video_id'] ?? 0);
         $content = trim($body['content'] ?? '');
         if (!$vid || strlen($content) < 1) json_error('Invalid data');
-        if (!rate_limit('comment_'.$uid, 10, 60)) json_error('Slow down!');
+        $rl_key  = $uid ? 'comment_'.$uid : 'comment_guest_'.($_SERVER['REMOTE_ADDR'] ?? 'anon');
+        if (!rate_limit($rl_key, 10, 60)) json_error('Slow down!');
         $content = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
-        db_insert('comments', ['video_id'=>$vid,'user_id'=>$uid,'content'=>$content]);
+        $comment_uid = $uid ?: get_guest_user_id();
+        db_insert('comments', ['video_id'=>$vid,'user_id'=>$comment_uid,'content'=>$content]);
         db_query("UPDATE videos SET comments_count=comments_count+1 WHERE id=?", [$vid]);
         json_success(null, 'Comment posted');
     }
@@ -381,17 +425,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reel_id = (int)($body['video_id'] ?? 0);
         if (!$reel_id) json_error('Invalid reel');
 
-        $existing = db_fetch("SELECT id, type FROM reel_reactions WHERE reel_id=? AND user_id=?", [$reel_id, $uid]);
         $new_reaction = 'like';
-        if ($existing) {
-            db_query("DELETE FROM reel_reactions WHERE id=?", [$existing['id']]);
-            $new_reaction = 'none';
+        if ($uid) {
+            $existing = db_fetch("SELECT id, type FROM reel_reactions WHERE reel_id=? AND user_id=?", [$reel_id, $uid]);
+            if ($existing) {
+                db_query("DELETE FROM reel_reactions WHERE id=?", [$existing['id']]);
+                $new_reaction = 'none';
+            } else {
+                db_insert('reel_reactions', ['reel_id'=>$reel_id, 'user_id'=>$uid, 'type'=>'like']);
+            }
+            $likes = db_count('reel_reactions', "reel_id=? AND type='like'", [$reel_id]);
+            db_update('reels', ['likes'=>$likes], 'id=?', [$reel_id]);
         } else {
-            db_insert('reel_reactions', ['reel_id'=>$reel_id, 'user_id'=>$uid, 'type'=>'like']);
+            // Guest reel reaction tracking using PHP session
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            if (!isset($_SESSION['reel_reactions'])) {
+                $_SESSION['reel_reactions'] = [];
+            }
+            $old_reaction = $_SESSION['reel_reactions'][$reel_id] ?? 'none';
+            if ($old_reaction === 'like') {
+                unset($_SESSION['reel_reactions'][$reel_id]);
+                $new_reaction = 'none';
+                db_query("UPDATE reels SET likes = GREATEST(0, CAST(likes AS SIGNED) - 1) WHERE id = ?", [$reel_id]);
+            } else {
+                $_SESSION['reel_reactions'][$reel_id] = 'like';
+                db_query("UPDATE reels SET likes = likes + 1 WHERE id = ?", [$reel_id]);
+            }
+            $reel = db_fetch("SELECT likes FROM reels WHERE id=?", [$reel_id]);
+            $likes = (int)($reel['likes'] ?? 0);
         }
-        
-        $likes = db_count('reel_reactions', "reel_id=? AND type='like'", [$reel_id]);
-        db_update('reels', ['likes'=>$likes], 'id=?', [$reel_id]);
         json_success(['likes' => format_number($likes), 'user_reaction' => $new_reaction]);
     }
 
@@ -400,9 +464,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reel_id = (int)($body['video_id'] ?? 0);
         $content = trim($body['content'] ?? '');
         if (!$reel_id || strlen($content) < 1) json_error('Invalid data');
-        if (!rate_limit('comment_'.$uid, 10, 60)) json_error('Slow down!');
+        $rl_key  = $uid ? 'comment_'.$uid : 'comment_guest_'.($_SERVER['REMOTE_ADDR'] ?? 'anon');
+        if (!rate_limit($rl_key, 10, 60)) json_error('Slow down!');
         $content = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
-        db_insert('reel_comments', ['reel_id'=>$reel_id, 'user_id'=>$uid, 'content'=>$content]);
+        $comment_uid = $uid ?: get_guest_user_id();
+        db_insert('reel_comments', ['reel_id'=>$reel_id, 'user_id'=>$comment_uid, 'content'=>$content]);
         db_query("UPDATE reels SET comments_count=comments_count+1 WHERE id=?", [$reel_id]);
         json_success(null, 'Comment posted');
     }

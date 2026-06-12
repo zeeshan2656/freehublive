@@ -117,16 +117,10 @@ require_once __DIR__ . '/includes/header.php';
       <!-- Injected dynamically -->
     </div>
     <div class="comments-panel-footer">
-      <?php if (is_logged_in()): ?>
-        <form onsubmit="postReelComment(event)">
-          <input type="text" id="new-comment-field" placeholder="Add a comment..." required autocomplete="off">
-          <button type="submit" class="post-comment-btn">Post</button>
-        </form>
-      <?php else: ?>
-        <div style="text-align:center; padding: 10px; font-size: 0.85rem; color: var(--text2);">
-          Please <a href="<?= BASE_URL ?>/auth/login.php" style="color:var(--accent); font-weight:700;">login</a> to comment.
-        </div>
-      <?php endif; ?>
+      <form onsubmit="postReelComment(event)">
+        <input type="text" id="new-comment-field" placeholder="Add a comment..." required autocomplete="off">
+        <button type="submit" class="post-comment-btn">Post</button>
+      </form>
     </div>
   </div>
 </div> <!-- /reels-feed-container -->
@@ -567,14 +561,14 @@ function renderReelSlide(v) {
         <div class="action-icon-wrap">
           <svg class="heart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         </div>
-        <span class="like-count"></span>
+        <span class="like-count">${v.likes || ''}</span>
       </button>
 
       <button type="button" class="reel-side-btn comment-trigger-btn" onclick="openComments(${v.id})" title="Comments">
         <div class="action-icon-wrap">
           <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         </div>
-        <span class="comment-count"></span>
+        <span class="comment-count">${v.comments || ''}</span>
       </button>
 
       <button type="button" class="reel-side-btn share-btn" onclick="shareReel(${v.id}, this)" title="Copy Link">

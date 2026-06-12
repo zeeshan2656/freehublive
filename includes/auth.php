@@ -143,3 +143,36 @@ function rate_limit(string $key, int $max, int $window = 60): bool {
     file_put_contents($file, json_encode($data), LOCK_EX);
     return true;
 }
+
+function get_guest_user_id(): int {
+    static $guest_id = null;
+    if ($guest_id !== null) {
+        return $guest_id;
+    }
+    $guest = db_fetch("SELECT id FROM users WHERE username = 'guest'");
+    if ($guest) {
+        $guest_id = (int)$guest['id'];
+        return $guest_id;
+    }
+    // Create guest user
+    try {
+        $guest_id = db_insert('users', [
+            'username' => 'guest',
+            'email' => 'guest@freehub.live',
+            'password' => password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT),
+            'role' => 'viewer',
+            'status' => 'active',
+            'channel_name' => 'Guest User',
+            'ref_code' => 'GUEST'
+        ]);
+        return (int)$guest_id;
+    } catch (Throwable $e) {
+        // Fallback in case of collision or other issues
+        $guest = db_fetch("SELECT id FROM users WHERE username = 'guest'");
+        if ($guest) {
+            $guest_id = (int)$guest['id'];
+            return $guest_id;
+        }
+    }
+    return 0;
+}

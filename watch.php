@@ -104,6 +104,8 @@ $user_reaction = null;
 if (is_logged_in()) {
     $r = db_fetch("SELECT type FROM video_reactions WHERE video_id=? AND user_id=?", [$vid, auth_user()['id']]);
     $user_reaction = $r['type'] ?? null;
+} else {
+    $user_reaction = $_SESSION['video_reactions'][$vid] ?? null;
 }
 
 $meta_title = $video['title'] . ' — ' . setting('site_name','FreeHub');
@@ -707,7 +709,6 @@ if (player) {
 // Reactions (Like/Dislike)
 async function handleReact(e, type) {
   if (e) { e.preventDefault(); e.stopPropagation(); }
-  if (!requireLogin()) return;
   const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=react',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({video_id:<?= $vid ?>,type:type})
@@ -767,7 +768,6 @@ document.getElementById('close-comments')?.addEventListener('click',function(e){
 // Post Comment
 document.getElementById('comment-form')?.addEventListener('submit',async function(e){
   e.preventDefault();
-  if (!requireLogin()) return;
   const input=document.getElementById('comment-input');
   if(!input.value.trim()) return;
   const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=comment',{
