@@ -87,30 +87,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Finalize: create video or reel record ──
     if (!empty($_GET['finalize'])) {
-        // Validate temp file exists
-        if (!is_file($tempPath)) {
-            json_error('No upload data found. Upload may have been cleaned up.', 404);
-        }
+        $filename = $_GET['filename'] ?? '';
+        $is_embed = (str_starts_with($filename, 'http://') || str_starts_with($filename, 'https://'));
 
-        $fsize = filesize($tempPath);
-        if ($fsize <= 0) {
-            @unlink($tempPath);
-            db_update('upload_sessions', ['status' => 'failed'], 'id=?', [$sid]);
-            json_error('Verification failed: empty file.');
-        }
+        if ($is_embed) {
+            $finalName = $filename;
+            $fsize = 0;
+        } else {
+            // Validate temp file exists
+            if (!is_file($tempPath)) {
+                json_error('No upload data found. Upload may have been cleaned up.', 404);
+            }
 
-        // Integrity check: if total_size was provided, validate it matches
-        $expectedSize = (int)($_GET['expected_size'] ?? 0);
-        if ($expectedSize > 0 && abs($fsize - $expectedSize) > 1024) {
-            // Allow 1KB tolerance for rounding
-            db_update('upload_sessions', ['status' => 'failed'], 'id=?', [$sid]);
-            json_error("Integrity check failed: expected {$expectedSize} bytes, got {$fsize} bytes.", 400);
-        }
+            $fsize = filesize($tempPath);
+            if ($fsize <= 0) {
+                @unlink($tempPath);
+                db_update('upload_sessions', ['status' => 'failed'], 'id=?', [$sid]);
+                json_error('Verification failed: empty file.');
+            }
 
-        $ext = pathinfo($_GET['filename'] ?? '', PATHINFO_EXTENSION) ?: 'mp4';
-        $finalName = unique_filename($ext);
-        $finalPath = $targetPath . $finalName;
-        if (!rename($tempPath, $finalPath)) json_error('Could not finalize upload', 500);
+            // Integrity check: if total_size was provided, validate it matches
+            $expectedSize = (int)($_GET['expected_size'] ?? 0);
+            if ($expectedSize > 0 && abs($fsize - $expectedSize) > 1024) {
+                // Allow 1KB tolerance for rounding
+                db_update('upload_sessions', ['status' => 'failed'], 'id=?', [$sid]);
+                json_error("Integrity check failed: expected {$expectedSize} bytes, got {$fsize} bytes.", 400);
+            }
+
+            $ext = pathinfo($filename, PATHINFO_EXTENSION) ?: 'mp4';
+            $finalName = unique_filename($ext);
+            $finalPath = $targetPath . $finalName;
+            if (!rename($tempPath, $finalPath)) json_error('Could not finalize upload', 500);
+        }
 
         // Read metadata from session
         $title       = $meta['title'] ?? '';
@@ -192,7 +200,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             $pdo->rollBack();
             // Clean up the finalized video file on transaction failure
-            @unlink($finalPath);
+            if (!$is_embed && isset($finalPath) && is_file($finalPath)) {
+                @unlink($finalPath);
+            }
             if ($thumbnail && !str_starts_with($thumbnail, 'http')) {
                 @unlink(THUMB_PATH . $thumbnail);
             }

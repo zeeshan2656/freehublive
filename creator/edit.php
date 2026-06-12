@@ -33,11 +33,6 @@ if (empty($selected_categories) && $video['category_id']) {
 }
 
 $video_owner_id = (int)$video['user_id'];
-$user_playlists = db_fetchAll("SELECT id, title FROM playlists WHERE user_id = ? ORDER BY title ASC", [$video_owner_id]);
-$selected_playlists = array_column(
-    db_fetchAll("SELECT playlist_id FROM playlist_videos WHERE video_id = ?", [$vid]),
-    'playlist_id'
-);
 
 $error   = '';
 $success = '';
@@ -52,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $category_id  = !empty($category_ids) ? $category_ids[0] : 0;
         $visibility  = in_array($_POST['visibility'] ?? '', ['public','unlisted','private']) ? $_POST['visibility'] : 'public';
         $allow_comments = isset($_POST['allow_comments']) ? 1 : 0;
-        $playlist_ids = array_map('intval', $_POST['playlist_ids'] ?? []);
+
 
         if (strlen($title) < 3) {
             $error = 'Title must be at least 3 characters.';
@@ -66,29 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'allow_comments' => $allow_comments,
             ];
 
-            // Handle new thumbnail upload
-            if (!empty($_FILES['thumbnail']['name'])) {
-                $tfile = $_FILES['thumbnail'];
-                $tmime = mime_content_type($tfile['tmp_name']);
-                if (allowed_image($tmime)) {
-                    if (!is_dir(THUMB_PATH)) mkdir(THUMB_PATH, 0755, true);
-                    $ext = strtolower(pathinfo($tfile['name'], PATHINFO_EXTENSION));
-                    $tfn = unique_filename($ext ?: 'jpg');
-                    move_uploaded_file($tfile['tmp_name'], THUMB_PATH . $tfn);
-                    // Delete old thumb
-                    $old = $video['thumbnail'];
-                    if ($old && !str_starts_with($old, 'http') && file_exists(THUMB_PATH . $old)) {
-                        @unlink(THUMB_PATH . $old);
-                    }
-                    $updateData['thumbnail'] = $tfn;
-                } else {
-                    $error = 'Invalid image format.';
-                }
-            }
-
-            if (empty($video['thumbnail']) && empty($updateData['thumbnail'])) {
-                $updateData['thumbnail'] = 'default-thumb.jpg';
-            }
+            // Thumbnail management is now handled immediately via AJAX.
+            // No file upload or base64 decoding is needed on final form submission.
 
             if (!$error) {
                 db_update('videos', $updateData, 'id=?', [$vid]);
@@ -104,38 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                // Sync playlists
-                $current_pids = array_column(
-                    db_fetchAll("SELECT playlist_id FROM playlist_videos WHERE video_id = ?", [$vid]),
-                    'playlist_id'
-                );
 
-                $to_remove = array_diff($current_pids, $playlist_ids);
-                foreach ($to_remove as $pid) {
-                    db_query("DELETE FROM playlist_videos WHERE playlist_id = ? AND video_id = ?", [$pid, $vid]);
-                    db_query("DELETE FROM playlist_items WHERE playlist_id = ? AND video_id = ?", [$pid, $vid]);
-                    db_query("UPDATE playlists SET video_count = GREATEST(0, CAST(video_count AS SIGNED) - 1) WHERE id = ?", [$pid]);
-                }
-
-                $to_add = array_diff($playlist_ids, $current_pids);
-                foreach ($to_add as $pid) {
-                    $playlist = db_fetch("SELECT id FROM playlists WHERE id = ? AND (user_id = ? OR ? IN (SELECT id FROM users WHERE role='admin' AND id=?))", [$pid, $video_owner_id, $uid, $uid]);
-                    if ($playlist) {
-                        $max_sort = (int)db_fetch("SELECT MAX(sort_order) as m FROM playlist_videos WHERE playlist_id = ?", [$pid])['m'];
-                        db_insert('playlist_videos', [
-                            'playlist_id' => $pid,
-                            'video_id'    => $vid,
-                            'sort_order'  => $max_sort + 1
-                        ]);
-                        $max_pos = (int)db_fetch("SELECT MAX(position) as m FROM playlist_items WHERE playlist_id = ?", [$pid])['m'];
-                        db_insert('playlist_items', [
-                            'playlist_id' => $pid,
-                            'video_id'    => $vid,
-                            'position'    => $max_pos + 1
-                        ]);
-                        db_query("UPDATE playlists SET video_count = video_count + 1 WHERE id = ?", [$pid]);
-                    }
-                }
                 
                 // Refresh video data and selected categories/playlists
                 $video = db_fetch("SELECT * FROM videos WHERE id=?", [$vid]);
@@ -147,10 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $selected_categories = [(int)$video['category_id']];
                 }
 
-                $selected_playlists = array_column(
-                    db_fetchAll("SELECT playlist_id FROM playlist_videos WHERE video_id = ?", [$vid]),
-                    'playlist_id'
-                );
+
                 
                 $success = 'Video updated successfully!';
             }
@@ -220,22 +160,6 @@ require_once __DIR__ . '/../includes/header.php';
               </div>
 
               <div class="form-group">
-                <label class="form-label">Playlists (Assign to one or more)</label>
-                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));gap:10px;background:var(--bg3);padding:12px;border-radius:var(--radius);border:1px solid var(--border);max-height:150px;overflow-y:auto">
-                  <?php if (!empty($user_playlists)): ?>
-                    <?php foreach ($user_playlists as $pl): ?>
-                    <label class="flex gap-2" style="font-size:.85rem;cursor:pointer;user-select:none;align-items:center">
-                      <input type="checkbox" name="playlist_ids[]" value="<?= $pl['id'] ?>" <?= in_array($pl['id'], $selected_playlists) ? 'checked' : '' ?>>
-                      <span><?= e($pl['title']) ?></span>
-                    </label>
-                    <?php endforeach; ?>
-                  <?php else: ?>
-                    <span class="text-muted text-xs" style="padding:4px">No playlists created yet.</span>
-                  <?php endif; ?>
-                </div>
-              </div>
-              
-              <div class="form-group" style="grid-column: 1 / -1">
                 <label class="form-label">Visibility</label>
                 <select class="form-input form-select" name="visibility">
                   <?php foreach (['public','unlisted','private'] as $vis): ?>
@@ -279,16 +203,55 @@ require_once __DIR__ . '/../includes/header.php';
         <!-- Right: Thumbnail + Actions -->
         <div>
           <?php if (!(int)$video['is_reel']): ?>
+          <style>
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .thumb-item {
+            transition: transform 0.15s ease, border-color 0.15s ease;
+          }
+          .thumb-item:hover {
+            transform: scale(1.02);
+            border-color: var(--text3) !important;
+          }
+          .thumb-item.selected {
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+          }
+          </style>
           <div class="card" style="margin-bottom:16px">
-            <h3 style="font-weight:700;margin-bottom:12px;font-size:.95rem">&#128444; Thumbnail</h3>
-            <div class="thumb-preview-box" id="thumb-preview-box">
-              <img src="<?= thumb_url($video['thumbnail']) ?>" id="thumb-preview-img" alt="Thumbnail">
+            <h3 style="font-weight:700;margin-bottom:4px;font-size:.95rem">&#128444; Thumbnail Management</h3>
+            <p class="text-xs text-muted" style="margin-bottom:16px;">Select a frame from the video or upload a custom image. Only one thumbnail remains associated with the video.</p>
+            
+            <input type="hidden" name="selected_generated_thumbnail" id="selected-generated-thumbnail-input" value="">
+            
+            <div class="thumb-management-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px; margin-bottom:16px;">
+              <!-- 1 Currently Saved Thumbnail -->
+              <div class="thumb-item active-original selected" id="thumb-item-original" onclick="selectOriginalThumb()" style="position:relative; aspect-ratio:16/9; border-radius:8px; overflow:hidden; border:3px solid var(--accent); box-shadow: 0 0 12px rgba(99, 102, 241, 0.4); cursor:pointer; background:#000;">
+                <img src="<?= thumb_url($video['thumbnail'], $video['video_url']) ?>" id="thumb-preview-img" style="width:100%; height:100%; object-fit:cover;">
+                <div class="thumb-badge" style="position:absolute; top:4px; left:4px; background:var(--green); color:#fff; font-size:9px; padding:2px 5px; border-radius:4px; font-weight:700; box-shadow: 0 1px 3px rgba(0,0,0,0.5);">Saved Thumbnail</div>
+                <div class="thumb-select-check" style="position:absolute; top:4px; right:4px; width:16px; height:16px; background:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:bold;">✓</div>
+              </div>
+
+              <!-- 9 Generated Thumbnails -->
+              <?php for ($i = 1; $i <= 9; $i++): ?>
+              <div class="thumb-item generated-thumb-item loading" id="thumb-item-gen-<?= $i ?>" onclick="selectGeneratedThumb(<?= $i ?>)" style="position:relative; aspect-ratio:16/9; border-radius:8px; overflow:hidden; border:2.5px solid transparent; cursor:pointer; background:var(--bg3); display:flex; align-items:center; justify-content:center;">
+                <div class="thumb-spinner" style="font-size:1.2rem; animation: spin 1s linear infinite; color:var(--text2);">&#8635;</div>
+                <img style="width:100%; height:100%; object-fit:cover; display:none;">
+                <div class="thumb-badge" style="position:absolute; top:4px; left:4px; background:rgba(0,0,0,0.65); border:1px solid rgba(255,255,255,0.15); color:#fff; font-size:9px; padding:2px 5px; border-radius:4px; font-weight:700; display:none;">Temporary Frame <?= $i ?></div>
+                <div class="thumb-select-check" style="position:absolute; top:4px; right:4px; width:16px; height:16px; background:var(--accent); border-radius:50%; display:none; align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:bold;">✓</div>
+              </div>
+              <?php endfor; ?>
             </div>
-            <label class="btn btn-outline w-full btn-sm" style="justify-content:center;cursor:pointer" for="thumb-input">
-              &#128247; Change Thumbnail
-            </label>
-            <input type="file" id="thumb-input" name="thumbnail" accept="image/jpeg,image/png,image/webp" style="display:none">
-            <p class="text-xs text-muted" style="margin-top:8px;text-align:center">JPG, PNG, WebP — 1280×720 recommended</p>
+
+            <div class="flex gap-2" style="align-items:center;">
+              <label class="btn btn-outline btn-sm w-full" style="justify-content:center; cursor:pointer;" for="thumb-input">
+                &#128247; Upload Custom Thumbnail
+              </label>
+              <input type="file" id="thumb-input" name="thumbnail" accept="image/jpeg,image/png,image/webp" style="display:none">
+            </div>
+            <p class="text-xs text-muted" style="margin-top:8px; text-align:center;">JPG, PNG, WebP — 1280×720 recommended</p>
           </div>
           <?php endif; ?>
 
@@ -318,16 +281,254 @@ require_once __DIR__ . '/../includes/header.php';
     </form>
 </div>
 
+<canvas id="offscreen-canvas" style="display:none"></canvas>
+
 <script data-page-script="true">
-// Thumbnail preview
-const thumbInput = document.getElementById('thumb-input');
-if (thumbInput) {
-  thumbInput.addEventListener('change', function() {
-    if (!this.files[0]) return;
-    const reader = new FileReader();
-    reader.onload = e => { document.getElementById('thumb-preview-img').src = e.target.result; };
-    reader.readAsDataURL(this.files[0]);
-  });
-}
+(function() {
+  const hiddenInput = document.getElementById('selected-generated-thumbnail-input');
+  const thumbInput = document.getElementById('thumb-input');
+
+  // ── Selection Functions ──
+  window.selectOriginalThumb = function() {
+    document.querySelectorAll('.thumb-management-grid .thumb-item').forEach(el => {
+      el.classList.remove('selected');
+      el.style.borderColor = 'transparent';
+      el.style.boxShadow = 'none';
+      const check = el.querySelector('.thumb-select-check');
+      if (check) {
+        check.style.display = 'none';
+        check.style.animation = '';
+        check.innerHTML = '✓';
+      }
+    });
+    
+    const originalItem = document.getElementById('thumb-item-original');
+    if (originalItem) {
+      originalItem.classList.add('selected');
+      originalItem.style.borderColor = 'var(--accent)';
+      originalItem.style.boxShadow = '0 0 12px rgba(99, 102, 241, 0.4)';
+      const check = originalItem.querySelector('.thumb-select-check');
+      if (check) {
+        check.style.display = 'flex';
+        check.innerHTML = '✓';
+        check.style.animation = '';
+      }
+      
+      const badge = originalItem.querySelector('.thumb-badge');
+      if (badge) {
+        badge.textContent = "Saved Thumbnail";
+        badge.style.background = "var(--green)";
+      }
+    }
+    if (hiddenInput) hiddenInput.value = '';
+  };
+
+  window.selectGeneratedThumb = async function(index) {
+    const item = document.getElementById('thumb-item-gen-' + index);
+    if (!item || item.classList.contains('loading')) return;
+
+    document.querySelectorAll('.thumb-management-grid .thumb-item').forEach(el => {
+      el.classList.remove('selected');
+      el.style.borderColor = 'transparent';
+      el.style.boxShadow = 'none';
+      const check = el.querySelector('.thumb-select-check');
+      if (check) {
+        check.style.display = 'none';
+        check.style.animation = '';
+        check.innerHTML = '✓';
+      }
+    });
+
+    item.classList.add('selected');
+    item.style.borderColor = 'var(--accent)';
+    item.style.boxShadow = '0 0 12px rgba(99, 102, 241, 0.4)';
+    const check = item.querySelector('.thumb-select-check');
+    if (check) {
+      check.style.display = 'flex';
+      check.innerHTML = '✓';
+    }
+
+    // Show loading spinner on the active original thumbnail check
+    const origCheck = document.querySelector('#thumb-item-original .thumb-select-check');
+    if (origCheck) {
+      origCheck.style.display = 'flex';
+      origCheck.innerHTML = '&#8635;';
+      origCheck.style.animation = 'spin 1s linear infinite';
+    }
+
+    const dataUrl = item.dataset.thumbData;
+    if (!dataUrl) return;
+
+    try {
+      const response = await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          video_id: <?= $vid ?>,
+          data_url: dataUrl
+        })
+      });
+      const result = await response.json();
+      if (result.success && result.thumbnail_url) {
+        // Replace original thumbnail preview
+        const previewImg = document.getElementById('thumb-preview-img');
+        if (previewImg) previewImg.src = result.thumbnail_url;
+        
+        // Success notification banner
+        showToast('Thumbnail replaced and database updated successfully!');
+      } else {
+        alert(result.error || 'Failed to save thumbnail.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error saving thumbnail.');
+    } finally {
+      selectOriginalThumb();
+    }
+  };
+
+  // ── Custom File Upload Handler (AJAX implementation) ──
+  if (thumbInput) {
+    thumbInput.addEventListener('change', function() {
+      if (!this.files[0]) return;
+
+      const reader = new FileReader();
+      reader.onload = async e => {
+        const dataUrl = e.target.result;
+
+        // Show loading spinner on the active original thumbnail check
+        const origCheck = document.querySelector('#thumb-item-original .thumb-select-check');
+        if (origCheck) {
+          origCheck.style.display = 'flex';
+          origCheck.innerHTML = '&#8635;';
+          origCheck.style.animation = 'spin 1s linear infinite';
+        }
+
+        try {
+          const response = await fetch('<?= BASE_URL ?>/api/thumbnails.php?action=save_thumbnail', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              video_id: <?= $vid ?>,
+              data_url: dataUrl
+            })
+          });
+          const result = await response.json();
+          if (result.success && result.thumbnail_url) {
+            const previewImg = document.getElementById('thumb-preview-img');
+            if (previewImg) previewImg.src = result.thumbnail_url;
+            showToast('Custom thumbnail uploaded and saved successfully!');
+          } else {
+            alert(result.error || 'Failed to upload custom thumbnail.');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Error uploading custom thumbnail.');
+        } finally {
+          selectOriginalThumb();
+        }
+      };
+      reader.readAsDataURL(this.files[0]);
+    });
+  }
+
+  function showToast(msg) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-success fade-in';
+    alertDiv.style.position = 'fixed';
+    alertDiv.style.bottom = '20px';
+    alertDiv.style.right = '20px';
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.boxShadow = '0 4px 12px rgba(0,0,0,0.5)';
+    alertDiv.innerHTML = '&#10003; ' + msg;
+    document.body.appendChild(alertDiv);
+    setTimeout(() => {
+      alertDiv.style.opacity = '0';
+      alertDiv.style.transition = 'opacity 0.5s';
+      setTimeout(() => alertDiv.remove(), 500);
+    }, 3000);
+  }
+
+  // ── Client-side Frame Extraction ──
+  <?php if (!(int)$video['is_reel']): ?>
+  const videoSrc = '<?= BASE_URL ?>/api/stream.php?v=<?= $vid ?>';
+  const tempVideo = document.createElement('video');
+  tempVideo.src = videoSrc;
+  tempVideo.crossOrigin = 'anonymous';
+  tempVideo.muted = true;
+  tempVideo.playsInline = true;
+
+  tempVideo.onloadedmetadata = async () => {
+    const duration = tempVideo.duration || 0;
+    if (duration <= 0) return;
+
+    const step = duration / 10;
+    const canvas = document.getElementById('offscreen-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const vWidth = tempVideo.videoWidth || 640;
+    const vHeight = tempVideo.videoHeight || 360;
+    canvas.width = vWidth;
+    canvas.height = vHeight;
+
+    for (let i = 1; i <= 9; i++) {
+      try {
+        const time = step * i;
+        const dataUrl = await seekAndCapture(tempVideo, canvas, ctx, time);
+        renderGeneratedThumb(i, dataUrl);
+      } catch (e) {
+        console.error("Frame capture error at step " + i + ":", e);
+      }
+    }
+  };
+
+  function seekAndCapture(video, canvas, ctx, time) {
+    return new Promise((resolve, reject) => {
+      const onSeeked = () => {
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+        try {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        } catch (e) { reject(e); }
+      };
+      const onError = (e) => {
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+        reject(e);
+      };
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('error', onError);
+      video.currentTime = time;
+    });
+  }
+
+  function renderGeneratedThumb(index, dataUrl) {
+    const item = document.getElementById('thumb-item-gen-' + index);
+    if (!item) return;
+    item.classList.remove('loading');
+    
+    const spinner = item.querySelector('.thumb-spinner');
+    if (spinner) spinner.style.display = 'none';
+
+    const img = item.querySelector('img');
+    if (img) {
+      img.src = dataUrl;
+      img.style.display = 'block';
+    }
+
+    const badge = item.querySelector('.thumb-badge');
+    if (badge) badge.style.display = 'block';
+
+    item.dataset.thumbData = dataUrl;
+  }
+  <?php endif; ?>
+
+})();
 </script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

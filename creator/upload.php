@@ -12,7 +12,6 @@ $primary    = setting('primary_color', '#6366f1');
 
 $uid     = auth_user()['id'];
 $categories = db_fetchAll("SELECT * FROM categories WHERE is_active=1 ORDER BY sort_order");
-$user_playlists = db_fetchAll("SELECT id, title FROM playlists WHERE user_id = ? ORDER BY title ASC", [$uid]);
 
 $mode = ($_GET['mode'] ?? '') === 'reel' ? 'reel' : 'video';
 $page_title = $mode === 'reel' ? 'Upload Reel' : 'Upload Video';
@@ -45,14 +44,15 @@ require_once __DIR__ . '/../includes/header.php';
   <!-- ── WELCOME VIEW: Large Init Dropzone ── -->
   <div id="welcome-dropzone" class="fade-in">
     <!-- Tab selector -->
-    <div class="upload-tab-header" style="margin-bottom:24px; <?= $mode === 'reel' ? 'display:none;' : 'display:flex;' ?> gap:12px;">
+    <!-- Tab selector -->
+    <div class="upload-tab-header" style="margin-bottom:24px; display:flex; gap:12px;">
       <button type="button" class="upload-tab-btn active" id="tab-file-btn" onclick="switchSourceType('file')">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        Upload Video Files
+        <?= $mode === 'reel' ? 'Upload Reel File' : 'Upload Video File' ?>
       </button>
       <button type="button" class="upload-tab-btn" id="tab-embed-btn" onclick="switchSourceType('embed')">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-        Import Links (YouTube / MP4)
+        <?= $mode === 'reel' ? 'Import YouTube / Shorts Link' : 'Import Links (YouTube / MP4)' ?>
       </button>
     </div>
 
@@ -71,10 +71,10 @@ require_once __DIR__ . '/../includes/header.php';
       <div class="upload-dropzone" style="padding:50px 24px; cursor:default;">
         <div style="max-width:580px; margin:0 auto">
           <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--text3); margin-bottom:16px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:8px">Import Video from External Source</h2>
-          <p style="color:var(--text2); font-size:0.88rem; margin-bottom:24px">Paste a YouTube video URL or a direct link ending in .mp4 / .webm</p>
+          <h2 style="font-size:1.3rem; font-weight:700; margin-bottom:8px"><?= $mode === 'reel' ? 'Import Reel from YouTube' : 'Import Video from External Source' ?></h2>
+          <p style="color:var(--text2); font-size:0.88rem; margin-bottom:24px"><?= $mode === 'reel' ? 'Paste a YouTube Shorts or standard YouTube video URL.' : 'Paste a YouTube video URL or a direct link ending in .mp4 / .webm' ?></p>
           <div style="display:flex; gap:10px">
-            <input class="form-input" type="url" id="embed-link-field" placeholder="https://www.youtube.com/watch?v=..." style="border-radius:8px">
+            <input class="form-input" type="url" id="embed-link-field" placeholder="<?= $mode === 'reel' ? 'https://www.youtube.com/shorts/...' : 'https://www.youtube.com/watch?v=...' ?>" style="border-radius:8px">
             <button type="button" class="btn btn-primary" onclick="verifyAndLoadEmbed()" style="border-radius:8px; font-weight:700; white-space:nowrap">Import Video</button>
           </div>
         </div>
@@ -155,8 +155,8 @@ require_once __DIR__ . '/../includes/header.php';
                   </div>
                 </div>
 
-                <!-- Categories and Playlist lists -->
-                <div id="details-cat-playlist-group" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
+                <!-- Categories list -->
+                <div id="details-cat-playlist-group" style="margin-bottom:24px;">
                   <div class="form-group">
                     <label class="form-label">Categories</label>
                     <div style="display:flex; flex-direction:column; gap:8px; background:var(--bg3); padding:12px; border-radius:8px; border:1px solid var(--border); max-height:140px; overflow-y:auto" id="details-categories-box">
@@ -166,22 +166,6 @@ require_once __DIR__ . '/../includes/header.php';
                         <span><?= e($c['name']) ?></span>
                       </label>
                       <?php endforeach; ?>
-                    </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label">Playlists</label>
-                    <div style="display:flex; flex-direction:column; gap:8px; background:var(--bg3); padding:12px; border-radius:8px; border:1px solid var(--border); max-height:140px; overflow-y:auto" id="details-playlists-box">
-                      <?php if (!empty($user_playlists)): ?>
-                        <?php foreach ($user_playlists as $pl): ?>
-                        <label class="flex gap-2" style="font-size:.8rem; cursor:pointer; user-select:none; align-items:center">
-                          <input type="checkbox" name="playlist_ids[]" value="<?= $pl['id'] ?>" class="playlist-checkbox">
-                          <span><?= e($pl['title']) ?></span>
-                        </label>
-                        <?php endforeach; ?>
-                      <?php else: ?>
-                        <span class="text-muted text-xs" style="padding:4px">No playlists created.</span>
-                      <?php endif; ?>
                     </div>
                   </div>
                 </div>
@@ -747,12 +731,13 @@ require_once __DIR__ . '/../includes/header.php';
   async function createEmbedSession(url) {
     const uploadId = 'up_' + Math.random().toString(36).substr(2, 9);
     const ytId = getYoutubeId(url);
+    const embedUrl = ytId ? `https://www.youtube.com/embed/${ytId}` : url;
     const defaultTitle = ytId ? 'YouTube Import #' + ytId : 'External Import #' + Math.floor(Math.random() * 10000);
 
     const session = {
       id: uploadId,
       isEmbed: true,
-      embedUrl: url,
+      embedUrl: embedUrl,
       file: null,
       title: defaultTitle,
       description: 'Imported external video link.',
@@ -1134,16 +1119,7 @@ require_once __DIR__ . '/../includes/header.php';
       };
     });
 
-    document.querySelectorAll('.playlist-checkbox').forEach(cb => {
-      cb.checked = session.playlistIds.includes(cb.value);
-      cb.onchange = function() {
-        if (this.checked) {
-          if (!session.playlistIds.includes(this.value)) session.playlistIds.push(this.value);
-        } else {
-          session.playlistIds = session.playlistIds.filter(v => v !== this.value);
-        }
-      };
-    });
+
 
     // Populate thumbnail selector grid
     renderThumbnailsGrid(session);

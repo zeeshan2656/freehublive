@@ -139,7 +139,7 @@ $user = db_fetch("SELECT * FROM users WHERE id=?", [$uid]);
         </div>
 
         <div class="card profile-actions">
-          <a href="<?= BASE_URL ?>/dashboard.php" class="btn btn-outline">Cancel</a>
+          <a href="<?= BASE_URL ?>/" class="btn btn-outline">Cancel</a>
           <button type="submit" class="btn btn-primary" style="padding:10px 24px">&#10003; Save Settings</button>
         </div>
       </form>

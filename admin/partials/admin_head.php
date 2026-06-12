@@ -6,9 +6,6 @@ $admin_page = basename($_SERVER['PHP_SELF'] ?? '');
 
 // Sidebar alert counts
 $admin_pending_videos = db_count('videos', "status='pending'");
-$admin_pending_withdrawals = fh_table_exists('withdrawal_requests')
-    ? db_count('withdrawal_requests', "status='pending'")
-    : 0;
 $admin_pending_creators = db_count('users', "role='creator' AND status='pending'");
 
 // Set layout variables for the main shell

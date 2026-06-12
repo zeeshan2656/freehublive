@@ -242,7 +242,6 @@ $is_dashboard_page = (
     str_contains($_SERVER['PHP_SELF'], '/admin/') ||
     str_contains($_SERVER['PHP_SELF'], '/creator/') ||
     str_contains($_SERVER['PHP_SELF'], '/affiliate/') ||
-    basename($_SERVER['PHP_SELF']) === 'dashboard.php' ||
     basename($_SERVER['PHP_SELF']) === 'settings.php' ||
     basename($_SERVER['PHP_SELF']) === 'profile.php'
 );
@@ -325,14 +324,12 @@ input,select,textarea{font-family:inherit;outline:none}
 </style>
 
 <!-- ── Main CSS (async — non-blocking) ── -->
-<link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.css') ?>" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.css') ?>"></noscript>
-
-
+<link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.min.css') ?>" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.min.css') ?>"></noscript>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap">
 <link rel="icon" type="image/svg+xml" href="<?= BASE_URL ?>/assets/img/logo.svg">
-<script src="<?= fh_asset_url('assets/js/reels-cache.js') ?>"></script>
+<script src="<?= fh_asset_url('assets/js/reels-cache.min.js') ?>"></script>
 <style>
 :root{--accent:<?= e($primary) ?>;--accent2:<?= e($primary) ?>cc}
 /* Responsive Header Right Actions */
@@ -850,9 +847,7 @@ endif;
         <a href="<?= BASE_URL ?>/admin/reels.php" class="studio-nav-item <?= $current_page === 'reels.php' ? 'active' : '' ?>">
           <span>📱 Reels</span>
         </a>
-        <a href="<?= BASE_URL ?>/admin/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">
-          <span>📈 Analytics</span>
-        </a>
+
 
         <!-- Ads Dropdown -->
         <div class="studio-nav-group-ads" style="margin-bottom: 6px;">
@@ -886,21 +881,7 @@ endif;
         </a>
 
 
-        <!-- Library Dropdown (Saved Videos, Subscriptions) -->
-        <div class="studio-nav-group-library" style="margin-bottom: 6px;">
-          <a href="#" class="studio-nav-item <?= ($current_page === 'dashboard.php' && ($current_tab === 'saved' || $current_tab === 'subscriptions')) ? 'active' : '' ?>" id="library-menu-toggle" style="margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
-            <span>📥 Library</span>
-            <span class="library-arrow" style="font-size: 0.65rem; transition: transform 0.25s; transform: <?= ($current_page === 'dashboard.php' && ($current_tab === 'saved' || $current_tab === 'subscriptions')) ? 'rotate(90deg)' : 'rotate(0deg)' ?>;">▶</span>
-          </a>
-          <div id="library-submenu" style="margin-left: 20px; display: <?= ($current_page === 'dashboard.php' && ($current_tab === 'saved' || $current_tab === 'subscriptions')) ? 'flex' : 'none' ?>; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); padding-left: 6px; margin-top: 2px;">
-            <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && $current_tab === 'saved' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
-              <span>• Saved Videos</span>
-            </a>
-            <a href="<?= BASE_URL ?>/dashboard.php?tab=subscriptions" class="studio-nav-item <?= $current_page === 'dashboard.php' && $current_tab === 'subscriptions' ? 'active' : '' ?>" style="margin: 0; padding: 4px 10px; font-size: 0.8rem; height: auto;">
-              <span>• Subscriptions</span>
-            </a>
-          </div>
-        </div>
+
 
         <a href="<?= BASE_URL ?>/profile.php" class="studio-nav-item <?= $current_page === 'profile.php' ? 'active' : '' ?>">
           <span>👤 Profile</span>
@@ -911,32 +892,21 @@ endif;
 
         <script>
         document.addEventListener('DOMContentLoaded', function() {
-          const dropdowns = [
-            { toggleId: 'ads-menu-toggle', subId: 'ads-submenu', arrowClass: 'ads-arrow' },
-            { toggleId: 'users-menu-toggle', subId: 'users-submenu', arrowClass: 'users-arrow' },
-            { toggleId: 'finances-menu-toggle', subId: 'finances-submenu', arrowClass: 'finances-arrow' },
-            { toggleId: 'content-menu-toggle', subId: 'content-submenu', arrowClass: 'content-arrow' },
-            { toggleId: 'system-menu-toggle', subId: 'system-submenu', arrowClass: 'system-arrow' },
-            { toggleId: 'library-menu-toggle', subId: 'library-submenu', arrowClass: 'library-arrow' }
-          ];
-          
-          dropdowns.forEach(function(item) {
-            const toggle = document.getElementById(item.toggleId);
-            const sub = document.getElementById(item.subId);
-            if (toggle && sub) {
-              toggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                const arrow = this.querySelector('.' + item.arrowClass);
-                if (sub.style.display === 'none' || sub.style.display === '') {
-                  sub.style.display = 'flex';
-                  if (arrow) arrow.style.transform = 'rotate(90deg)';
-                } else {
-                  sub.style.display = 'none';
-                  if (arrow) arrow.style.transform = 'rotate(0deg)';
-                }
-              });
-            }
-          });
+          var toggle = document.getElementById('ads-menu-toggle');
+          var sub = document.getElementById('ads-submenu');
+          if (toggle && sub) {
+            toggle.addEventListener('click', function(e) {
+              e.preventDefault();
+              var arrow = this.querySelector('.ads-arrow');
+              if (sub.style.display === 'none' || sub.style.display === '') {
+                sub.style.display = 'flex';
+                if (arrow) arrow.style.transform = 'rotate(90deg)';
+              } else {
+                sub.style.display = 'none';
+                if (arrow) arrow.style.transform = 'rotate(0deg)';
+              }
+            });
+          }
         });
         </script>
 
@@ -945,9 +915,7 @@ endif;
         <a href="<?= BASE_URL ?>/creator/index.php" class="studio-nav-item <?= $current_page === 'index.php' && str_contains($_SERVER['PHP_SELF'], '/creator/') ? 'active' : '' ?>">
           <span>🏠 Dashboard</span>
         </a>
-        <a href="<?= BASE_URL ?>/creator/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">
-          <span>📈 Analytics</span>
-        </a>
+
         <a href="<?= BASE_URL ?>/creator/upload.php?mode=video" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') !== 'reel' ? 'active' : '' ?>">
           <span>⬆️ Upload Video</span>
         </a>
@@ -960,33 +928,17 @@ endif;
         <a href="<?= BASE_URL ?>/creator/reels.php" class="studio-nav-item <?= $current_page === 'reels.php' || $current_page === 'edit_reel.php' ? 'active' : '' ?>">
           <span>📱 My Reels</span>
         </a>
-        <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
-          <span>📥 Saved Videos</span>
-        </a>
-        <a href="<?= BASE_URL ?>/dashboard.php?tab=subscriptions" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'subscriptions' ? 'active' : '' ?>">
-          <span>🔔 Subscribed Channels</span>
-        </a>
+
         <a href="<?= BASE_URL ?>/profile.php" class="studio-nav-item <?= $current_page === 'profile.php' ? 'active' : '' ?>">
           <span>👤 Profile</span>
         </a>
-        <a href="<?= BASE_URL ?>/channel.php?id=<?= auth_user()['id'] ?>" class="studio-nav-item <?= $current_page === 'channel.php' && ($_GET['id'] ?? 0) == auth_user()['id'] ? 'active' : '' ?>">
-          <span>📺 My Channel</span>
-        </a>
+
         <a href="<?= BASE_URL ?>/settings.php" class="studio-nav-item <?= $current_page === 'settings.php' && !str_contains($_SERVER['PHP_SELF'], '/admin/') ? 'active' : '' ?>">
           <span>⚙️ Settings</span>
         </a>
 
       <?php else: ?>
         <!-- Viewer Menu -->
-        <a href="<?= BASE_URL ?>/dashboard.php" class="studio-nav-item <?= $current_page === 'dashboard.php' ? 'active' : '' ?>">
-          <span>🏠 Dashboard</span>
-        </a>
-        <a href="<?= BASE_URL ?>/dashboard.php?tab=saved" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'saved' ? 'active' : '' ?>">
-          <span>📥 Saved Videos</span>
-        </a>
-        <a href="<?= BASE_URL ?>/dashboard.php?tab=subscriptions" class="studio-nav-item <?= $current_page === 'dashboard.php' && ($_GET['tab'] ?? '') === 'subscriptions' ? 'active' : '' ?>">
-          <span>🔔 Subscribed Channels</span>
-        </a>
         <a href="<?= BASE_URL ?>/profile.php" class="studio-nav-item <?= $current_page === 'profile.php' ? 'active' : '' ?>">
           <span>👤 Profile</span>
         </a>
@@ -1065,10 +1017,7 @@ endif;
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                   <span>Dashboard</span>
                 </a>
-                <a href="<?= BASE_URL ?>/channel.php?id=<?= auth_user()['id'] ?>" class="dropdown-item" role="menuitem">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <span>My Channel</span>
-                </a>
+
                 <a href="<?= BASE_URL ?>/creator/upload.php?mode=video" class="dropdown-item" role="menuitem">
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   <span>Upload Video</span>
@@ -1087,12 +1036,7 @@ endif;
                 </a>
               <?php endif; ?>
 
-              <?php if (!is_admin() && !is_creator()): ?>
-                <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                  <span>Dashboard</span>
-                </a>
-              <?php endif; ?>
+
 
               <a href="<?= BASE_URL ?>/profile.php" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1145,7 +1089,7 @@ endif;
     <!-- DESKTOP: Nav Links -->
     <div class="header-nav-links desktop-only" style="display:flex; align-items:center; gap:8px; margin-left:16px">
       <a href="<?= BASE_URL ?>/" class="btn <?= $is_home ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Home</a>
-      <a href="<?= BASE_URL ?>/reels.php" class="btn <?= $is_reels ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Reels</a>
+      <a href="<?= BASE_URL ?>/reels" class="btn <?= $is_reels ? 'btn-primary' : 'btn-outline' ?> btn-sm" style="border-radius:18px; padding:6px 16px; font-weight:600; font-size:.82rem">Reels</a>
     </div>
 
     <!-- RIGHT: mobile user/login icon -->
@@ -1159,7 +1103,7 @@ endif;
       </button>
 
       <!-- Mobile Reels toggle -->
-      <a href="<?= BASE_URL ?>/reels.php" class="btn btn-outline btn-sm btn-icon reels-mobile-btn" id="reels-toggle-mobile" aria-label="Open Reels" title="Open Reels" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3);margin-left:6px">
+      <a href="<?= BASE_URL ?>/reels" class="btn btn-outline btn-sm btn-icon reels-mobile-btn" id="reels-toggle-mobile" aria-label="Open Reels" title="Open Reels" style="width:34px;height:34px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text2);background:var(--bg3);margin-left:6px">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <rect width="18" height="18" x="3" y="3" rx="4" />
           <path stroke-linecap="round" stroke-linejoin="round" d="m10 9 5 3-5 3V9Z" fill="currentColor"/>
@@ -1195,10 +1139,7 @@ endif;
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span>Dashboard</span>
               </a>
-              <a href="<?= BASE_URL ?>/channel.php?id=<?= $user['id'] ?>" class="dropdown-item" role="menuitem">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                <span>My Channel</span>
-              </a>
+
               <a href="<?= BASE_URL ?>/creator/upload.php?mode=video" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 <span>Upload Video</span>
@@ -1217,12 +1158,7 @@ endif;
               </a>
             <?php endif; ?>
             
-            <?php if (!is_admin() && !is_creator()): ?>
-              <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                <span>Dashboard</span>
-              </a>
-            <?php endif; ?>
+
             
             <a href="<?= BASE_URL ?>/profile.php" class="dropdown-item" role="menuitem">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1299,10 +1235,7 @@ endif;
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span>Dashboard</span>
               </a>
-              <a href="<?= BASE_URL ?>/channel.php?id=<?= $user['id'] ?>" class="dropdown-item" role="menuitem">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                <span>My Channel</span>
-              </a>
+
               <a href="<?= BASE_URL ?>/creator/upload.php?mode=video" class="dropdown-item" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 <span>Upload Video</span>
@@ -1321,12 +1254,7 @@ endif;
               </a>
             <?php endif; ?>
             
-            <?php if (!is_admin() && !is_creator()): ?>
-              <a href="<?= BASE_URL ?>/dashboard.php" class="dropdown-item" role="menuitem">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                <span>Dashboard</span>
-              </a>
-            <?php endif; ?>
+
             
             <a href="<?= BASE_URL ?>/profile.php" class="dropdown-item" role="menuitem">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>

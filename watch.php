@@ -6,11 +6,11 @@ require_once __DIR__ . '/includes/functions.php';
 $vid = (int)($_GET['v'] ?? 0);
 if (!$vid) { redirect(BASE_URL . '/'); }
 
-// Redirect to reels page if the ID belongs to a reel
-$reel = db_fetch("SELECT id FROM reels WHERE id = ?", [$vid]);
-if ($reel) {
-    redirect(BASE_URL . '/reels.php?id=' . $vid);
-}
+// Redirect to reels page if the ID belongs to a reel (Disabled for clean routing separation)
+// $reel = db_fetch("SELECT id FROM reels WHERE id = ?", [$vid]);
+// if ($reel) {
+//     redirect(BASE_URL . '/reels.php?id=' . $vid);
+// }
 
 $video = db_fetch(
     "SELECT v.*,u.username,u.channel_name,u.avatar,u.subscribers,u.bio
@@ -21,50 +21,10 @@ if (!$video) { http_response_code(404); die('Video not found'); }
 $is_xhr_view = isset($_GET['xhr_view']);
 
 
-$playlist_id = (int)($_GET['list'] ?? 0);
 $playlist = null;
 $playlist_videos = [];
 $next_video_id = null;
 $prev_video_id = null;
-$current_video_index = -1;
-
-if ($playlist_id > 0) {
-    $playlist = db_fetch("SELECT p.*, u.username, u.channel_name FROM playlists p JOIN users u ON u.id = p.user_id WHERE p.id = ?", [$playlist_id]);
-    if ($playlist) {
-        $is_playlist_owner = is_logged_in() && (auth_user()['id'] == $playlist['user_id'] || auth_user()['role'] === 'admin');
-        $uid = is_logged_in() ? auth_user()['id'] : 0;
-        
-        if ($playlist['visibility'] !== 'private' || $is_playlist_owner) {
-            $playlist_videos = db_fetchAll(
-                "SELECT pv.video_id, v.title, v.thumbnail, v.duration, v.is_reel, u.username, u.channel_name
-                 FROM playlist_videos pv
-                 JOIN videos v ON v.id = pv.video_id
-                 JOIN users u ON u.id = v.user_id
-                 WHERE pv.playlist_id = ? AND (v.visibility = 'public' OR v.user_id = ? OR ? = 1)
-                 ORDER BY pv.sort_order ASC",
-                [$playlist_id, $uid, is_logged_in() && auth_user()['role'] === 'admin' ? 1 : 0]
-            );
-            
-            foreach ($playlist_videos as $idx => $pv) {
-                if ((int)$pv['video_id'] === $vid) {
-                    $current_video_index = $idx;
-                    break;
-                }
-            }
-            
-            if ($current_video_index !== -1) {
-                if (isset($playlist_videos[$current_video_index + 1])) {
-                    $next_video_id = (int)$playlist_videos[$current_video_index + 1]['video_id'];
-                }
-                if (isset($playlist_videos[$current_video_index - 1])) {
-                    $prev_video_id = (int)$playlist_videos[$current_video_index - 1]['video_id'];
-                }
-            }
-        } else {
-            $playlist = null;
-        }
-    }
-}
 
 
 // Track view
@@ -148,7 +108,7 @@ if (is_logged_in()) {
 
 $meta_title = $video['title'] . ' — ' . setting('site_name','FreeHub');
 $meta_desc  = truncate(strip_tags($video['description'] ?? ''), 160);
-$meta_image = thumb_url($video['thumbnail']);
+$meta_image = thumb_url($video['thumbnail'], $video['video_url']);
 $is_watch = true;
 
 // Build preload hint for local video files (speeds up first-frame time)
@@ -203,13 +163,13 @@ if ($_fh_is_local_video && $_fh_video_preload_url) {
                   allowfullscreen style="width:100%;height:100%;border:none;display:block"></iframe>
         <?php elseif ($is_external && !$is_direct_video): ?>
           <iframe id="fh-embed-player" width="100%" height="100%"
-                  src="<?= BASE_URL ?>/embed_proxy.php?url=<?= urlencode($video_url) ?>"
+                  src="<?= e($video_url) ?>"
                   frameborder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowfullscreen style="width:100%;height:100%;border:none;display:block"></iframe>
         <?php else: ?>
           <video id="fh-player" playsinline preload="auto"
-                 poster="<?= thumb_url($video['thumbnail']) ?>"
+                 poster="<?= thumb_url($video['thumbnail'], $video['video_url']) ?>"
                  style="width:100%;height:100%;display:block"
                  fetchpriority="high">
             <?php if ($video['hls_url']): ?>
@@ -324,13 +284,7 @@ if ($_fh_is_local_video && $_fh_video_preload_url) {
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               Share
             </button>
-            <!-- Watch Later -->
-            <?php $is_saved = is_logged_in() ? (bool)db_fetch("SELECT id FROM watch_later WHERE user_id=? AND video_id=?", [auth_user()['id'], $vid]) : false; ?>
-            <button class="btn btn-outline btn-sm" id="wl-btn" data-id="<?= $vid ?>"
-                    style="<?= $is_saved?'background:rgba(99,102,241,.15);color:var(--accent)':'' ?>">
-              <svg width="16" height="16" fill="<?= $is_saved?'var(--accent)':'none' ?>" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-              <span><?= $is_saved ? 'Saved ✓' : 'Save' ?></span>
-            </button>
+
             <?php if (is_logged_in() && (auth_user()['id'] == $video['user_id'] || auth_user()['role'] === 'admin')): ?>
             <a href="<?= BASE_URL ?>/creator/<?= $video['is_reel'] ? 'edit_reel.php' : 'edit.php' ?>?id=<?= $vid ?>" class="btn btn-outline btn-sm" style="color:var(--accent);border-color:var(--accent)">
               &#9998; <?= $video['is_reel'] ? 'Edit Reel' : 'Edit Video' ?>
@@ -340,20 +294,14 @@ if ($_fh_is_local_video && $_fh_video_preload_url) {
         </div>
       </div>
 
-      <!-- Channel Info -->
       <div class="watch-channel-row">
-        <a href="<?= BASE_URL ?>/channel.php?id=<?= $video['user_id'] ?>&tab=videos" class="flex gap-3">
+        <div class="flex gap-3">
           <img src="<?= avatar_url($video['avatar']) ?>" alt="<?= e($video['channel_name']??$video['username']) ?>"
                class="avatar avatar-lg" width="64" height="64" loading="lazy">
           <div>
             <div style="font-weight:700;font-size:1rem"><?= e($video['channel_name']??$video['username']) ?></div>
-            <div class="text-muted text-sm"><?= format_number((int)$video['subscribers']) ?> subscribers</div>
           </div>
-        </a>
-        <?php if (!is_logged_in() || auth_user()['id'] != $video['user_id']): ?>
-        <?php $is_subbed = is_logged_in() ? (bool)db_fetch("SELECT id FROM subscriptions WHERE subscriber_id=? AND channel_id=?", [auth_user()['id'], $video['user_id']]) : false; ?>
-        <button class="btn <?= $is_subbed ? 'btn-subscribed' : 'btn-primary' ?>" id="sub-btn" data-channel="<?= $video['user_id'] ?>"><?= $is_subbed ? 'Subscribed ✓' : 'Subscribe' ?></button>
-        <?php endif; ?>
+        </div>
       </div>
 
       <!-- Description -->
@@ -393,61 +341,7 @@ if ($_fh_is_local_video && $_fh_video_preload_url) {
       <div style="margin-bottom: 20px; padding: 0 16px;">
         <?= render_ad_placeholder('watch_sidebar') ?>
       </div>
-      <?php if ($playlist): ?>
-      <div class="playlist-watch-panel" style="margin: 0 16px 20px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg2); box-shadow: 0 4px 15px rgba(0,0,0,0.15)">
-        <div style="padding: 16px; background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.06)); border-bottom: 1px solid var(--border)">
-          <div style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em; margin-bottom: 4px">Playing from Playlist</div>
-          <a href="<?= BASE_URL ?>/playlists.php?id=<?= $playlist['id'] ?>" style="display: block; font-weight: 700; font-size: 0.95rem; color: var(--text); line-height: 1.3; margin-bottom: 6px; transition: color 0.2s">
-            <?= e($playlist['title']) ?>
-          </a>
-          <div style="font-size: 0.8rem; color: var(--text2)">
-            <span><?= e($playlist['channel_name'] ?? $playlist['username'] ?? 'Creator') ?> · <?= ($current_video_index + 1) ?> / <?= count($playlist_videos) ?></span>
-          </div>
-        </div>
-        <div class="playlist-watch-items" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column">
-          <?php foreach ($playlist_videos as $idx => $pv):
-            $is_current = ((int)$pv['video_id'] === $vid);
-            $pv_thumb = thumb_url($pv['thumbnail']);
-          ?>
-            <a href="<?= BASE_URL ?>/watch.php?v=<?= $pv['video_id'] ?>&list=<?= $playlist['id'] ?>" 
-               class="playlist-watch-item"
-               style="display: flex; gap: 10px; padding: 10px 16px; align-items: center; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.15s; background: <?= $is_current ? 'rgba(99,102,241,0.1)' : 'transparent' ?>">
-              
-              <div style="font-size: 0.75rem; font-weight: 700; color: <?= $is_current ? 'var(--accent)' : 'var(--text3)' ?>; width: 18px; text-align: center; flex-shrink: 0">
-                <?php if ($is_current): ?>
-                  ▶
-                <?php else: ?>
-                  <?= $idx + 1 ?>
-                <?php endif; ?>
-              </div>
 
-              <?php $is_pv_portrait = (int)($pv['is_reel'] ?? 0) === 1; ?>
-              <div class="playlist-video-thumb-wrapper<?= $is_pv_portrait ? ' is-portrait' : '' ?>" style="width: 80px; aspect-ratio: <?= $is_pv_portrait ? '9/16' : '16/9' ?>; border-radius: 4px; overflow: hidden; position: relative; flex-shrink: 0; background: var(--bg3)">
-                <img src="<?= $pv_thumb ?>" alt="<?= e($pv['title']) ?>" style="width:100%; height:100%; object-fit: <?= $is_pv_portrait ? 'contain' : 'cover' ?>">
-                <span style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.8); color: #fff; font-size: 0.6rem; font-weight: 600; padding: 0.5px 3px; border-radius: 2px">
-                  <?= format_duration((int)$pv['duration']) ?>
-                </span>
-              </div>
-
-              <div style="min-width: 0; flex: 1">
-                <div style="font-size: 0.8rem; font-weight: 600; color: <?= $is_current ? 'var(--accent)' : 'var(--text)' ?>; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 2px">
-                  <?= e($pv['title']) ?>
-                </div>
-                <div style="font-size: 0.72rem; color: var(--text2)">
-                  <?= e($pv['channel_name'] ?? $pv['username']) ?>
-                </div>
-              </div>
-            </a>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <style>
-        .playlist-watch-items::-webkit-scrollbar { width: 4px; }
-        .playlist-watch-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-        .playlist-watch-item:hover { background: rgba(255, 255, 255, 0.03) !important; }
-        .playlist-watch-item.active:hover { background: rgba(99, 102, 241, 0.12) !important; }
-      </style>
-      <?php endif; ?>
 
       <h2 style="font-size:.95rem;font-weight:700;margin-bottom:12px;padding:0 16px">Up Next</h2>
       <!-- Ad Placeholder: Watch Page Up Next -->
@@ -457,9 +351,9 @@ if ($_fh_is_local_video && $_fh_video_preload_url) {
       <?php foreach ($related as $r):
         $is_r_portrait = (int)($r['is_reel'] ?? 0) === 1;
       ?>
-      <a href="<?= BASE_URL ?>/watch.php?v=<?= $r['id'] ?>" class="related-video-item">
+      <a href="<?= BASE_URL ?>/video/watch/<?= $r['id'] ?>" class="related-video-item">
         <div class="related-thumb<?= $is_r_portrait ? ' is-portrait' : '' ?>" style="position:relative">
-          <img src="<?= thumb_url($r['thumbnail']) ?>" alt="<?= e($r['title']) ?>"
+          <img src="<?= thumb_url($r['thumbnail'], $r['video_url']) ?>" alt="<?= e($r['title']) ?>"
                loading="lazy" width="168" height="94">
           <span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.8);color:#fff;font-size:.68rem;font-weight:600;padding:1px 5px;border-radius:3px">
             <?= format_duration((int)$r['duration']) ?>
@@ -489,15 +383,14 @@ if ($_fh_is_local_video && $_fh_video_preload_url) {
       <?php if (auth_user()): ?>
       <p class="text-sm text-muted" style="margin-bottom:12px">Your affiliate link (earns you money when shared):</p>
       <div class="flex gap-2">
-        <input class="form-input" id="share-url" value="<?= BASE_URL ?>/watch.php?v=<?= $vid ?>&ref=<?= auth_user()['ref_code'] ?? '' ?>" readonly>
+        <input class="form-input" id="share-url" value="<?= BASE_URL ?>/video/watch/<?= $vid ?>?ref=<?= auth_user()['ref_code'] ?? '' ?>" readonly>
         <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('share-url').value);this.textContent='Copied!'">Copy</button>
       </div>
       <?php else: ?>
       <div class="flex gap-2">
-        <input class="form-input" id="share-url" value="<?= BASE_URL ?>/watch.php?v=<?= $vid ?>" readonly>
+        <input class="form-input" id="share-url" value="<?= BASE_URL ?>/video/watch/<?= $vid ?>" readonly>
         <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('share-url').value);this.textContent='Copied!'">Copy</button>
       </div>
-      <p class="text-sm text-muted" style="margin-top:12px"><a href="<?= BASE_URL ?>/auth/register.php" style="color:var(--accent)">Join affiliate program</a> to earn from shares.</p>
       <?php endif; ?>
     </div>
   </div>
@@ -841,42 +734,7 @@ document.getElementById('dislike-btn')?.addEventListener('click', (e) => handleR
 document.getElementById('share-btn')?.addEventListener('click',(e)=>{ if (e) { e.preventDefault(); e.stopPropagation(); } document.getElementById('share-modal').classList.add('open')});
 document.getElementById('share-modal')?.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 
-// Watch Later
-document.getElementById('wl-btn')?.addEventListener('click',async function(e){
-  if (e) { e.preventDefault(); e.stopPropagation(); }
-  if (!requireLogin()) return;
-  const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=watch_later',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({video_id:<?= $vid ?>})
-  });
-  const d=await res.json();
-  if (d.success) {
-    this.style.cssText = d.data.saved ? 'background:rgba(99,102,241,.15);color:var(--accent)' : '';
-    this.querySelector('svg').setAttribute('fill', d.data.saved ? 'var(--accent)' : 'none');
-    this.querySelector('span').textContent = d.data.saved ? 'Saved ✓' : 'Save';
-  }
-});
 
-// Subscribe
-document.getElementById('sub-btn')?.addEventListener('click',async function(e){
-  if (e) { e.preventDefault(); e.stopPropagation(); }
-  if (!requireLogin()) return;
-  const res=await fetch('<?= BASE_URL ?>/api/videos.php?action=subscribe',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({channel_id:<?= $video['user_id'] ?>})
-  });
-  const d=await res.json();
-  if (d.success) {
-    this.textContent = d.data.subscribed ? 'Subscribed ✓' : 'Subscribe';
-    if (d.data.subscribed) {
-      this.classList.remove('btn-primary');
-      this.classList.add('btn-subscribed');
-    } else {
-      this.classList.remove('btn-subscribed');
-      this.classList.add('btn-primary');
-    }
-  }
-});
 
 // Load Comments
 document.getElementById('load-comments')?.addEventListener('click',async function(e){
@@ -992,7 +850,7 @@ window.FH_WATCH = {
 };
 window.FH_VIDEO_DURATION = <?= (int)$video['duration'] ?>;
 </script>
-<script src="<?= fh_asset_url('assets/js/video-player-ads.js') ?>" defer></script>
+<script src="<?= fh_asset_url('assets/js/video-player-ads.min.js') ?>" defer></script>
 <script>
 window.addEventListener('load', () => {
   if (document.getElementById('player-wrapper')) {
@@ -1008,37 +866,7 @@ window.addEventListener('load', () => {
   }
 });
 
-// Playlist Autoplay Support
-<?php if ($playlist && $next_video_id): ?>
-window.addEventListener('DOMContentLoaded', () => {
-  const player = document.getElementById('fh-player');
-  const nextVideoUrl = '<?= BASE_URL ?>/watch.php?v=<?= $next_video_id ?>&list=<?= $playlist['id'] ?>';
-  
-  // HTML5 Video ended event
-  if (player) {
-    player.addEventListener('ended', () => {
-      window.location.href = nextVideoUrl;
-    });
-  }
-  
-  // YouTube API ended polling
-  let ytEndedTriggered = false;
-  let checkYTEnd = setInterval(() => {
-    if (window.fhAdManager && window.fhAdManager.ytPlayerObj && typeof window.fhAdManager.ytPlayerObj.getPlayerState === 'function') {
-      try {
-        const state = window.fhAdManager.ytPlayerObj.getPlayerState();
-        if (state === 0 && !ytEndedTriggered) { // 0 is YT.PlayerState.ENDED
-          ytEndedTriggered = true;
-          clearInterval(checkYTEnd);
-          window.location.href = nextVideoUrl;
-        }
-      } catch (e) {
-        // Ignore iframe api errors
-      }
-    }
-  }, 500);
-});
-<?php endif; ?>
+
 </script>
-<script src="<?= fh_asset_url('assets/js/watchtime.js') ?>" defer></script>
+<script src="<?= fh_asset_url('assets/js/watchtime.min.js') ?>" defer></script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

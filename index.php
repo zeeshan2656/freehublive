@@ -134,8 +134,7 @@ function bindLoadMore() {
         data.videos.forEach(v => {
           const el = document.createElement('article');
           el.className = 'video-card fade-in';
-          const watchUrl = v.url || '<?= BASE_URL ?>/watch.php?v=' + encodeURIComponent(v.id);
-          const channelUrl = '<?= BASE_URL ?>/channel.php?id=' + v.user_id + '&tab=videos';
+          const watchUrl = v.url || '<?= BASE_URL ?>/video/watch/' + encodeURIComponent(v.id);
           el.onclick = () => location.href = watchUrl;
           const durBadge = v.duration_fmt
             ? `<span class="video-duration">${v.duration_fmt}</span>`
@@ -150,13 +149,13 @@ function bindLoadMore() {
             </div>
             <div class="video-card-body">
               <div class="video-card-info-wrap">
-                <a href="${channelUrl}" onclick="event.stopPropagation();" style="display:inline-block;flex-shrink:0;border-radius:50%;overflow:hidden;width:44px;height:44px;">
+                <div style="display:inline-block;flex-shrink:0;border-radius:50%;overflow:hidden;width:44px;height:44px;">
                   <img src="${v.avatar}" alt="${v.channel}" class="video-card-avatar" loading="lazy" width="44" height="44" style="width:100%;height:100%;object-fit:cover">
-                </a>
+                </div>
                 <div style="min-width:0;">
                   <div class="video-title">${v.title}</div>
                   <div class="video-card-subtitle">
-                    <a href="${channelUrl}" onclick="event.stopPropagation();" class="video-card-channel-link">${v.channel}</a>
+                    <span class="video-card-channel-link">${v.channel}</span>
                   </div>
                 </div>
               </div>

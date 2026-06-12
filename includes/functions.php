@@ -93,7 +93,13 @@ if (!defined('MEDIA_CDN_URL')) {
 }
 
 // ── File helpers ────────────────────────────────────────────
-function thumb_url(?string $thumb): string {
+function thumb_url(?string $thumb, ?string $video_url = null): string {
+    if ($video_url) {
+        $yt_id = fh_youtube_id($video_url);
+        if ($yt_id) {
+            return 'https://img.youtube.com/vi/' . $yt_id . '/mqdefault.jpg';
+        }
+    }
     if (!$thumb) return BASE_URL . '/assets/img/default-thumb.jpg';
     if (str_starts_with($thumb, 'http')) return $thumb;
     if ($thumb === 'default-thumb.jpg') {
@@ -123,6 +129,9 @@ function cover_url(?string $cover): string {
 
 function fh_youtube_id(?string $url): ?string {
     if (!$url) return null;
+    if (preg_match('/(?:\/shorts\/|youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^"&?\/ ]{11})/i', $url, $match)) {
+        return $match[1];
+    }
     if (preg_match('%(?:youtube(?:-nocookie)?\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/ ]{11})%i', $url, $match)) {
         return $match[1];
     }
@@ -700,10 +709,9 @@ function render_video_card(array $v, array $opts = []): string {
         $format = 'grid';
     }
     $is_portrait = (int)($v['is_reel'] ?? 0) === 1;
-    $ref_param = $ref ? '&ref=' . urlencode($ref) : '';
-    $url       = $is_portrait ? BASE_URL . '/reels.php?id=' . (int)$v['id'] : BASE_URL . '/watch.php?v=' . (int)$v['id'] . $ref_param;
-    $channelUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . '&tab=videos';
-    $thumb     = thumb_url($v['thumbnail'] ?? null);
+    $ref_param = $ref ? '?ref=' . urlencode($ref) : '';
+    $url       = $is_portrait ? BASE_URL . '/reels/' . (int)$v['id'] : BASE_URL . '/video/watch/' . (int)$v['id'] . $ref_param;
+    $thumb     = thumb_url($v['thumbnail'] ?? null, $v['video_url'] ?? null);
     $durSec    = (int)($v['duration'] ?? 0);
     $dur       = $durSec > 0 ? format_duration($durSec) : '';
     $title     = e($v['title'] ?? '');
@@ -733,48 +741,23 @@ function render_video_card(array $v, array $opts = []): string {
         $thumbMedia = '<img src="' . $thumb . '" alt="' . $title . '" loading="lazy" decoding="async" width="320" height="180" class="thumb-main">';
     }
 
-    $deleteBtnHtml = '';
-    if (!empty($opts['show_delete'])) {
-        $csrfToken = csrf_token();
-        $deleteActionUrl = BASE_URL . '/channel.php?id=' . (int)$v['user_id'] . ($is_portrait ? '&tab=reels' : '&tab=videos');
-        $editUrl = $is_portrait ? BASE_URL . '/creator/reels.php' : BASE_URL . '/creator/edit.php?id=' . (int)$v['id'];
-        $editTitle = $is_portrait ? 'Edit Reel' : 'Edit Video';
-        $deleteConfirm = $is_portrait ? 'Delete this reel?' : 'Delete this video?';
-        $deleteTitle = $is_portrait ? 'Delete Reel' : 'Delete Video';
-        $deleteBtnHtml = <<<HTML
-<div class="video-owner-actions" style="position:absolute; top:8px; right:8px; z-index:15; display:flex; gap:6px;" onclick="event.stopPropagation();">
-  <a href="{$editUrl}" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.65); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="{$editTitle}">
-    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-  </a>
-  <form method="POST" action="{$deleteActionUrl}" style="margin:0;" onsubmit="return confirm('{$deleteConfirm}');">
-    <input type="hidden" name="csrf" value="{$csrfToken}">
-    <input type="hidden" name="video_id" value="{$v['id']}">
-    <button type="submit" name="action" value="delete_video" class="btn btn-sm btn-icon" style="background:rgba(239,68,68,0.85); color:#fff; border:none; width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer;" title="{$deleteTitle}">
-      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-    </button>
-  </form>
-</div>
-HTML;
-    }
-
     return <<<HTML
 <article class="video-card fade-in{$formatClass}" onclick="location.href='{$url}'">
   <div class="video-thumb{$portraitClass}" style="position:relative">
     {$thumbMedia}
     {$durBadge}
-    {$deleteBtnHtml}
   </div>
   <div class="video-card-body">
     <div style="display:flex;gap:10px;margin-bottom:8px">
-      <a href="{$channelUrl}" onclick="event.stopPropagation();" style="display:inline-block;flex-shrink:0;border-radius:50%;overflow:hidden;width:40px;height:40px;">
+      <div style="display:inline-block;flex-shrink:0;border-radius:50%;overflow:hidden;width:40px;height:40px;">
         <img src="{$avatar}" alt="{$creator}" class="video-card-avatar" loading="lazy" width="40" height="40" style="width:100%;height:100%;object-fit:cover">
-      </a>
+      </div>
       <div style="min-width:0;flex:1">
         <div class="video-title" style="margin:0;line-height:1.3">{$title}</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.75rem;color:var(--text2)">
-      <a href="{$channelUrl}" onclick="event.stopPropagation();" class="video-card-channel-link">{$creator}</a>
+      <span class="video-card-channel-link">{$creator}</span>
       <span>·</span>
       <span style="display:inline-flex;align-items:center;gap:2px">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -954,8 +937,6 @@ function render_ad_placeholder(string $placement_key): string {
         str_contains($_SERVER['PHP_SELF'] ?? '', '/admin/') ||
         str_contains($_SERVER['PHP_SELF'] ?? '', '/creator/') ||
         str_contains($_SERVER['PHP_SELF'] ?? '', '/affiliate/') ||
-        basename($_SERVER['PHP_SELF'] ?? '') === 'dashboard.php' ||
-        basename($_SERVER['PHP_SELF'] ?? '') === 'withdrawal.php' ||
         basename($_SERVER['PHP_SELF'] ?? '') === 'settings.php' ||
         basename($_SERVER['PHP_SELF'] ?? '') === 'profile.php'
     );

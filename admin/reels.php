@@ -246,7 +246,7 @@ require_once __DIR__ . '/partials/admin_head.php';
             <video src="<?= reel_url($r['video_url']) ?>#t=0.1" muted playsinline style="width:40px; aspect-ratio:9/16; object-fit:cover; border-radius:4px; background:#000; display:block;"></video>
           </td>
           <td style="max-width:220px; font-weight:600;">
-            <a href="<?= BASE_URL ?>/reels.php?id=<?= $r['id'] ?>" target="_blank" style="color:var(--accent); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<?= e($r['title']) ?>">
+            <a href="<?= BASE_URL ?>/reels/<?= $r['id'] ?>" target="_blank" style="color:var(--accent); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<?= e($r['title']) ?>">
               <?= e(truncate($r['title'], 50)) ?>
             </a>
           </td>
@@ -268,7 +268,7 @@ require_once __DIR__ . '/partials/admin_head.php';
           <td class="text-xs text-muted"><?= date('M j, Y H:i', strtotime($r['created_at'])) ?></td>
           <td>
             <div class="flex gap-2" style="align-items:center">
-              <a href="<?= BASE_URL ?>/reels.php?id=<?= $r['id'] ?>" target="_blank" class="btn btn-sm btn-outline" title="View Reel" style="padding: 4px 8px;">View</a>
+              <a href="<?= BASE_URL ?>/reels/<?= $r['id'] ?>" target="_blank" class="btn btn-sm btn-outline" title="View Reel" style="padding: 4px 8px;">View</a>
               <?php if ($r['status'] === 'pending'): ?>
                 <form method="POST" action="?<?= e(http_build_query($_GET)) ?>" style="display:inline">
                   <input type="hidden" name="csrf" value="<?= csrf_token() ?>">

@@ -41,7 +41,6 @@ require_once __DIR__ . '/partials/admin_head.php';
         </div>
         <div class="flex gap-2" style="margin-left:auto;flex-wrap:wrap">
           <a href="<?= BASE_URL ?>/admin/settings.php" class="btn btn-outline btn-sm">⚙️ Settings</a>
-          <a href="<?= BASE_URL ?>/admin/analytics.php" class="btn btn-primary btn-sm">📊 Analytics</a>
         </div>
       </div>
     </div>
@@ -91,10 +90,6 @@ require_once __DIR__ . '/partials/admin_head.php';
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
         <span>New Creators</span>
       </a>
-      <a href="<?= BASE_URL ?>/admin/analytics.php" class="qa-btn">
-        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span>Analytics</span>
-      </a>
       <a href="<?= BASE_URL ?>/admin/users.php" class="qa-btn">
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span>All Users</span>
@@ -118,7 +113,7 @@ require_once __DIR__ . '/partials/admin_head.php';
         </div>
         <?php foreach ($recent_videos as $v): ?>
         <div class="flex gap-3" style="padding:8px 0;border-bottom:1px solid var(--border)">
-          <img src="<?= thumb_url($v['thumbnail']) ?>" style="width:64px;aspect-ratio:16/9;border-radius:4px;object-fit:cover;flex-shrink:0" loading="lazy">
+          <img src="<?= thumb_url($v['thumbnail'], $v['video_url']) ?>" style="width:64px;aspect-ratio:16/9;border-radius:4px;object-fit:cover;flex-shrink:0" loading="lazy">
           <div style="min-width:0;flex:1">
             <div style="font-size:.83rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"><?= e($v['title']) ?></div>
             <div class="text-muted text-xs"><?= e($v['channel_name']??$v['username']) ?> · <?= format_number((int)$v['views']) ?> views</div>

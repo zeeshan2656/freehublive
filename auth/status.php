@@ -13,7 +13,7 @@ $status = $user['status'] ?? 'pending';
 
 // If they are active, they have no reason to be here. Redirect to dashboard.
 if ($status === 'active') {
-    redirect(BASE_URL . '/dashboard.php');
+    redirect(BASE_URL . '/index.php');
 }
 
 $meta_title = 'Account Status — ' . setting('site_name', 'FreeHub');

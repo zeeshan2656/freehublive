@@ -232,7 +232,7 @@ require_once __DIR__ . '/../includes/header.php';
               <?php if ((int)$v['is_reel'] === 1): ?>
                 <video src="<?= video_url($v['video_url']) ?>#t=0.1" muted playsinline style="width:50px; aspect-ratio:9/16; object-fit:cover; border-radius:4px; background:#000;"></video>
               <?php else: ?>
-                <img src="<?= thumb_url($v['thumbnail']) ?>" style="width:72px;aspect-ratio:16/9;object-fit:cover;border-radius:4px" loading="lazy">
+                <img src="<?= thumb_url($v['thumbnail'], $v['video_url']) ?>" style="width:72px;aspect-ratio:16/9;object-fit:cover;border-radius:4px" loading="lazy">
               <?php endif; ?>
             </td>
             <td style="max-width:200px; font-weight:600;">

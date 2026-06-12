@@ -116,13 +116,7 @@ $themes = [
           <label class="form-label">Tagline</label>
           <input class="form-input" type="text" name="site_tagline" value="<?= e(setting('site_tagline','Watch. Share. Earn.')) ?>">
         </div>
-        <div class="form-group">
-          <label class="form-label">Allow New Registrations</label>
-          <select class="form-input form-select" name="allow_register">
-            <option value="1" <?= setting('allow_register','1')==='1'?'selected':'' ?>>Yes</option>
-            <option value="0" <?= setting('allow_register','1')==='0'?'selected':'' ?>>No</option>
-          </select>
-        </div>
+
         <div class="form-group">
           <label class="form-label">Maintenance Mode</label>
           <select class="form-input form-select" name="maintenance" id="maintenance-toggle">
