@@ -2,8 +2,8 @@
 <?php if (isset($is_reels) && $is_reels): ?>
   </div> <!-- /reels-page-wrapper -->
   
-  <script src="<?= fh_asset_url('assets/js/app.js') ?>" defer></script>
-  <script src="<?= fh_asset_url('assets/js/ads.js') ?>" defer></script>
+  <script src="<?= fh_asset_url('assets/js/app.min.js') ?>" defer></script>
+  <script src="<?= fh_asset_url('assets/js/ads.min.js') ?>" defer></script>
 
   <?php require_once __DIR__ . '/partials/global-upload-widget.php'; ?>
 
@@ -36,8 +36,8 @@
   </div>
 </footer>
 
-<script src="<?= fh_asset_url('assets/js/app.js') ?>" defer></script>
-<script src="<?= fh_asset_url('assets/js/ads.js') ?>" defer></script>
+<script src="<?= fh_asset_url('assets/js/app.min.js') ?>" defer></script>
+<script src="<?= fh_asset_url('assets/js/ads.min.js') ?>" defer></script>
 
 <?php require_once __DIR__ . '/partials/date_filter_modal.php'; ?>
 

@@ -109,10 +109,4 @@ Options -Indexes
     RewriteRule ^reels/?$ reels.php [QSA,L]
 </IfModule>
 
-# ── Allow iframe embedding for the proxy script ──────────────────
-<Files "embed_proxy.php">
-    <IfModule mod_headers.c>
-        Header always unset X-Frame-Options
-        Header unset X-Frame-Options
-    </IfModule>
-</Files>
+

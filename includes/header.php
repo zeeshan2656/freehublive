@@ -324,14 +324,12 @@ input,select,textarea{font-family:inherit;outline:none}
 </style>
 
 <!-- ── Main CSS (async — non-blocking) ── -->
-<link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.css') ?>" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.css') ?>"></noscript>
-
-
+<link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.min.css') ?>" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="<?= fh_asset_url('assets/css/main.min.css') ?>"></noscript>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap">
 <link rel="icon" type="image/svg+xml" href="<?= BASE_URL ?>/assets/img/logo.svg">
-<script src="<?= fh_asset_url('assets/js/reels-cache.js') ?>"></script>
+<script src="<?= fh_asset_url('assets/js/reels-cache.min.js') ?>"></script>
 <style>
 :root{--accent:<?= e($primary) ?>;--accent2:<?= e($primary) ?>cc}
 /* Responsive Header Right Actions */
@@ -849,9 +847,7 @@ endif;
         <a href="<?= BASE_URL ?>/admin/reels.php" class="studio-nav-item <?= $current_page === 'reels.php' ? 'active' : '' ?>">
           <span>📱 Reels</span>
         </a>
-        <a href="<?= BASE_URL ?>/admin/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">
-          <span>📈 Analytics</span>
-        </a>
+
 
         <!-- Ads Dropdown -->
         <div class="studio-nav-group-ads" style="margin-bottom: 6px;">
@@ -896,32 +892,21 @@ endif;
 
         <script>
         document.addEventListener('DOMContentLoaded', function() {
-          const dropdowns = [
-            { toggleId: 'ads-menu-toggle', subId: 'ads-submenu', arrowClass: 'ads-arrow' },
-            { toggleId: 'users-menu-toggle', subId: 'users-submenu', arrowClass: 'users-arrow' },
-            { toggleId: 'finances-menu-toggle', subId: 'finances-submenu', arrowClass: 'finances-arrow' },
-            { toggleId: 'content-menu-toggle', subId: 'content-submenu', arrowClass: 'content-arrow' },
-            { toggleId: 'system-menu-toggle', subId: 'system-submenu', arrowClass: 'system-arrow' },
-            { toggleId: 'library-menu-toggle', subId: 'library-submenu', arrowClass: 'library-arrow' }
-          ];
-          
-          dropdowns.forEach(function(item) {
-            const toggle = document.getElementById(item.toggleId);
-            const sub = document.getElementById(item.subId);
-            if (toggle && sub) {
-              toggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                const arrow = this.querySelector('.' + item.arrowClass);
-                if (sub.style.display === 'none' || sub.style.display === '') {
-                  sub.style.display = 'flex';
-                  if (arrow) arrow.style.transform = 'rotate(90deg)';
-                } else {
-                  sub.style.display = 'none';
-                  if (arrow) arrow.style.transform = 'rotate(0deg)';
-                }
-              });
-            }
-          });
+          var toggle = document.getElementById('ads-menu-toggle');
+          var sub = document.getElementById('ads-submenu');
+          if (toggle && sub) {
+            toggle.addEventListener('click', function(e) {
+              e.preventDefault();
+              var arrow = this.querySelector('.ads-arrow');
+              if (sub.style.display === 'none' || sub.style.display === '') {
+                sub.style.display = 'flex';
+                if (arrow) arrow.style.transform = 'rotate(90deg)';
+              } else {
+                sub.style.display = 'none';
+                if (arrow) arrow.style.transform = 'rotate(0deg)';
+              }
+            });
+          }
         });
         </script>
 
@@ -930,9 +915,7 @@ endif;
         <a href="<?= BASE_URL ?>/creator/index.php" class="studio-nav-item <?= $current_page === 'index.php' && str_contains($_SERVER['PHP_SELF'], '/creator/') ? 'active' : '' ?>">
           <span>🏠 Dashboard</span>
         </a>
-        <a href="<?= BASE_URL ?>/creator/analytics.php" class="studio-nav-item <?= $current_page === 'analytics.php' ? 'active' : '' ?>">
-          <span>📈 Analytics</span>
-        </a>
+
         <a href="<?= BASE_URL ?>/creator/upload.php?mode=video" class="studio-nav-item <?= $current_page === 'upload.php' && ($_GET['mode'] ?? '') !== 'reel' ? 'active' : '' ?>">
           <span>⬆️ Upload Video</span>
         </a>

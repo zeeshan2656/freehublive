@@ -850,7 +850,7 @@ window.FH_WATCH = {
 };
 window.FH_VIDEO_DURATION = <?= (int)$video['duration'] ?>;
 </script>
-<script src="<?= fh_asset_url('assets/js/video-player-ads.js') ?>" defer></script>
+<script src="<?= fh_asset_url('assets/js/video-player-ads.min.js') ?>" defer></script>
 <script>
 window.addEventListener('load', () => {
   if (document.getElementById('player-wrapper')) {
@@ -868,5 +868,5 @@ window.addEventListener('load', () => {
 
 
 </script>
-<script src="<?= fh_asset_url('assets/js/watchtime.js') ?>" defer></script>
+<script src="<?= fh_asset_url('assets/js/watchtime.min.js') ?>" defer></script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

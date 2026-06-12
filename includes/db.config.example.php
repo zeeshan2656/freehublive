@@ -1,23 +1,7 @@
 <?php
 /**
- * Hostinger database credentials (this file stays on the server only).
- * Do not commit real passwords to public git repos. 
- */
-return [
-    'host'    => 'localhost',
-    'port'    => 3306,
-    'user'    => 'u434697879_freehub',
-    'pass'    => '03061881882Star2656@',
-    'name'    => 'u434697879_freehub',
-    'charset' => 'utf8mb4',
-];
-
-
-
-
-<?php
-/**
- * Hostinger database credentials (this file stays on the server only).
+ * Database credentials example file.
+ * Copy this to db.config.php and fill in your real values.
  * Do not commit real passwords to public git repos. 
  */
 return [
@@ -28,6 +12,3 @@ return [
     'name'    => 'freehub',
     'charset' => 'utf8mb4',
 ];
-
-
-
