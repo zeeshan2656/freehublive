@@ -122,6 +122,48 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
+// ── Dashboard mobile/desktop sidebar toggle ───────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  const dashboardToggle = document.getElementById('dashboard-sidebar-toggle');
+  const dashboardSidebar = document.querySelector('.dashboard-sidebar-container');
+  const dashboardBackdrop = document.getElementById('dashboard-sidebar-backdrop');
+
+  if (dashboardToggle && dashboardSidebar) {
+    function openDashboardSidebar() {
+      dashboardSidebar.classList.add('open');
+      if (dashboardBackdrop) dashboardBackdrop.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeDashboardSidebar() {
+      dashboardSidebar.classList.remove('open');
+      if (dashboardBackdrop) dashboardBackdrop.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    dashboardToggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (window.innerWidth <= 768) {
+        dashboardSidebar.classList.contains('open') ? closeDashboardSidebar() : openDashboardSidebar();
+      } else {
+        const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+        localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
+      }
+    });
+
+    if (dashboardBackdrop) {
+      dashboardBackdrop.addEventListener('click', closeDashboardSidebar);
+    }
+
+    dashboardSidebar.addEventListener('click', function(e) {
+      const navItem = e.target.closest('.studio-nav-item');
+      if (navItem && window.innerWidth <= 768) {
+        closeDashboardSidebar();
+      }
+    });
+  }
+});
+
 // ── Dropdown toggle on button click ──────────────────────────
 document.addEventListener('click', e => {
   const target = e.target instanceof Element ? e.target : null;
@@ -264,7 +306,7 @@ if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
 document.addEventListener('click', e => {
   const target = e.target instanceof Element ? e.target : null;
   if (!target) return;
-  if (target.closest('#theme-toggle, #theme-toggle-mobile, .theme-toggle-btn') && typeof _cycleTheme === 'function') {
+  if (target.closest('#theme-toggle, #theme-toggle-mobile, #dashboard-theme-toggle, .theme-toggle-btn') && typeof _cycleTheme === 'function') {
     _cycleTheme();
   }
 });

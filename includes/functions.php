@@ -1188,4 +1188,18 @@ function fh_cache_delete(string $key): bool {
     return false;
 }
 
+/**
+ * Trigger background HLS transcoding process asynchronously.
+ */
+function fh_run_background_transcode(int $id, string $type): void {
+    $script = __DIR__ . '/transcode.php';
+    if (PHP_OS_FAMILY === 'Windows') {
+        $cmd = 'php -f "' . $script . '" -- id=' . $id . ' type=' . $type;
+        @pclose(@popen("start /B cmd /c " . $cmd, "r"));
+    } else {
+        $cmd = 'php -f "' . $script . '" -- id=' . $id . ' type=' . $type . ' > /dev/null 2>&1 &';
+        @shell_exec($cmd);
+    }
+}
+
 

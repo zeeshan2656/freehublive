@@ -149,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'user_id'    => $uid,
                     'video_url'  => $finalName,
                     'title'      => empty($title) ? null : $title,
-                    'status'     => 'published',
+                    'status'     => 'processing',
                     'created_at' => date('Y-m-d H:i:s'),
                 ]);
             } else {
@@ -173,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'file_size'    => $fsize,
                     'duration'     => $duration,
                     'visibility'   => $visibility,
-                    'status'       => 'published',
+                    'status'       => 'processing',
                     'published_at' => date('Y-m-d H:i:s'),
                     'is_reel'      => 0,
                 ]);
@@ -197,6 +197,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ], 'id=?', [$sid]);
 
             $pdo->commit();
+            
+            // Trigger HLS transcoding and thumbnail extraction asynchronously
+            fh_run_background_transcode($video_id, $is_reel === 1 ? 'reel' : 'video');
         } catch (Throwable $e) {
             $pdo->rollBack();
             // Clean up the finalized video file on transaction failure

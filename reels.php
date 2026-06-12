@@ -16,7 +16,7 @@ $_ssr_reels = [];
 
 try {
     // Use same fields as api/videos.php to ensure compatibility
-    $ssr_fields = "v.id, v.video_url, v.user_id, u.username, u.channel_name, u.avatar, v.title, v.views, v.likes, COALESCE(v.comments_count, 0) AS comments_count, v.created_at";
+    $ssr_fields = "v.id, v.video_url, v.hls_url, v.thumbnail, v.user_id, u.username, u.channel_name, u.avatar, v.title, v.views, v.likes, COALESCE(v.comments_count, 0) AS comments_count, v.created_at";
 
     if ($_ssr_start_id > 0) {
         $start_reel = db_fetch(
@@ -59,6 +59,8 @@ $_ssr_feed = array_map(function($v) {
         'id'          => (int)$v['id'],
         'user_id'     => (int)$v['user_id'],
         'video_src'   => reel_url($v['video_url']),
+        'hls_url'     => $v['hls_url'] ? BASE_URL . '/' . $v['hls_url'] : '',
+        'thumbnail'   => $v['thumbnail'] ? thumb_url($v['thumbnail']) : thumb_url(null, $v['video_url']),
         'channel'     => $v['channel_name'] ?? $v['username'] ?? '',
         'avatar'      => avatar_url($v['avatar'] ?? null),
         'description' => $v['title'] ?? '',
@@ -75,6 +77,7 @@ $_ssr_feed = array_map(function($v) {
 
 require_once __DIR__ . '/includes/header.php';
 ?>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 
 <div class="reels-feed-container">
   <!-- Reels Ads Placements (Desktop Sides) -->
@@ -488,6 +491,73 @@ let reelsList = [];
 
 // Track created Blob URLs to prevent memory leaks
 const activeBlobUrls = {};
+const activeHlsInstances = {};
+
+function prefetchHls(hlsUrl) {
+  if (!hlsUrl) return;
+  fetch(hlsUrl).then(res => res.text()).then(playlistText => {
+    const baseUrl = hlsUrl.substring(0, hlsUrl.lastIndexOf('/') + 1);
+    const lines = playlistText.split('\n');
+    const variantUrls = [];
+    lines.forEach(line => {
+      if (line && !line.startsWith('#') && line.trim() !== '') {
+        variantUrls.push(baseUrl + line.trim());
+      }
+    });
+    if (variantUrls.length > 0) {
+      const firstVariantUrl = variantUrls[0];
+      fetch(firstVariantUrl).then(res2 => res2.text()).then(variantText => {
+        const variantLines = variantText.split('\n');
+        let firstSegmentName = null;
+        for (let i = 0; i < variantLines.length; i++) {
+          const vLine = variantLines[i].trim();
+          if (vLine && !vLine.startsWith('#') && vLine !== '') {
+            firstSegmentName = vLine;
+            break;
+          }
+        }
+        if (firstSegmentName) {
+          const firstSegmentUrl = firstVariantUrl.substring(0, firstVariantUrl.lastIndexOf('/') + 1) + firstSegmentName;
+          fetch(firstSegmentUrl, { priority: 'low' }).catch(()=>{});
+        }
+      }).catch(()=>{});
+    }
+  }).catch(()=>{});
+}
+
+function initHlsForVideo(video, hlsUrl) {
+  const slide = video.closest('.reel-slide');
+  const reelId = slide.getAttribute('data-id');
+  if (activeHlsInstances[reelId]) {
+    return;
+  }
+  if (Hls.isSupported()) {
+    const hls = new Hls({
+      maxBufferLength: 6,
+      maxMaxBufferLength: 10,
+      enableWorker: true,
+      lowLatencyMode: true,
+      backBufferLength: 4
+    });
+    hls.loadSource(hlsUrl);
+    hls.attachMedia(video);
+    activeHlsInstances[reelId] = hls;
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = hlsUrl;
+  }
+}
+
+function destroyHlsForVideo(video) {
+  const slide = video.closest('.reel-slide');
+  const reelId = slide.getAttribute('data-id');
+  if (activeHlsInstances[reelId]) {
+    activeHlsInstances[reelId].destroy();
+    delete activeHlsInstances[reelId];
+  }
+  video.src = '';
+  video.removeAttribute('src');
+  video.load();
+}
 
 const cache = new ReelsCache();
 
@@ -527,7 +597,8 @@ function renderReelSlide(v) {
   if (ytId) {
     mediaHtml = `<div class="reel-video" data-src="${v.video_src}" data-yt-id="${ytId}" style="width:100%; height:100%; background:#000;"></div>`;
   } else {
-    mediaHtml = `<video class="reel-video" data-src="${v.video_src}" loop playsinline style="width:100%; height:100%; object-fit:contain; background:#000;" onerror="handleVideoError(this)"></video>`;
+    const posterUrl = v.thumbnail || '<?= BASE_URL ?>/assets/img/default-thumb.jpg';
+    mediaHtml = `<video class="reel-video" data-src="${v.video_src}" poster="${posterUrl}" loop playsinline style="width:100%; height:100%; object-fit:contain; background:#000;" onerror="handleVideoError(this)" data-hls="${v.hls_url || ''}"></video>`;
   }
 
   slide.innerHTML = `
@@ -630,7 +701,6 @@ function playActiveVideo(video, slide) {
 
 async function updateMediaSources(activeIndex) {
   const slides = document.querySelectorAll('.reel-slide');
-  const keepIds = [];
 
   for (let idx = 0; idx < slides.length; idx++) {
     const slide = slides[idx];
@@ -639,117 +709,52 @@ async function updateMediaSources(activeIndex) {
 
     const reelId = parseInt(slide.getAttribute('data-id'), 10);
     const realSrc = video.getAttribute('data-src');
+    const hlsUrl = video.getAttribute('data-hls');
 
-    // Rolling cache window range: [activeIndex - 2, activeIndex + 10]
-    if (idx >= activeIndex - 2 && idx <= activeIndex + 10) {
-      keepIds.push(reelId);
-    }
-
-    // Active DOM range: [activeIndex - 2, activeIndex + 5]
-    if (idx >= activeIndex - 2 && idx <= activeIndex + 5) {
-      if (video.tagName === 'DIV' && video.hasAttribute('data-yt-id')) {
-        const ytId = video.getAttribute('data-yt-id');
-        if (idx === activeIndex) {
-          let iframe = video.querySelector('iframe');
-          if (!iframe) {
-            video.innerHTML = `<iframe class="youtube-player-iframe" src="https://www.youtube.com/embed/${ytId}?enablejsapi=1&autoplay=1&controls=0&loop=1&playlist=${ytId}&mute=${isMutedGlobal ? 1 : 0}&playsinline=1&rel=0" style="width:100%; height:100%; border:none; display:block;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
-          } else {
-            if (iframe.contentWindow) {
-              iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-            }
-          }
-          const playOverlay = slide.querySelector('.reel-play-overlay');
-          if (playOverlay) playOverlay.classList.remove('paused');
-        } else {
-          video.innerHTML = '';
-        }
+    if (idx === activeIndex) {
+      // Current active video: Play it
+      if (hlsUrl) {
+        initHlsForVideo(video, hlsUrl);
       } else {
-        // Standard video file
-        let srcJustSet = false;
         if (!video.src || video.src === '') {
-          const localBlob = await cache.getVideoBlob(reelId);
-          if (localBlob) {
-            const blobUrl = URL.createObjectURL(localBlob);
-            activeBlobUrls[reelId] = blobUrl;
-            video.src = blobUrl;
-          } else {
-            video.src = realSrc;
-          }
-          srcJustSet = true;
+          video.src = realSrc;
         }
-
-        if (idx === activeIndex) {
-          video.setAttribute('preload', 'auto');
-          if (srcJustSet || video.paused) {
-            playActiveVideo(video, slide);
-          }
-        } else if (idx > activeIndex) {
-          video.setAttribute('preload', 'auto');
-          if (video.paused && video.readyState < 2) {
-            video.load();
-          }
+      }
+      playActiveVideo(video, slide);
+    } else if (idx === activeIndex + 1 || idx === activeIndex + 2) {
+      // Prefetch upcoming videos (smart prefetching)
+      if (hlsUrl) {
+        prefetchHls(hlsUrl);
+      } else {
+        // Fallback prefetch first 256KB of raw MP4 file
+        fetch(realSrc, { headers: { Range: 'bytes=0-262143' } }).catch(()=>{});
+      }
+      // Release video source if it was playing previously to save memory
+      if (idx !== activeIndex) {
+        if (hlsUrl) {
+          destroyHlsForVideo(video);
         } else {
-          video.setAttribute('preload', 'metadata');
+          video.pause();
+          video.src = '';
+          video.removeAttribute('src');
+          video.load();
         }
       }
     } else {
-      if (video.tagName === 'DIV') {
-        video.innerHTML = '';
+      // Out of active range: destroy players and release memory completely (memory optimization)
+      if (hlsUrl) {
+        destroyHlsForVideo(video);
       } else {
-        video.removeAttribute('preload');
+        video.pause();
+        video.src = '';
         video.removeAttribute('src');
         video.load();
-
-        if (activeBlobUrls[reelId]) {
-          URL.revokeObjectURL(activeBlobUrls[reelId]);
-          delete activeBlobUrls[reelId];
-        }
       }
     }
   }
-
-  // Preload upcoming reels binary video files
-  precacheRange(activeIndex + 1, activeIndex + 10);
-
-  // Evict old unused video blobs
-  cache.cleanOldBlobs(keepIds);
 }
 
-async function precacheRange(startIdx, endIdx) {
-  const slides = document.querySelectorAll('.reel-slide');
-  for (let idx = startIdx; idx <= endIdx; idx++) {
-    if (idx >= slides.length) break;
-    const slide = slides[idx];
-    const reelId = parseInt(slide.getAttribute('data-id'), 10);
-    const video = slide.querySelector('.reel-video');
-    if (!video || video.tagName === 'DIV') continue;
 
-    const realSrc = video.getAttribute('data-src');
-
-    try {
-      const existing = await cache.getVideoBlob(reelId);
-      if (!existing) {
-        const res = await fetch(realSrc);
-        const blob = await res.blob();
-        await cache.saveVideoBlob(reelId, blob);
-        
-        // Dynamic swap to blob if active in viewport buffer range
-        const activeSlides = document.querySelectorAll('.reel-slide');
-        const currentActive = parseInt(activeSlides[currentActiveIndex].getAttribute('data-id'), 10);
-        const selfIdx = Array.from(activeSlides).indexOf(slide);
-        if (selfIdx >= currentActiveIndex - 2 && selfIdx <= currentActiveIndex + 5) {
-          if (video.src === realSrc || !video.src) {
-            const blobUrl = URL.createObjectURL(blob);
-            activeBlobUrls[reelId] = blobUrl;
-            video.src = blobUrl;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn(`Failed to preload video blob for reel ${reelId}:`, e);
-    }
-  }
-}
 
 let observer;
 

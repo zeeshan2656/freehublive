@@ -559,6 +559,10 @@ input,select,textarea{font-family:inherit;outline:none}
   .dashboard-layout {
     min-height: 100vh;
   }
+  #dashboard-sidebar-backdrop {
+    inset: 0;
+    z-index: 100;
+  }
 }
 
 /* Desktop sidebar collapsed rules */

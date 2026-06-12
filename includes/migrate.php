@@ -37,7 +37,7 @@ function fh_run_migrations(): void {
 
     // ── Migration cache: skip INFORMATION_SCHEMA queries if already done ──
     // Bump this version whenever you add new migrations to force re-check
-    $migration_version = '2026.06.12.1';
+    $migration_version = '2026.06.12.2';
     $cache_dir = __DIR__ . '/../cache/';
     $flag_file = $cache_dir . '.migrations_done';
     
@@ -773,12 +773,14 @@ function fh_run_migrations(): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
 
-    // Run daily aggregation helper exactly once per day (or if cache is stale)
-    $agg_flag = $cache_dir . '.analytics_aggregated';
-    $today = date('Y-m-d');
-    if (!is_file($agg_flag) || trim(@file_get_contents($agg_flag)) !== $today) {
-        fh_run_analytics_aggregation();
-        @file_put_contents($agg_flag, $today);
+    // Add HLS and thumbnail support for reels table
+    if (fh_table_exists('reels')) {
+        if (!fh_column_exists('reels', 'hls_url')) {
+            db_query("ALTER TABLE reels ADD COLUMN hls_url VARCHAR(500) DEFAULT NULL AFTER video_url");
+        }
+        if (!fh_column_exists('reels', 'thumbnail')) {
+            db_query("ALTER TABLE reels ADD COLUMN thumbnail VARCHAR(255) DEFAULT NULL AFTER hls_url");
+        }
     }
 
     // ── All migrations passed — write flag to skip on next request ──

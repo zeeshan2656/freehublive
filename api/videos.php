@@ -26,6 +26,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     $is_reel    = isset($_GET['is_reel']) ? (int)$_GET['is_reel'] : null;
     $is_public_feed = !$channel_id && !is_logged_in();
 
+    // Check server cache first
+    $cache_key = "reels_feed_v2_p_{$page}_per_{$per}_cat_{$cat}_sort_{$sort}_q_" . md5($q) . "_chan_{$channel_id}_reel_{$is_reel}_pub_{$is_public_feed}";
+    $cached = fh_cache_get($cache_key);
+    if ($cached !== null) {
+        json_response($cached);
+    }
+
     if ($is_reel === 1) {
         $where_params = [];
         if ($channel_id) {
@@ -43,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
         $start_id = isset($_GET['start_id']) ? (int)$_GET['start_id'] : 0;
         $offset = ($page - 1) * $per;
 
-        $select_fields = "v.id, v.video_url, v.user_id, u.username, u.channel_name, u.avatar, v.title, v.views, v.likes, COALESCE(v.comments_count, 0) AS comments_count, v.created_at";
+        $select_fields = "v.id, v.video_url, v.hls_url, v.thumbnail, v.user_id, u.username, u.channel_name, u.avatar, v.title, v.views, v.likes, COALESCE(v.comments_count, 0) AS comments_count, v.created_at";
 
         if ($start_id > 0 && $page === 1) {
             $videos_start = db_fetchAll(
@@ -76,9 +83,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
         
         $out = array_map(function($v) {
             return [
-                'id'          => $v['id'],
+                'id'          => (int)$v['id'],
                 'user_id'     => (int)$v['user_id'],
                 'video_src'   => reel_url($v['video_url']),
+                'hls_url'     => $v['hls_url'] ? BASE_URL . '/' . $v['hls_url'] : '',
+                'thumbnail'   => $v['thumbnail'] ? thumb_url($v['thumbnail']) : thumb_url(null, $v['video_url']),
                 'channel'     => $v['channel_name'] ?? $v['username'],
                 'avatar'      => avatar_url($v['avatar']),
                 'description' => $v['title'] ?? '',
@@ -94,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
         }, $videos);
 
         $response = ['videos' => $out, 'has_next' => ($offset + $per) < $total];
+        fh_cache_set($cache_key, $response, 60);
 
         // Add HTTP cache headers for public reel feeds (60s browser cache)
         if ($is_public_feed && $page === 1 && !$start_id) {
@@ -182,6 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$action) {
     }, $videos);
 
     $response = ['videos' => $out, 'has_next' => ($offset + $per) < $total];
+    fh_cache_set($cache_key, $response, 60);
 
     // Add HTTP cache headers for public video feeds
     if ($is_public_feed && $page === 1 && !$q) {
