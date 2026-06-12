@@ -1435,7 +1435,15 @@ require_once __DIR__ . '/../includes/header.php';
           signal: session.abortController.signal,
           keepalive: true
         });
-        const finalizeData = await finalizeRes.json();
+        let finalizeData;
+        const finalizeText = await finalizeRes.text();
+        try {
+          finalizeData = JSON.parse(finalizeText);
+        } catch (jsonErr) {
+          console.error("Finalize JSON parse error. Raw response text:", finalizeText);
+          setUploadFailed(session, 'Finalize error: ' + (finalizeText.substring(0, 150) || 'Empty server response'));
+          return;
+        }
 
         if (finalizeData.success) {
           session.status = 'published';
@@ -1554,7 +1562,15 @@ require_once __DIR__ . '/../includes/header.php';
       const finalizeRes = await fetch(`<?= BASE_URL ?>/api/upload.php?session_id=${session.sessionId}&token=${session.token}&finalize=1&filename=${encodeURIComponent(session.embedUrl)}`, {
         method: 'POST'
       });
-      const finalizeData = await finalizeRes.json();
+      let finalizeData;
+      const finalizeText = await finalizeRes.text();
+      try {
+        finalizeData = JSON.parse(finalizeText);
+      } catch (jsonErr) {
+        console.error("Embed finalize JSON parse error. Raw response text:", finalizeText);
+        setUploadFailed(session, 'Finalize error: ' + (finalizeText.substring(0, 150) || 'Empty server response'));
+        return;
+      }
 
       if (finalizeData.success) {
         session.status = 'published';
